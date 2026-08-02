@@ -1,0 +1,194 @@
+# ═══════════════════════════════════════════════════════════════
+# LEOS FIRM LLC — REGLAS PARA IA (Método AInnovate v2.1)
+# ═══════════════════════════════════════════════════════════════
+#
+# ATENCIÓN IA: Este proyecto usa Documentation-Driven Development.
+# ANTES de escribir CUALQUIER línea de código, DEBES:
+#
+# 1. LEER docs/01-project-overview.md (visión, stack, estado)
+# 2. LEER docs/02-architecture.md (estructura, carpetas, convenciones)
+# 3. IDENTIFICAR qué feature se va a modificar
+# 4. LEER el doc de esa feature en docs/features/[feature].md
+# 5. Si NO existe doc para la feature → CREARLO ANTES de codear
+#
+# Si vas a tocar la base de datos  → LEER docs/DB_SCHEMA.md
+# Si vas a tocar endpoints/API     → LEER docs/API_DOCS.md
+# Si vas a tocar seguridad/auth    → LEER docs/03-security.md
+# Si vas a hacer deploy            → LEER docs/04-deployment.md
+# Antes de implementar una feature → LEER docs/SKILLS.md
+#
+# Documento completo del método: METODO_AINNOVATE.md (raíz del proyecto)
+# Contexto de negocio del cliente: context.md (raíz del proyecto)
+#
+# ═══════════════════════════════════════════════════════════════
+
+# ─── QUÉ ES ESTE PROYECTO ───
+# Sitio web de Leos Firm LLC (San Antonio, TX): consultoría fiscal y
+# apertura de empresas en EE. UU. para empresarios hispanos.
+# Es un ecosistema automatizado:
+#   catálogo → pago Square → agente IA → intake form → Google Calendar
+#   → Google Meet → CRM → correos (Gmail) → estado de la cita
+#
+# Stack: Next.js 16 (App Router) + TypeScript + TailwindCSS v4 + Supabase
+# Integraciones: Square, Google Calendar, Google Meet/Zoom, Gmail, Anthropic
+
+# ─── PRINCIPIO FUNDAMENTAL DEL PROYECTO ───
+# Ninguna cita existe sin pago confirmado y sin slot bloqueado en Google
+# Calendar. El webhook de Square es la ÚNICA fuente de verdad del pago.
+# Google Calendar es la ÚNICA fuente de verdad de la disponibilidad.
+
+# ─── ⚠️ NEXT.JS 16: APIS QUE CAMBIARON ───
+# Este proyecto usa Next.js 16. Los patrones de Next 13/14/15 NO COMPILAN.
+# Documentación local actualizada: node_modules/next/dist/docs/
+#
+# - middleware.ts   → proxy.ts (función exportada `proxy`, runtime nodejs)
+# - cookies()       → await cookies()   (síncrono ELIMINADO)
+# - headers()       → await headers()
+# - params          → await props.params  con tipo PageProps<'/ruta/[slug]'>
+# - searchParams    → await props.searchParams
+# - `next lint`     → eliminado, se usa la CLI de ESLint
+# - images.domains  → images.remotePatterns
+# - Turbopack es el bundler por DEFAULT (una config de webpack rompe el build)
+#
+# OJO: la documentación oficial de @supabase/ssr todavía usa middleware.ts
+# y cookies() síncrono. Hay que ADAPTARLA, no copiarla tal cual.
+
+# ─── LOS 12 MANDAMIENTOS DEL VIBE CODING ───
+# Estos mandamientos son INVIOLABLES. Seguirlos en TODO momento.
+#
+# I.    NO ALUCINARÁS
+#       Solo implementar EXACTAMENTE lo que se pide.
+#       NO agregar features extra. NO remover código sin permiso.
+#       NO optimizar lo que no se pidió. Ante duda → PREGUNTAR.
+#
+# II.   SEPARARÁS LÓGICA DE ESTILOS
+#       Con Tailwind: las clases van en el JSX, pero la lógica de negocio
+#       NO vive en el componente → va en src/services/ o en un hook.
+#       Los tipos de props van en Componente.types.ts.
+#       NUNCA llamar a Supabase/Square/Google directo desde un componente.
+#
+# III.  DOCUMENTARÁS CADA CAMBIO
+#       Ningún cambio existe sin documentación.
+#
+# IV.   ACTUALIZARÁS EL CHANGELOG
+#       CADA request que modifique código → nueva entrada en CHANGELOG.md
+#       Formato: fecha, tipo (ADDED/CHANGED/FIXED/REMOVED), archivos, request.
+#
+# V.    DOCUMENTARÁS LA BASE DE DATOS
+#       CADA cambio de schema → actualizar docs/DB_SCHEMA.md inmediatamente.
+#       Después de cada migración → regenerar src/types/database.types.ts.
+#
+# VI.   SEGUIRÁS LA ESTRUCTURA DE CARPETAS
+#       La estructura está en docs/02-architecture.md. Es INMUTABLE.
+#       NO crear archivos fuera de la estructura sin autorización.
+#
+# VII.  USARÁS EL SISTEMA DE ESTILOS DEFINIDO
+#       Los tokens viven en src/app/globals.css (@theme de Tailwind v4).
+#       PROHIBIDO usar colores arbitrarios tipo bg-[#123456].
+#       Si falta un color → agregarlo primero como token.
+#       Paleta: navy (#0B1B3A), platinum, gold, accent-blue,
+#       mx-green y us-red (decorativos de bandera, NUNCA como error).
+#
+# VIII. PROTEGERÁS LAS CREDENCIALES
+#       NUNCA hardcodear secretos, API keys, tokens, passwords.
+#       SUPABASE_SERVICE_ROLE_KEY, SQUARE_ACCESS_TOKEN, GOOGLE_PRIVATE_KEY
+#       y ANTHROPIC_API_KEY son SOLO de servidor: jamás con NEXT_PUBLIC_.
+#       NUNCA guardar datos de tarjeta (Square tokeniza en el navegador).
+#
+# IX.   TIPARÁS TODO CON TYPESCRIPT
+#       Cero `any`. Todos los props, retornos y variables tipados.
+#       Usar los tipos generados de Supabase.
+#
+# X.    VALIDARÁS ANTES DE ENTREGAR
+#       Checklist: `npm run build` compila, funciona, docs actualizados,
+#       CHANGELOG, sin deps extra, sin credenciales, tipos completos.
+#
+# XI.   MANTENDRÁS LA CONSISTENCIA
+#       Leer archivos existentes y seguir SUS convenciones.
+#       Textos de UI en español; código, tipos y comentarios en inglés.
+#       Rutas en español kebab-case; tablas y columnas en snake_case.
+#
+# XII.  COMUNICARÁS CON CLARIDAD
+#       Al terminar cada implementación, dar resumen:
+#       archivos creados/modificados, cambios en DB, docs actualizados.
+
+# ─── 4 LEYES DE OPERACIÓN ───
+
+# LEY 1 — LEER ANTES DE ACTUAR
+# 1. Leer docs/01-project-overview.md
+# 2. Identificar qué feature se modifica
+# 3. Leer docs/features/[feature].md
+# 4. Si no existe doc → CREARLO PRIMERO
+# 5. Consultar la TABLA DE LOOKUP abajo para saber qué doc leer
+
+# LEY 2 — NO ROMPER LO QUE FUNCIONA
+# Si el cambio pedido conflicta con docs/02-architecture.md:
+# 1. DETENERSE — no modificar nada
+# 2. ADVERTIR al usuario del conflicto
+# 3. EXPLICAR el impacto potencial
+# 4. PEDIR autorización explícita antes de proceder
+
+# LEY 3 — DOCUMENTACIÓN CONTINUA
+# Después de CADA cambio completado:
+# 1. Actualizar docs/features/[feature].md
+# 2. Actualizar docs/02-architecture.md si cambió la estructura
+# 3. Actualizar docs/DB_SCHEMA.md si cambió el schema
+# 4. Actualizar docs/API_DOCS.md si cambió un endpoint
+# 5. Agregar entrada en CHANGELOG.md
+# 6. Actualizar esta TABLA DE LOOKUP si se crearon archivos nuevos
+
+# LEY 4 — SEGURIDAD Y BUENAS PRÁCTICAS
+# - Leer docs/03-security.md antes de tocar auth/credenciales/RLS/pagos
+# - NUNCA hacer deploy, git push, o cambios destructivos sin confirmación
+# - NUNCA desactivar RLS ni validaciones existentes
+# - NUNCA usar el MCP de Supabase (execute_sql/apply_migration) contra
+#   producción sin autorización explícita: escribe directo en el proyecto real
+
+# ─── REGLAS DE NEGOCIO NO NEGOCIABLES (context.md §8) ───
+# - La cita se confirma SOLO después del pago (o cupón de referido).
+# - Reprogramación gratuita con ≥24 h de anticipación.
+# - Cancelación ≥24 h: reembolso menos comisiones, o crédito.
+# - Cancelación <24 h: NO reembolsable.
+# - No-show o >15 min de retraso: se considera realizada, sin reembolso.
+# - Tolerancia de 15 min; la sesión termina a la hora original.
+# - El cliente DEBE aceptar la política de cancelación en el intake,
+#   y se registra timestamp + IP como evidencia.
+# - Referidos de abogados: primeros 30 minutos gratis (vía cupón).
+# - Precios SIEMPRE en centavos y leídos del servidor, nunca del cliente.
+
+# ─── DOCUMENTACIÓN DEL PROYECTO ───
+#
+# docs/
+# ├── 01-project-overview.md    ← LEER SIEMPRE (visión, objetivos, estado)
+# ├── 02-architecture.md        ← LEER SIEMPRE (stack, carpetas, ADRs, Next 16)
+# ├── 03-security.md            ← Leer si se toca: auth, credenciales, RLS, pagos, PII
+# ├── 04-deployment.md          ← Leer si se toca: deploy, CI/CD, cron, build
+# ├── DB_SCHEMA.md              ← Leer si se toca: tablas, columnas, migraciones, RLS
+# ├── API_DOCS.md               ← Leer si se toca: endpoints, API routes
+# ├── SKILLS.md                 ← Leer ANTES de implementar cualquier feature nueva
+# └── features/                 ← Leer el .md de la feature que se va a modificar
+#
+# CHANGELOG.md                   ← Historial de todos los cambios
+# context.md                     ← Contexto de negocio original de la clienta
+
+# ─── TABLA DE LOOKUP ───
+# Cuando la IA va a modificar un archivo, DEBE leer primero el doc correspondiente:
+#
+# Archivo que se modifica                → Doc que se debe leer primero
+# ─────────────────────────────────────   ──────────────────────────────
+# src/app/(public)/**                    → docs/features/[feature].md
+# src/app/(admin)/**                     → docs/03-security.md + features/dashboard.md
+# src/app/api/v1/**                      → docs/API_DOCS.md + features/[feature].md
+# src/app/api/v1/webhooks/square/**      → docs/03-security.md + API_DOCS.md
+# src/app/api/v1/cron/**                 → docs/04-deployment.md + API_DOCS.md
+# src/app/globals.css                    → docs/02-architecture.md (design system)
+# src/lib/supabase/**                    → docs/03-security.md + DB_SCHEMA.md
+# src/lib/square/**                      → docs/03-security.md (PCI, firma HMAC)
+# src/lib/google/**                      → docs/03-security.md (scopes mínimos)
+# src/lib/ai/**                          → docs/03-security.md (prompt injection) + skill claude-api
+# src/lib/env.ts                         → docs/02-architecture.md (tabla de variables)
+# src/services/*.service.ts              → docs/features/[feature].md
+# src/types/database.types.ts            → GENERADO, no editar a mano
+# src/proxy.ts                           → docs/03-security.md
+# supabase/migrations/*.sql              → docs/DB_SCHEMA.md
+# package.json                           → docs/02-architecture.md (justificar toda dep nueva)

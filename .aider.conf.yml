@@ -1,0 +1,82 @@
+# Leos Firm LLC — Reglas para IA (Método AInnovate v2.1)
+# Este proyecto usa Documentation-Driven Development.
+# LEER METODO_AINNOVATE.md para el método completo y context.md para el negocio.
+
+read:
+  - CLAUDE.md
+  - docs/01-project-overview.md
+  - docs/02-architecture.md
+
+conventions: |
+  PROYECTO: Sitio web de Leos Firm LLC (San Antonio, TX) — consultoría fiscal y
+  apertura de empresas en EE. UU. Es un ecosistema automatizado:
+  catálogo → pago Square → agente IA → intake form → Google Calendar →
+  Google Meet → CRM → correos (Gmail) → estado de la cita.
+
+  STACK: Next.js 16 (App Router) + TypeScript + TailwindCSS v4 + Supabase.
+  Integraciones: Square, Google Calendar, Google Meet/Zoom, Gmail, Anthropic.
+
+  PRINCIPIO FUNDAMENTAL:
+  Ninguna cita existe sin pago confirmado y sin slot bloqueado en Google Calendar.
+  El webhook de Square es la única fuente de verdad del pago.
+  Google Calendar es la única fuente de verdad de la disponibilidad.
+
+  ANTES de cualquier cambio:
+  1. Leer docs/01-project-overview.md y docs/02-architecture.md
+  2. Leer docs/SKILLS.md (hay MCP servers de Supabase, Calendar y Gmail)
+  3. Leer docs/features/[feature].md de la feature a modificar
+  4. Si no existe doc → crearlo primero
+  5. Si se toca DB → docs/DB_SCHEMA.md | API → docs/API_DOCS.md
+  6. Si se toca auth/pagos/RLS/PII → docs/03-security.md
+
+  ⚠️ NEXT.JS 16 — los patrones de Next 13/14/15 NO COMPILAN.
+  Documentación local: node_modules/next/dist/docs/
+  - middleware.ts → src/proxy.ts (función `proxy`, runtime nodejs)
+  - cookies() → await cookies()  (el acceso síncrono fue eliminado)
+  - headers() → await headers()
+  - params/searchParams → await props.params, tipo PageProps<'/ruta/[slug]'>
+  - `next lint` eliminado → CLI de ESLint
+  - images.domains → images.remotePatterns
+  - Turbopack por default; una config de webpack rompe el build
+  OJO: la doc de @supabase/ssr todavía usa middleware.ts y cookies() síncrono.
+
+  12 MANDAMIENTOS (INVIOLABLES):
+  I.    Solo implementar lo pedido (no alucinar). Ante duda, preguntar.
+  II.   Separar lógica de estilos: clases Tailwind en el JSX, pero la lógica de
+        negocio va en src/services/. Nunca llamar a Supabase/Square/Google
+        directamente desde un componente.
+  III.  Documentar cada cambio.
+  IV.   Actualizar CHANGELOG.md en cada request.
+  V.    Documentar cambios de DB en docs/DB_SCHEMA.md y regenerar los tipos.
+  VI.   Seguir la estructura de carpetas de docs/02-architecture.md.
+  VII.  Respetar el design system: tokens en src/app/globals.css (@theme).
+        Prohibido usar colores arbitrarios como bg-[#123456].
+  VIII. Nunca hardcodear credenciales. Las claves de servidor jamás con
+        prefijo NEXT_PUBLIC_. Nunca guardar datos de tarjeta.
+  IX.   TypeScript estricto (cero any).
+  X.    Validar antes de entregar: `npm run build` debe compilar.
+  XI.   Consistencia: UI en español, código en inglés. Rutas kebab-case en
+        español, tablas y columnas en snake_case.
+  XII.  Comunicar con claridad al terminar.
+
+  REGLAS DE NEGOCIO (context.md §8):
+  - La cita se confirma solo después del pago (o cupón de referido).
+  - Reprogramación gratuita con ≥24 h de anticipación.
+  - Cancelación ≥24 h: reembolso menos comisiones o crédito. <24 h: no reembolsable.
+  - No-show o >15 min de retraso: se considera realizada, sin reembolso.
+  - El cliente debe aceptar la política de cancelación (se registra timestamp + IP).
+  - Referidos de abogados: primeros 30 minutos gratis (vía cupón).
+  - Precios siempre en centavos, leídos en el servidor, nunca del cliente.
+  - Fechas siempre en UTC en la DB; la firma opera en America/Chicago.
+
+  DESPUÉS de cada cambio:
+  - Actualizar el doc de la feature
+  - Actualizar architecture si cambió la estructura
+  - Actualizar DB_SCHEMA.md si cambió el schema
+  - Actualizar API_DOCS.md si cambió un endpoint
+  - Agregar entrada en CHANGELOG.md
+  - Dar un resumen de lo hecho
+
+# Nunca hacer commit ni push automáticamente (Ley 4 — Seguridad)
+auto-commits: false
+gitignore: false

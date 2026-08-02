@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — LEOS FIRM LLC
+   Tokens derivados de logo.png. Mandamiento VII: nunca usar colores
+   arbitrarios (bg-[#123456]) en componentes. Si falta un color, se
+   agrega aquí primero.
+   ═══════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ─── Navy institucional (fondo del logo: #0B1B3A) ─── */
+  --color-navy-50: #eef2f9;
+  --color-navy-100: #d6dfee;
+  --color-navy-200: #adbfdd;
+  --color-navy-300: #7f97c4;
+  --color-navy-400: #5471a5;
+  --color-navy-500: #345186;
+  --color-navy-600: #233c69;
+  --color-navy-700: #152c57;
+  --color-navy-800: #0f2246;
+  --color-navy-900: #0b1b3a;
+  --color-navy-950: #060f22;
+
+  /* ─── Neutros / plata (texto del logo) ─── */
+  --color-platinum: #e8ecf3;
+  --color-platinum-dim: #b8c2d4;
+
+  /* ─── Acentos de marca ─── */
+  --color-gold: #c9a227;
+  --color-gold-light: #e2c15c;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+
+  /* ─── Acentos de bandera (DECORATIVOS) ───
+     us-red NO es el color de error. Para errores existe --color-danger. */
+  --color-mx-green: #0e7a3c;
+  --color-us-red: #c8102e;
+
+  /* ─── Estados semánticos de UI ─── */
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-info: #0369a1;
+
+  /* ─── Superficies ─── */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f8fb;
+  --color-border: #dfe4ec;
+  --color-ink: #101828;
+  --color-ink-muted: #566076;
+
+  /* ─── Tipografía ─── */
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-heading), ui-serif, Georgia, serif;
+
+  /* ─── Radios y sombras (estilo sobrio, sin exageraciones) ─── */
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.1);
+  --shadow-elevated: 0 12px 24px -8px rgb(11 27 58 / 0.18);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  /* A11Y (FASE 4.4): el foco de teclado debe ser siempre visible */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
