@@ -101,7 +101,7 @@ cuerpo. Nada de gradientes llamativos ni animaciones excesivas.
 | Fase | Descripción | Estado |
 |------|-------------|--------|
 | 1 | Setup + documentación + design system (Método AInnovate) | [x] **Completo** |
-| 2 | Sitio público: home, servicios, sobre Claudia, FAQ | [ ] Pendiente |
+| 2 | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
 | 3 | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
 | 4 | Agente IA + intake form inteligente + Storage de adjuntos | [ ] Pendiente |
 | 5 | Google Calendar: disponibilidad, cita, Google Meet | [ ] Pendiente |

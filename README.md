@@ -69,5 +69,9 @@ Detalle completo en [`docs/02-architecture.md`](./docs/02-architecture.md).
 
 ## Estado
 
-**FASE 1 completa** — documentación, reglas para IA, design system y estructura base.
-FASE 2 en adelante: ver el roadmap en [`docs/01-project-overview.md`](./docs/01-project-overview.md).
+- **FASE 1 completa** — documentación, reglas para IA, design system y estructura base.
+- **FASE 2 completa** — sitio público: portada, catálogo de 8 servicios con detalle, sobre Claudia,
+  FAQ y política de cancelación. 17 rutas estáticas.
+- **Siguiente:** FASE 3 — checkout con Square y webhook de confirmación de pago.
+
+Roadmap completo en [`docs/01-project-overview.md`](./docs/01-project-overview.md).

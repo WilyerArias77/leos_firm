@@ -98,3 +98,4 @@ desde el dashboard de Vercel o con la CLI (`vercel`).
 | 2026-08-02 | Pendiente | Vercel MCP | **Requiere autorización del usuario** |
 | 2026-08-02 | Registrado | Skill `claude-api` | Referencia obligatoria para el agente IA |
 | 2026-08-02 | Registrado | Skill `security-review` | Auditoría de pagos, RLS y PII |
+| 2026-08-02 | Usado | Supabase MCP `list_projects` | FASE 2: verificar si existía proyecto para Leos Firm (no existe → catálogo en constantes) |

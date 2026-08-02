@@ -6,6 +6,82 @@
 
 ---
 
+## [2026-08-02] — Sitio público (FASE 2) — v0.2.0
+
+### Tipo de cambio
+- **ADDED**: 6 páginas públicas, biblioteca de componentes base y capa de datos del catálogo
+- **FIXED**: formato de precio que renderizaba "USD 150 USD"
+
+### Archivos creados
+
+**Páginas** (`src/app/(public)/`):
+- `layout.tsx` — Header + Footer compartidos por el sitio público
+- `page.tsx` — Portada: hero, público objetivo, servicios destacados, Claudia, CTA
+- `servicios/page.tsx` — Catálogo completo (8 servicios)
+- `servicios/[slug]/page.tsx` — Detalle con `generateStaticParams` y `generateMetadata`
+- `sobre-claudia/page.tsx` — Storytelling, diferenciador, misión, visión y 7 valores
+- `faq/page.tsx` — 7 preguntas frecuentes
+- `politicas/page.tsx` — Política de cancelación (10 puntos)
+
+**Componentes:**
+- `ui/Button` — `Button` y `ButtonLink`, 3 variantes y 2 tamaños
+- `ui/Card`, `ui/Badge`
+- `layout/Container`, `layout/Section` (+ `SectionHeading`)
+- `layout/Header` — Client Component con navegación, estado activo y menú móvil
+- `layout/Footer` — contacto, dirección y navegación
+- `features/services/ServiceCard`
+
+**Contenido y datos:**
+- `src/constants/content/{services,company,faq,policies}.ts` — literal de `context.md`
+- `src/types/content.types.ts` — `Service`, `FaqItem`, `PolicyItem`, `CompanyValue`
+- `src/services/service.service.ts` — única fuente de datos del catálogo
+
+### Archivos modificados
+- `docs/features/public-site.md` — estado a Completo + lecciones aprendidas
+- `docs/01-project-overview.md` — FASE 2 marcada como completa
+- `docs/02-architecture.md` — estructura de `constants/content/`, nota de formato de moneda, **ADR-007**
+- `.windsurfrules`, `CLAUDE.md`, `.cursorrules`, `.clinerules`, `.github/copilot-instructions.md` — tabla de lookup ampliada
+
+### Cambios en base de datos
+- Ninguno. El catálogo vive en constantes tipadas con la forma de la futura tabla `services`.
+  No existe proyecto de Supabase para Leos Firm (la cuenta tiene 2, el límite del tier gratuito),
+  y crearlo es una decisión con costo que corresponde al usuario.
+
+### Documentación actualizada
+- [x] `CHANGELOG.md` — esta entrada
+- [x] `docs/features/public-site.md`
+- [x] `docs/01-project-overview.md`
+- [x] `docs/02-architecture.md` (ADR-007)
+- [x] Tabla de lookup en los 6 archivos de reglas
+- [ ] `DB_SCHEMA.md` (no aplica — sin cambios de schema)
+- [ ] `API_DOCS.md` (no aplica — el sitio público no expone endpoints nuevos)
+
+### Validación (Mandamiento X)
+- [x] `npm run build` — 17 rutas, 8 detalles de servicio prerrenderizados vía SSG
+- [x] `npm run lint` — sin errores
+- [x] Las 6 páginas responden `200`; un slug inexistente responde `404`
+- [x] Revisión visual en escritorio (1280px) y móvil (390px)
+- [x] Sin colores arbitrarios, sin `any`, sin dependencias nuevas
+
+### Notas importantes
+- **Ninguna respuesta de FAQ fue inventada.** `context.md` §9 lista las preguntas sin respuesta;
+  son afirmaciones fiscales y legales, así que se muestran remitiendo a la consultoría. Las
+  respuestas oficiales las debe redactar Claudia.
+- Los CTA de agendamiento **no simulan** un flujo que no existe: el detalle de servicio ofrece
+  contacto telefónico e indica que el pago en línea llega en FASE 3.
+- Falta el material audiovisual de Claudia (`context.md` §2): hay un placeholder marcado como tal.
+
+### Lección aprendida
+`Intl.NumberFormat` en locale `es-MX` con `currency: "USD"` devuelve `"USD 150"`, no `"$150"` —
+al añadir el sufijo " USD" salía **"USD 150 USD"**. Ni el build ni el lint detectan texto
+duplicado; se encontró en la revisión visual. La revisión de pantallas no es opcional, es parte
+del Mandamiento X.
+
+### Request original
+> procedamos con la fase 2
+
+---
+
 ## [2026-08-02] — Setup Inicial (Método AInnovate FASE 1) — v0.1.0
 
 ### Tipo de cambio

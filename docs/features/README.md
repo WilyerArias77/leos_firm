@@ -3,9 +3,11 @@
 Un archivo `.md` por funcionalidad. **Se crea ANTES de escribir el código** (Método AInnovate,
 FASE 2.1) y se actualiza al terminar.
 
-> Esta carpeta está vacía a propósito: en FASE 1 solo se define la estructura. Cada feature de
-> FASE 2 en adelante agrega su documento aquí. Este README existe para que la carpeta sobreviva a
-> `git clone` (git no versiona directorios vacíos).
+## Features documentadas
+
+| Doc | Feature | Estado |
+|-----|---------|--------|
+| [`public-site.md`](./public-site.md) | Sitio público: portada, catálogo, detalle, Claudia, FAQ, políticas | ✅ Completo |
 
 ## Ciclo de cada feature
 
@@ -59,7 +61,7 @@ FASE 2.1) y se actualiza al terminar.
 
 | Fase | Feature | Doc esperado |
 |------|---------|--------------|
-| 2 | Sitio público (home, servicios, sobre Claudia, FAQ) | `public-site.md` |
+| 2 | Sitio público (home, servicios, sobre Claudia, FAQ) | ✅ `public-site.md` |
 | 3 | Checkout con Square + webhook | `payments.md` |
 | 4 | Agente IA + intake form | `intake.md` |
 | 5 | Google Calendar + Meet | `scheduling.md` |

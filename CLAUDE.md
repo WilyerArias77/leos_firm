@@ -144,7 +144,12 @@ Estilo: serio, profesional y discreto. Serif para titulares, sans para cuerpo.
 
 | Archivo que se modifica | Doc que se debe leer primero |
 |------------------------|------------------------------|
-| `src/app/(public)/**` | `docs/features/[feature].md` |
+| `src/app/(public)/**` | `docs/features/public-site.md` |
+| `src/components/ui/**` · `src/components/layout/**` | `docs/features/public-site.md` + `02-architecture.md` (design system) |
+| `src/components/features/services/**` | `docs/features/public-site.md` |
+| `src/constants/content/**` | `docs/features/public-site.md` + `context.md` (**fuente única del contenido**) |
+| `src/services/service.service.ts` | `docs/features/public-site.md` (migra a Supabase en FASE 3) |
+| `src/types/content.types.ts` | `docs/DB_SCHEMA.md` (debe reflejar la tabla `services`) |
 | `src/app/(admin)/**` | `docs/03-security.md` + `features/dashboard.md` |
 | `src/app/api/v1/**` | `docs/API_DOCS.md` + `features/[feature].md` |
 | `src/app/api/v1/webhooks/square/**` | `docs/03-security.md` + `API_DOCS.md` |

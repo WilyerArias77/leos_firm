@@ -100,7 +100,14 @@ leos_firm/
 │   │
 │   ├── hooks/                         # Custom hooks de React
 │   ├── types/                         # Tipos globales + database.types.ts (generado)
-│   ├── constants/                     # SERVICES, BUSINESS_HOURS, POLICIES, ROUTES
+│   ├── constants/
+│   │   ├── business.ts                # COMPANY, BUSINESS_HOURS, CANCELLATION_POLICY
+│   │   ├── routes.ts                  # ROUTES, API_ROUTES
+│   │   └── content/                   # Contenido literal de context.md
+│   │       ├── services.ts            # Catálogo (temporal, migra a Supabase en FASE 3)
+│   │       ├── company.ts             # Misión, visión, valores, fundadora
+│   │       ├── faq.ts
+│   │       └── policies.ts
 │   └── proxy.ts                       # Refresco de sesión admin (Next 16: NO se llama middleware.ts)
 │
 ├── public/                            # Assets estáticos (logo, imágenes)
@@ -372,3 +379,18 @@ permite manipularlo.
 **Decisión:** Precios en `integer` de centavos, leídos siempre desde la tabla `services` en el
 servidor. El cliente solo envía el `service_id`.
 **Consecuencias:** Cambiar un precio es un UPDATE en `services`, sin deploy.
+
+**Nota de implementación (FASE 2):** hasta que exista el proyecto de Supabase, el catálogo vive en
+`src/constants/content/services.ts` con la misma forma que la tabla. `service.service.ts` es la
+única pieza que conoce el origen de los datos, así que la migración no toca ningún componente.
+Los montos se formatean con `Intl.NumberFormat` en locale **`en-US`** (`"$150"`); `es-MX` devuelve
+`"USD 150"` y duplica el código de moneda al añadir el sufijo.
+
+### ADR-007: El sitio público no bloquea sobre servicios externos
+**Fecha:** 2026-08-02
+**Contexto:** El sitio es la capa de captación. Si dependiera de Supabase, Square o Google para
+renderizar, una caída de cualquiera de ellos dejaría a la firma sin presencia web.
+**Decisión:** Las páginas públicas son estáticas y se prerrenderizan en build. No consultan
+servicios externos en tiempo de request.
+**Consecuencias:** Cuando el catálogo migre a Supabase (FASE 3) debe leerse en build o con
+revalidación por tiempo (ISR), nunca con un fetch bloqueante por visita.
