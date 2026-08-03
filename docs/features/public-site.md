@@ -1,7 +1,7 @@
 # Feature: Sitio Público
 
-> **Estado:** ✅ Completo — 6 páginas en línea, 17 rutas prerrenderizadas
-> **Fase:** 2 · Última actualización: 2026-08-02
+> **Estado:** ✅ Completo — 6 páginas en línea, 18 rutas
+> **Fase:** 2 · Última actualización: 2026-08-03 (FASE 3: slogan en el header + diagnóstico)
 > **Archivos clave:** `src/app/(public)/**`, `src/components/layout/**`, `src/components/ui/**`, `src/constants/content/**`
 > **Dependencias:** ninguna nueva (solo `next/image`, `next/link` y `lucide-react` ya instalado)
 
@@ -27,6 +27,7 @@ de pago y agendamiento de FASE 3–5 no tiene puerta de entrada.
 | Sección de la UI | Origen |
 |------------------|--------|
 | Slogan del hero | `context.md` §1 |
+| **Slogan del header** (dorado, franja superior) | **Pedido directo de la clienta, 2026-08-03** — no está en `context.md`. Vive en `COMPANY.slogan` |
 | Bio, diferenciador y storytelling de Claudia | §2 |
 | Misión, visión y 7 valores | §3 |
 | Público objetivo | §4 |
@@ -60,9 +61,13 @@ FASE 3:   componentes → service.service.ts → Supabase (tabla services)
 ## Flujo de Uso
 
 1. El cliente entra a `/` y ve el slogan, los servicios destacados y el perfil de Claudia.
-2. Va a `/servicios` y compara el catálogo completo con precios.
+2. Va a `/servicios` y compara el catálogo completo con precios. Si no sabe cuál elegir, tiene un
+   atajo al **diagnóstico gratuito** (FASE 3).
 3. Entra al detalle en `/servicios/[slug]`: qué incluye, precio o "requiere cotización", duración.
-4. Pulsa **Agendar consultoría** → `/agendar?servicio=[slug]` (**FASE 3**, aún no implementado).
+   A los ~10 s (o al 30 % de scroll) aparece el **popup de diagnóstico**
+   ([`lead-diagnostic.md`](./lead-diagnostic.md)).
+4. Deja sus datos en el diagnóstico → según el servicio, va al pago (FASE 7) o su caso llega a
+   Claudia por correo (FASE 6).
 5. Si duda, consulta `/sobre-claudia`, `/faq` o `/politicas` antes de decidir.
 
 ## Componentes / Archivos
@@ -76,7 +81,7 @@ FASE 3:   componentes → service.service.ts → Supabase (tabla services)
 | `src/app/(public)/sobre-claudia/page.tsx` | Storytelling, misión, visión y valores |
 | `src/app/(public)/faq/page.tsx` | Preguntas frecuentes |
 | `src/app/(public)/politicas/page.tsx` | Política de cancelación y reprogramación |
-| `src/components/layout/Header` | Navegación + CTA, con menú móvil |
+| `src/components/layout/Header` | Franja con el slogan en dorado + logo, navegación, CTA y menú móvil |
 | `src/components/layout/Footer` | Contacto, enlaces legales, husos |
 | `src/components/layout/Container` | Ancho máximo y padding horizontal |
 | `src/components/layout/Section` | Bloque vertical con variantes de fondo |
@@ -137,8 +142,8 @@ y confirmar que el HTML servido contiene el contenido nuevo antes de dar por bue
   Los servicios sin precio muestran "Requiere cotización", nunca `$0`.
 - **Ningún color arbitrario.** Solo tokens de `globals.css` (Mandamiento VII).
 - **Ninguna llamada a datos desde un componente**: todo pasa por `service.service.ts` (Mandamiento II).
-- Los CTA de agendamiento apuntan a `/agendar`, que **aún no existe** — deben comunicar que el
-  agendamiento llega en la siguiente fase, no simular que funciona.
+- Los CTA de agendamiento apuntan a `/agendar`, que **aún no existe** (FASE 4) — deben comunicar que
+  el agendamiento llega en una fase posterior, no simular que funciona.
 - **A11Y** (FASE 4.4): toda imagen con `alt`, navegación operable con teclado, contraste ≥ 4.5:1.
 
 ## Pendiente
@@ -148,6 +153,7 @@ y confirmar que el HTML servido contiene el contenido nuevo antes de dar por bue
       profesionales) — hoy hay un placeholder marcado como tal
 - [ ] **Métricas de impacto** (§3, valor "Impacto": respaldar con estadísticas de empresas
       atendidas) — faltan los números reales
-- [ ] Textos legales definitivos (aviso de privacidad, términos)
-- [ ] `/agendar` — FASE 3
-- [ ] Migrar el catálogo de constantes a la tabla `services` — FASE 3
+- [ ] Textos legales definitivos (aviso de privacidad, términos) — necesarios ahora que el
+      diagnóstico recoge datos personales
+- [ ] `/agendar` — FASE 4
+- [ ] Migrar el catálogo de constantes a la tabla `services` — FASE 6

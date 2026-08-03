@@ -1,6 +1,6 @@
 # Skills y MCP Servers Disponibles — Leos Firm LLC
 
-> **Última actualización:** 2026-08-02
+> **Última actualización:** 2026-08-03
 > **Registro del entorno de desarrollo:** skills, extensiones, MCP servers y herramientas
 > especializadas disponibles para este proyecto.
 
@@ -58,8 +58,10 @@ desde el dashboard de Vercel o con la CLI (`vercel`).
 
 ## Cómo se Aplican a Este Proyecto
 
-| Feature (FASE 2+) | Skill / MCP a usar primero |
-|-------------------|---------------------------|
+| Feature | Skill / MCP a usar primero |
+|---------|---------------------------|
+| Guardar los leads del diagnóstico (FASE 6) | MCP **Supabase**: `apply_migration` para la tabla `leads` → `get_advisors` → `generate_typescript_types` |
+| Correo del lead a Claudia (FASE 6) | MCP **Gmail**: `create_draft` para diseñar la plantilla antes de automatizarla |
 | Crear el proyecto y las tablas en Supabase | MCP **Supabase**: `create_project` → `apply_migration` → `generate_typescript_types` |
 | Verificar seguridad de RLS | MCP **Supabase**: `get_advisors` (tipo `security`) tras cada migración |
 | Integración con Google Calendar | MCP **Google Calendar**: inspeccionar eventos reales antes de escribir `src/lib/google/calendar.ts` |
@@ -99,3 +101,4 @@ desde el dashboard de Vercel o con la CLI (`vercel`).
 | 2026-08-02 | Registrado | Skill `claude-api` | Referencia obligatoria para el agente IA |
 | 2026-08-02 | Registrado | Skill `security-review` | Auditoría de pagos, RLS y PII |
 | 2026-08-02 | Usado | Supabase MCP `list_projects` | FASE 2: verificar si existía proyecto para Leos Firm (no existe → catálogo en constantes) |
+| 2026-08-03 | No usado | Supabase / Gmail MCP | FASE 3: el diagnóstico no persiste ni envía correo todavía; ambos MCP se usan en la FASE 6 |

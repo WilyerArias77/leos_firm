@@ -18,6 +18,7 @@ export const ROUTES = {
 export const API_ROUTES = {
   health: "/api/v1/health",
   services: "/api/v1/services",
+  leads: "/api/v1/leads",
   checkout: "/api/v1/checkout",
   squareWebhook: "/api/v1/webhooks/square",
   intake: "/api/v1/intake",

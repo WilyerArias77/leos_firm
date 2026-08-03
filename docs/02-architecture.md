@@ -1,7 +1,8 @@
 # Arquitectura — Leos Firm LLC
 
-> **Última actualización:** 2026-08-02
+> **Última actualización:** 2026-08-03
 > **Lectura obligatoria** antes de crear cualquier archivo (Mandamiento VI).
+> Orden de trabajo y numeración de fases: [`00-roadmap.md`](./00-roadmap.md).
 
 ---
 
@@ -74,9 +75,10 @@ leos_firm/
 │   │   └── not-found.tsx
 │   │
 │   ├── components/
-│   │   ├── ui/                        # Base: Button, Input, Card, Badge, Skeleton…
+│   │   ├── ui/                        # Base: Button, Input, Card, Badge, Modal, Skeleton…
 │   │   ├── layout/                    # Header, Footer, Container, Section
 │   │   └── features/                  # Componentes por feature
+│   │       ├── diagnostic/            # Popup de diagnóstico y captación de leads
 │   │       ├── services/
 │   │       ├── checkout/
 │   │       ├── intake/
@@ -85,13 +87,17 @@ leos_firm/
 │   │
 │   ├── lib/
 │   │   ├── env.ts                     # Validación Zod de variables de entorno
+│   │   ├── validation/                # Esquemas Zod compartidos cliente ↔ servidor
 │   │   ├── supabase/                  # client.ts (browser) · server.ts (RSC) · admin.ts (service role)
 │   │   ├── square/                    # SDK + verificación de firma de webhook
 │   │   ├── google/                    # auth.ts · calendar.ts · gmail.ts
 │   │   ├── ai/                        # Cliente Anthropic + prompts del agente
-│   │   └── utils/                     # formatters, timezone, cn()
+│   │   └── utils/                     # formatCurrency, rateLimit, timezone, cn()
 │   │
 │   ├── services/                      # Lógica de negocio (NO tocan React)
+│   │   ├── diagnostic.service.ts
+│   │   ├── lead.service.ts
+│   │   ├── service.service.ts
 │   │   ├── appointment.service.ts
 │   │   ├── payment.service.ts
 │   │   ├── intake.service.ts
@@ -133,6 +139,7 @@ leos_firm/
 | Un componente atado a una feature | `src/components/features/[feature]/` |
 | Lógica de negocio pura (sin React) | `src/services/*.service.ts` |
 | Un cliente de terceros (SDK, config) | `src/lib/[proveedor]/` |
+| Un esquema Zod de un endpoint | `src/lib/validation/[recurso].schema.ts` |
 | Una constante compartida | `src/constants/` |
 
 **Nunca** poner llamadas a Supabase/Square/Google directamente dentro de un componente: pasan por
@@ -167,6 +174,25 @@ leos_firm/
 ---
 
 ## Flujo de Datos (end-to-end)
+
+### Paso 0 — Captación (ADR-008): el dato se pide ANTES del pago
+
+```
+Visitante en /servicios/[slug]
+   └─ popup de diagnóstico (sin X) ── "solo estoy viendo" ──▶ FIN (no vuelve en la sesión)
+        └─ 3 preguntas filtro ──▶ datos de contacto ──▶ POST /api/v1/leads
+             │                                              └─ leads (Supabase) + correo a Claudia
+             ▼
+        servicio deducido
+             ├─ precio fijo (checkout) ──▶ sigue el flujo de pago de abajo
+             └─ precio variable (contact) ──▶ Claudia responde por correo. FIN del flujo automático
+```
+
+Solo los servicios **con precio en el catálogo** entran al flujo de cobro automático. Los demás
+terminan en el correo a Claudia: la firma no tiene aún la infraestructura para cobrarlos
+automáticamente (precios variables y otro medio de cobro).
+
+### Pasos 1–N — Compra, cita y seguimiento
 
 ```
 ┌─ NAVEGADOR ─────────────────────┐        ┌─ SERVIDOR (Next.js) ────────────┐
@@ -380,7 +406,7 @@ permite manipularlo.
 servidor. El cliente solo envía el `service_id`.
 **Consecuencias:** Cambiar un precio es un UPDATE en `services`, sin deploy.
 
-**Nota de implementación (FASE 2):** hasta que exista el proyecto de Supabase, el catálogo vive en
+**Nota de implementación (FASE 2 → migra en FASE 6):** hasta que exista el proyecto de Supabase, el catálogo vive en
 `src/constants/content/services.ts` con la misma forma que la tabla. `service.service.ts` es la
 única pieza que conoce el origen de los datos, así que la migración no toca ningún componente.
 Los montos se formatean con `Intl.NumberFormat` en locale **`en-US`** (`"$150"`); `es-MX` devuelve
@@ -392,5 +418,31 @@ Los montos se formatean con `Intl.NumberFormat` en locale **`en-US`** (`"$150"`)
 renderizar, una caída de cualquiera de ellos dejaría a la firma sin presencia web.
 **Decisión:** Las páginas públicas son estáticas y se prerrenderizan en build. No consultan
 servicios externos en tiempo de request.
-**Consecuencias:** Cuando el catálogo migre a Supabase (FASE 3) debe leerse en build o con
+**Consecuencias:** Cuando el catálogo migre a Supabase (FASE 6) debe leerse en build o con
 revalidación por tiempo (ISR), nunca con un fetch bloqueante por visita.
+
+### ADR-008: El dato del cliente se captura ANTES del pago, no después
+**Fecha:** 2026-08-03
+**Contexto:** El diseño original ponía el formulario de ingreso **después** del cobro. Con eso, todo
+visitante que llegaba a la pantalla de pago y no completaba la compra se perdía por completo: sin
+nombre, sin correo, sin teléfono y sin ninguna forma de recuperarlo. Para una firma cuyo ciclo de
+venta incluye consultas de alto valor y decisiones que tardan semanas, ese es el peor lugar posible
+para poner el formulario.
+**Decisión:** Un **diagnóstico gratuito** en popup, que aparece mientras el visitante lee un
+servicio, hace 3 preguntas de filtro, deduce qué servicio necesita y **pide sus datos antes de
+mostrarle el resultado**. El lead se registra en ese momento (`POST /api/v1/leads`), con
+independencia de que pague o no. El popup no tiene X: se sale por el botón
+*"No quiero mi diagnóstico gratuito, solo estoy viendo"*, decisión de la clienta para reducir
+abandonos por reflejo.
+Después del diagnóstico el flujo se bifurca **según el catálogo**:
+- servicio **con** `price_cents` → checkout de Square y agendamiento (flujo automático completo);
+- servicio **sin** `price_cents` → correo a Claudia con los datos del posible cliente y el servicio
+  solicitado.
+**Consecuencias:**
+- Nueva tabla `leads`, anterior a `clients` en el embudo.
+- El intake completo (`context.md` §7) sigue existiendo, pero **después** del pago y sin repetir lo
+  que el diagnóstico ya preguntó (nombre, correo, teléfono, país, si tiene entidad en EE. UU.).
+- La aceptación de la política de cancelación **no** se mueve: se sigue registrando en el intake de
+  la cita, con `accepted_at` e IP. El diagnóstico solo pide autorización para contactar.
+- La bifurcación no se hardcodea: el día que un servicio de cotización reciba precio, pasa solo a la
+  rama de cobro automático.

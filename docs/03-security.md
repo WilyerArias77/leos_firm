@@ -1,6 +1,6 @@
 # Seguridad — Leos Firm LLC
 
-> **Última actualización:** 2026-08-02
+> **Última actualización:** 2026-08-03
 > **Lectura obligatoria** antes de tocar auth, credenciales, RLS, pagos o datos personales.
 
 Este proyecto maneja **datos fiscales y de identidad de personas y empresas**, y **cobros con
@@ -12,6 +12,7 @@ tarjeta**. El estándar de seguridad no es negociable.
 
 | Activo | Riesgo | Mitigación |
 |--------|--------|------------|
+| **Leads del diagnóstico** (nombre, correo, teléfono, país) | Fuga de PII · spam de formularios | RLS sin acceso anónimo · escritura solo vía `service_role` · rate limit por IP · logs sin PII |
 | Datos del intake (nombre, país, empresa, situación fiscal) | Fuga de PII | RLS deny-by-default + acceso solo vía servidor |
 | Documentos adjuntos (actas, IDs, EIN) | Descarga no autorizada | Supabase Storage bucket **privado** + signed URLs de corta vida |
 | Cobros con tarjeta | Fraude / exposición PCI | Square Web Payments SDK: la tarjeta **nunca** toca nuestro servidor ni nuestra DB |
@@ -140,7 +141,9 @@ NUNCA CONFIAR EN EL CLIENTE. TODA ENTRADA SE VALIDA EN EL SERVIDOR.
 - Un esquema Zod por endpoint, compartido con el formulario (misma fuente de verdad).
 - La validación del cliente es **UX**, no seguridad: el servidor revalida siempre.
 - Adjuntos: validar tipo MIME real, extensión y tamaño máximo (10 MB) antes de subir a Storage.
-- Rate limiting en endpoints públicos: `/checkout`, `/intake`, `/availability`, `/agent/*`.
+- Rate limiting en endpoints públicos: `/leads`, `/checkout`, `/intake`, `/availability`, `/agent/*`.
+  Implementación actual: `src/lib/utils/rateLimit.ts`, **en memoria de la instancia** — frena el
+  abuso de un script, no un ataque distribuido. Migra a un store compartido en la FASE 6.
 - Escapar/sanear todo texto libre antes de incrustarlo en el HTML de un correo (riesgo de inyección
   en el correo del administrador).
 
@@ -149,6 +152,12 @@ NUNCA CONFIAR EN EL CLIENTE. TODA ENTRADA SE VALIDA EN EL SERVIDOR.
 ## Datos Personales (PII)
 
 - El intake contiene PII y datos fiscales: se guarda solo lo necesario para prestar el servicio.
+- **Leads (`leads`)**: el diagnóstico gratuito pide nombre, correo, teléfono y país. Reglas:
+  - Casilla de autorización **obligatoria**, con `consent_at` y `consent_ip` como evidencia.
+  - Los logs de producción registran solo rama, servicio, país y `has_us_entity` — **nunca** el
+    nombre, el correo ni el teléfono. El volcado completo solo existe en desarrollo.
+  - Un lead es PII aunque la persona nunca compre: mismas políticas de retención que `clients`.
+  - Falta publicar el aviso de privacidad antes de poner el sitio en producción (FASE 5).
 - El bucket de Storage de adjuntos es **privado**; se accede con signed URLs de vida corta (≤ 15 min).
 - Los logs **nunca** incluyen PII, tokens ni cuerpos completos de webhook. Loguear ids, no contenido.
 - La aceptación de la política de cancelación se registra con `accepted_at` y `accepted_ip` como

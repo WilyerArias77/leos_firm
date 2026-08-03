@@ -6,10 +6,12 @@ import { Container } from "@/components/layout/Container";
 import { Section } from "@/components/layout/Section";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { DiagnosticTrigger } from "@/components/features/diagnostic/DiagnosticTrigger";
 import {
   formatPrice,
   getServiceBySlug,
   getServiceSlugs,
+  getServices,
 } from "@/services/service.service";
 import { COMPANY } from "@/constants/business";
 import { INTAKE_REQUIREMENTS } from "@/constants/content/policies";
@@ -42,6 +44,9 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
 
   if (!service) notFound();
 
+  // The catalog travels to the popup so the diagnosis resolves in the browser
+  // without a round trip (`docs/features/lead-diagnostic.md`).
+  const services = await getServices();
   const price = formatPrice(service.priceCents);
 
   return (
@@ -126,17 +131,31 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
             </div>
 
             <aside className="lg:col-span-1">
-              <Card className="sticky top-28 p-6">
-                <h2 className="font-serif text-xl text-navy-900">Agendar</h2>
+              <Card className="sticky top-32 p-6">
+                <p className="text-xs font-medium tracking-widest text-accent uppercase">
+                  Diagnóstico gratuito
+                </p>
+
+                <h2 className="mt-2 font-serif text-xl text-navy-900">
+                  ¿Es este el servicio que necesitas?
+                </h2>
 
                 <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-                  El agendamiento y pago en línea estarán disponibles próximamente.
-                  Mientras tanto, comunícate directamente con la firma.
+                  Responde 3 preguntas y te decimos qué corresponde a tu caso y cuál
+                  es el siguiente paso.
                 </p>
+
+                <DiagnosticTrigger
+                  services={services}
+                  contextService={service}
+                  autoOpen
+                  label="Quiero mi diagnóstico gratuito"
+                  className="mt-5 w-full"
+                />
 
                 <a
                   href={PHONE_HREF}
-                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-card bg-accent px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-card border border-navy-200 bg-surface px-5 py-2.5 text-sm font-medium text-navy-900 transition-colors hover:bg-surface-muted"
                 >
                   <Phone className="h-4 w-4" aria-hidden="true" />
                   {COMPANY.phone}

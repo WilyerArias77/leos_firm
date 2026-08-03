@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/layout/Container";
 import { Section } from "@/components/layout/Section";
+import { Card } from "@/components/ui/Card";
+import { DiagnosticTrigger } from "@/components/features/diagnostic/DiagnosticTrigger";
 import { ServiceCard } from "@/components/features/services/ServiceCard";
 import { getServices } from "@/services/service.service";
 
@@ -30,7 +32,25 @@ export default async function ServicesPage() {
 
       <Section>
         <Container>
-          <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Atajo al diagnóstico: aquí es donde el visitante duda de cuál elegir */}
+          <Card className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-serif text-xl text-navy-900">
+                ¿No sabes cuál de todos necesitas?
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                Responde 3 preguntas y te decimos qué corresponde a tu caso, sin costo.
+              </p>
+            </div>
+
+            <DiagnosticTrigger
+              services={services}
+              label="Hacer mi diagnóstico gratuito"
+              className="shrink-0"
+            />
+          </Card>
+
+          <ul className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {services.map((service) => (
               <li key={service.slug}>
                 <ServiceCard service={service} />

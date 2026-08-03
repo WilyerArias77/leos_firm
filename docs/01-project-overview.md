@@ -1,18 +1,20 @@
 # Leos Firm LLC — Plataforma Web de Captación y Agendamiento
 
-> **Última actualización:** 2026-08-02
-> **Versión:** 0.1.0
+> **Última actualización:** 2026-08-03
+> **Versión:** 0.3.0
 > **Método:** AInnovate v2.1 (Documentation-Driven Development)
+> **Orden de trabajo:** [`00-roadmap.md`](./00-roadmap.md) — 14 fases en 2 bloques (front end / back end)
 
 ---
 
 ## Visión
 
 Plataforma web para **Leos Firm LLC** (San Antonio, TX) que convierte el sitio de la firma en un
-ecosistema automatizado de captación, cobro y agendamiento. El cliente elige un servicio, paga con
-Square, un agente de IA le genera y valida un formulario de ingreso inteligente, y el sistema agenda
-la cita en Google Calendar, crea la sala virtual, registra al cliente en el CRM y notifica por correo
-a cliente y administradora — sin intervención manual.
+ecosistema automatizado de captación, cobro y agendamiento. El visitante recibe un **diagnóstico
+gratuito** que identifica qué servicio necesita y deja sus datos ahí mismo; si el servicio tiene
+cobro automático paga con Square y el sistema agenda la cita en Google Calendar, crea la sala
+virtual, registra al cliente en el CRM y notifica por correo a cliente y administradora — sin
+intervención manual. Si el servicio es de precio variable, Claudia recibe un correo con el caso.
 
 Público objetivo: empresarios, inversionistas y familias internacionales (México, España, LatAm,
 Miami, California, Texas) que necesitan constituir, regularizar o administrar empresas en EE. UU.
@@ -21,6 +23,8 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
 
 ## Objetivos
 
+0. **No perder ningún interesado** — el diagnóstico gratuito captura nombre, correo, teléfono y país
+   **antes** del pago, para que un visitante que no compra siga siendo un contacto recuperable (ADR-008).
 1. **Vender sin fricción** — catálogo de servicios con compra directa vía Square (pago antes de confirmar cita).
 2. **Cero doble-agenda** — sincronización real con Google Calendar; cada cita bloquea el slot.
 3. **Intake de calidad** — formulario inteligente y condicional que llega completo y validado antes de la consultoría.
@@ -54,12 +58,25 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
 ## Alcance del Flujo Operativo
 
 ```
-Sitio web → Catálogo → Selección de servicio → Checkout Square
-   └─ pago aprobado → Agente IA → Intake inteligente → Validación
-        └─ Google Calendar (disponibilidad) → Cita + Google Meet/Zoom
-             └─ CRM (Supabase) → Correo al cliente + copia al admin
-                  └─ Estado: pendiente_atencion → atendido
+Sitio web → Catálogo → Servicio → DIAGNÓSTICO GRATUITO (popup, 3 preguntas)
+   └─ datos del cliente capturados  →  tabla leads + correo a Claudia
+        │
+        ├─ servicio CON cobro automático (precio fijo)
+        │     └─ Checkout Square → pago aprobado (webhook)
+        │          └─ Intake completo (§7) + Agente IA → Validación
+        │               └─ Google Calendar → Cita + Google Meet/Zoom
+        │                    └─ CRM → Correo al cliente + copia al admin
+        │                         └─ Estado: pendiente_atencion → atendido
+        │
+        └─ servicio SIN cobro automático (precio variable)
+              └─ Correo a Claudia con los datos del posible cliente y el servicio solicitado
+                   └─ Seguimiento manual (cotización)
 ```
+
+**Solo 2 de los 8 servicios tienen cobro automático hoy** — los que tienen precio cerrado:
+consultoría fiscal ($150) y elecciones fiscales ($250). Los otros 6 se cobran con una
+infraestructura distinta y con precios variables, así que caen en la rama del correo. La
+bifurcación se decide leyendo `services.price_cents`, no una lista fija (ADR-008).
 
 ### Servicios del catálogo (fuente: `context.md`)
 
@@ -98,18 +115,29 @@ cuerpo. Nada de gradientes llamativos ni animaciones excesivas.
 
 ## Estado del Proyecto
 
-| Fase | Descripción | Estado |
-|------|-------------|--------|
-| 1 | Setup + documentación + design system (Método AInnovate) | [x] **Completo** |
-| 2 | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
-| 3 | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
-| 4 | Agente IA + intake form inteligente + Storage de adjuntos | [ ] Pendiente |
-| 5 | Google Calendar: disponibilidad, cita, Google Meet | [ ] Pendiente |
-| 6 | Correos (Gmail API): confirmación, copia admin, recordatorios | [ ] Pendiente |
-| 7 | CRM + panel admin + estados de cita (`pendiente_atencion` → `atendido`) | [ ] Pendiente |
-| 8 | Enlace de calendario para referidos (30 min gratis / cupón) | [ ] Pendiente |
-| 9 | Post-cita: resumen IA + envío de propuestas | [ ] Pendiente |
-| 10 | Polish, A11Y, tests de flujos críticos + deploy | [ ] Pendiente |
+> Detalle completo, criterios de entrada/salida y mapeo con la numeración anterior:
+> [`00-roadmap.md`](./00-roadmap.md).
+
+| Fase | Bloque | Descripción | Estado |
+|------|--------|-------------|--------|
+| 1 | Front | Setup + documentación + design system (Método AInnovate) | [x] **Completo** |
+| 2 | Front | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
+| 3 | Front | **Diagnóstico interactivo + captación de leads (popup)** | [x] **Completo** |
+| 4 | Front | Front end de agendamiento y pago (`/agendar`, intake §7, calendario, pago — mock) | [ ] Siguiente |
+| 5 | Front | Cierre de front end: A11Y, SEO, 404/500, contenido pendiente de Claudia | [ ] Pendiente |
+| 6 | Back | Supabase (proyecto, migraciones, RLS, tipos) + entrega real del lead a Claudia | [ ] Pendiente |
+| 7 | Back | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
+| 8 | Back | Google Calendar: disponibilidad, cita, Google Meet | [ ] Pendiente |
+| 9 | Back | Correos (Gmail API): confirmación, copia admin, recordatorios | [ ] Pendiente |
+| 10 | Back | Agente IA en el intake (preguntas adaptativas + validación semántica) | [ ] Pendiente |
+| 11 | Back | CRM + panel admin + estados de cita (`pendiente_atencion` → `atendido`) | [ ] Pendiente |
+| 12 | Back | Enlace de calendario para referidos (30 min gratis / cupón) | [ ] Pendiente |
+| 13 | Back | Post-cita: resumen IA + envío de propuestas | [ ] Pendiente |
+| 14 | Back | Hardening, tests de flujos críticos + deploy | [ ] Pendiente |
+
+⚠️ **Bloqueante para publicar:** la FASE 3 ya captura leads, pero la entrega (guardar + avisar a
+Claudia) se implementa en la FASE 6. **No publicar el sitio antes de cerrar la FASE 6** o los
+contactos capturados se pierden.
 
 ---
 
@@ -142,6 +170,7 @@ Estas reglas provienen de `context.md` §8 y deben respetarse en TODA implementa
 
 | Doc | Contenido |
 |-----|-----------|
+| [`00-roadmap.md`](./00-roadmap.md) | **Orden de trabajo por fases** — fuente de verdad |
 | [`02-architecture.md`](./02-architecture.md) | Estructura de carpetas, flujo de datos, ADRs |
 | [`03-security.md`](./03-security.md) | Credenciales, RLS, validación, PII |
 | [`04-deployment.md`](./04-deployment.md) | Proceso de deploy y checklist |

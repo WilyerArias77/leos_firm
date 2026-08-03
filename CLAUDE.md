@@ -12,15 +12,23 @@ Sitio web de **Leos Firm LLC** (San Antonio, TX) — consultoría fiscal y apert
 EE. UU. para empresarios hispanos. No es un sitio informativo: es un **ecosistema automatizado**.
 
 ```
-Catálogo → Pago Square → Agente IA → Intake form → Google Calendar
-   → Google Meet → CRM → Correos (Gmail) → Estado de la cita
+Servicio → DIAGNÓSTICO GRATUITO (popup, captura el lead ANTES del pago)
+   ├─ servicio con precio  → Pago Square → Intake + Agente IA → Google Calendar
+   │                          → Google Meet → CRM → Correos → Estado de la cita
+   └─ servicio sin precio  → Correo a Claudia con los datos y el servicio solicitado
 ```
+
+Solo **2 de los 8 servicios** tienen cobro automático (los que tienen precio cerrado). El resto se
+cobra con otra infraestructura y con precios variables → caen en la rama del correo. La rama se
+decide leyendo `priceCents` del catálogo, nunca una lista de slugs (ADR-008).
 
 **Stack:** Next.js 16 (App Router) · TypeScript · TailwindCSS v4 · Supabase
 **Integraciones:** Square · Google Calendar · Google Meet/Zoom · Gmail · Anthropic
 
 ### Principio fundamental
 
+> El **dato del cliente se captura antes del pago** (ADR-008): quien abandona el checkout debe
+> seguir siendo un contacto recuperable.
 > Ninguna cita existe sin **pago confirmado** y sin **slot bloqueado en Google Calendar**.
 > El **webhook de Square** es la única fuente de verdad del pago.
 > **Google Calendar** es la única fuente de verdad de la disponibilidad.
@@ -29,8 +37,9 @@ Catálogo → Pago Square → Agente IA → Intake form → Google Calendar
 
 ## Protocolo Obligatorio (antes de cada cambio)
 
-1. LEER `docs/01-project-overview.md`
-2. LEER `docs/02-architecture.md`
+1. LEER `docs/00-roadmap.md` — en qué fase estamos y qué corresponde hacer
+2. LEER `docs/01-project-overview.md`
+3. LEER `docs/02-architecture.md`
 3. LEER `docs/SKILLS.md` — hay MCP servers para Supabase, Google Calendar y Gmail; úsalos
 4. IDENTIFICAR qué feature se modifica
 5. LEER `docs/features/[feature].md` — si NO existe → **CREARLO antes de codear**
@@ -128,6 +137,7 @@ Estilo: serio, profesional y discreto. Serif para titulares, sans para cuerpo.
 
 | Doc | Cuándo leerlo |
 |-----|--------------|
+| `docs/00-roadmap.md` | SIEMPRE (14 fases, front end → back end). **Fuente de verdad del orden** |
 | `docs/01-project-overview.md` | SIEMPRE (visión, stack, estado) |
 | `docs/02-architecture.md` | SIEMPRE (estructura, convenciones, ADRs, Next 16) |
 | `docs/03-security.md` | Auth, credenciales, RLS, pagos, PII |
@@ -147,8 +157,13 @@ Estilo: serio, profesional y discreto. Serif para titulares, sans para cuerpo.
 | `src/app/(public)/**` | `docs/features/public-site.md` |
 | `src/components/ui/**` · `src/components/layout/**` | `docs/features/public-site.md` + `02-architecture.md` (design system) |
 | `src/components/features/services/**` | `docs/features/public-site.md` |
+| `src/components/features/diagnostic/**` · `src/hooks/useDiagnosticPrompt.ts` | `docs/features/lead-diagnostic.md` |
+| `src/constants/content/diagnostic.ts` | `docs/features/lead-diagnostic.md` (**árbol de preguntas**: contenido, no lógica) |
+| `src/services/diagnostic.service.ts` · `src/services/lead.service.ts` | `docs/features/lead-diagnostic.md` |
+| `src/app/api/v1/leads/**` | `docs/API_DOCS.md` + `features/lead-diagnostic.md` + `03-security.md` (PII) |
+| `src/lib/validation/**` | `docs/03-security.md` (el mismo esquema corre en cliente y servidor) |
 | `src/constants/content/**` | `docs/features/public-site.md` + `context.md` (**fuente única del contenido**) |
-| `src/services/service.service.ts` | `docs/features/public-site.md` (migra a Supabase en FASE 3) |
+| `src/services/service.service.ts` | `docs/features/public-site.md` (migra a Supabase en FASE 6) |
 | `src/types/content.types.ts` | `docs/DB_SCHEMA.md` (debe reflejar la tabla `services`) |
 | `src/app/(admin)/**` | `docs/03-security.md` + `features/dashboard.md` |
 | `src/app/api/v1/**` | `docs/API_DOCS.md` + `features/[feature].md` |

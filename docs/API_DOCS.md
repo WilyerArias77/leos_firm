@@ -2,8 +2,9 @@
 
 **Base URL:** `/api/v1`
 **Autenticación:** ver tabla por endpoint (el sitio público **no** usa JWT de cliente — ADR-001)
-**Última actualización:** 2026-08-02
-**Estado global:** DISEÑADA — solo `/health` está implementado. El resto se construye en FASE 2.
+**Última actualización:** 2026-08-03
+**Estado global:** `/health` y `/leads` implementados. El resto se construye en el bloque de back
+end (fases 6–14 de [`00-roadmap.md`](./00-roadmap.md)).
 
 > **Mandamiento III:** ningún endpoint existe sin su fila en el índice y su sección en este archivo.
 
@@ -23,29 +24,33 @@
 
 ## Índice de Endpoints
 
+> Las fases citadas son las de [`00-roadmap.md`](./00-roadmap.md) (reorganizado el 2026-08-03).
+
 | Método | Ruta | Descripción | Auth | Estado |
 |--------|------|-------------|------|--------|
 | GET | `/api/v1/health` | Estado del servidor | Pública | ✅ Implementado |
-| GET | `/api/v1/services` | Catálogo de servicios activos | Pública | ⏳ FASE 2 |
-| GET | `/api/v1/services/[slug]` | Detalle de un servicio | Pública | ⏳ FASE 2 |
-| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 3 |
-| POST | `/api/v1/checkout/validate-coupon` | Validar un cupón de referido | Pública | ⏳ FASE 3 |
-| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 3 |
-| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 3 |
-| POST | `/api/v1/agent/intake-schema` | Generar el formulario inteligente | Pública | ⏳ FASE 4 |
-| POST | `/api/v1/intake` | Guardar el intake + validación | Pública | ⏳ FASE 4 |
-| POST | `/api/v1/intake/documents` | Subir adjuntos | Pública | ⏳ FASE 4 |
-| GET | `/api/v1/availability` | Slots libres desde Google Calendar | Pública | ⏳ FASE 5 |
-| POST | `/api/v1/availability/hold` | Bloquear un slot 10 min | Pública | ⏳ FASE 5 |
-| POST | `/api/v1/appointments` | Crear cita + Meet + CRM + correos | Pública | ⏳ FASE 5 |
-| GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 5 |
-| PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 7 |
-| DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 7 |
-| GET | `/api/v1/cron/reminders` | Recordatorios 24 h / 1 h | Cron | ⏳ FASE 6 |
-| GET | `/api/v1/cron/close-appointments` | `pendiente_atencion` → `atendido` | Cron | ⏳ FASE 7 |
-| GET | `/api/v1/admin/appointments` | Listado del panel | Admin | ⏳ FASE 7 |
-| PATCH | `/api/v1/admin/appointments/[id]` | Cambiar estado / notas | Admin | ⏳ FASE 7 |
-| POST | `/api/v1/admin/refunds` | Reembolso según política | Admin | ⏳ FASE 7 |
+| POST | `/api/v1/leads` | Registrar lead del diagnóstico gratuito | Pública + rate limit | ✅ Implementado (entrega en FASE 6) |
+| GET | `/api/v1/services` | Catálogo de servicios activos | Pública | ⏳ FASE 6 |
+| GET | `/api/v1/services/[slug]` | Detalle de un servicio | Pública | ⏳ FASE 6 |
+| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 7 |
+| POST | `/api/v1/checkout/validate-coupon` | Validar un cupón de referido | Pública | ⏳ FASE 12 |
+| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 7 |
+| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 7 |
+| POST | `/api/v1/agent/intake-schema` | Generar el formulario inteligente | Pública | ⏳ FASE 10 |
+| POST | `/api/v1/intake` | Guardar el intake + validación | Pública | ⏳ FASE 6 |
+| POST | `/api/v1/intake/documents` | Subir adjuntos | Pública | ⏳ FASE 6 |
+| GET | `/api/v1/availability` | Slots libres desde Google Calendar | Pública | ⏳ FASE 8 |
+| POST | `/api/v1/availability/hold` | Bloquear un slot 10 min | Pública | ⏳ FASE 8 |
+| POST | `/api/v1/appointments` | Crear cita + Meet + CRM + correos | Pública | ⏳ FASE 8 |
+| GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 8 |
+| PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 11 |
+| DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 11 |
+| GET | `/api/v1/cron/reminders` | Recordatorios 24 h / 1 h | Cron | ⏳ FASE 9 |
+| GET | `/api/v1/cron/close-appointments` | `pendiente_atencion` → `atendido` | Cron | ⏳ FASE 11 |
+| GET | `/api/v1/admin/leads` | Listado de leads del diagnóstico | Admin | ⏳ FASE 11 |
+| GET | `/api/v1/admin/appointments` | Listado del panel | Admin | ⏳ FASE 11 |
+| PATCH | `/api/v1/admin/appointments/[id]` | Cambiar estado / notas | Admin | ⏳ FASE 11 |
+| POST | `/api/v1/admin/refunds` | Reembolso según política | Admin | ⏳ FASE 11 |
 
 ---
 
@@ -88,6 +93,63 @@
 ```json
 { "status": "ok", "timestamp": "2026-08-02T15:30:00.000Z", "version": "0.1.0" }
 ```
+
+---
+
+### Leads del Diagnóstico ✅
+
+**`POST /api/v1/leads`** — Pública · rate limit 5 peticiones / 10 min por IP
+
+Registra un contacto capturado por el diagnóstico gratuito, **antes de cualquier pago** (ADR-008).
+Feature: [`features/lead-diagnostic.md`](./features/lead-diagnostic.md)
+
+**Request**
+```json
+{
+  "fullName": "Ana Rivera",
+  "email": "ana@ejemplo.com",
+  "phone": "+52 55 1234 5678",
+  "country": "México",
+  "consent": true,
+  "steps": [
+    { "questionId": "situacion", "optionId": "con-entidad" },
+    { "questionId": "objetivo-con-entidad", "optionId": "nomina" },
+    { "questionId": "urgencia", "optionId": "este-mes" }
+  ],
+  "recommendedServiceSlug": "payroll",
+  "outcome": "contact",
+  "viewedServiceSlug": "payroll",
+  "sourcePath": "/servicios/payroll"
+}
+```
+
+Reglas:
+- `consent` debe ser `true`; se guardará con `consent_at` y `consent_ip` como evidencia.
+- El esquema Zod es el **mismo** que corre el formulario (`src/lib/validation/lead.schema.ts`).
+- `email` se normaliza a minúsculas en el servidor.
+- `outcome` lo calcula el cliente pero el servidor **lo recalculará** contra `services.price_cents`
+  cuando el catálogo viva en Supabase (FASE 6): el cliente nunca decide si algo se cobra (ADR-006).
+
+**Response 201**
+```json
+{
+  "data": {
+    "received": true,
+    "outcome": "contact",
+    "recommendedServiceSlug": "payroll",
+    "delivery": "pending"
+  },
+  "message": "Datos recibidos"
+}
+```
+
+> ⚠️ **`delivery: "pending"` es literal.** Hoy el endpoint valida, limita y responde, pero **no
+> persiste ni envía correo**: no existen aún el proyecto de Supabase ni el service account de
+> Google. En producción registra en el log solo campos **sin PII** (`03-security.md`) y una
+> advertencia. **FASE 6 lo convierte en `delivered`.** El sitio no debe publicarse antes.
+
+**Errores:** `400 VALIDATION_ERROR` (con `details` por campo) · `429 RATE_LIMITED` (con
+`Retry-After`)
 
 ---
 

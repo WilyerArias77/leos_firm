@@ -6,6 +6,117 @@
 
 ---
 
+## [2026-08-03] — Diagnóstico interactivo y captación de leads (FASE 3) — v0.3.0
+
+### Tipo de cambio
+- **CHANGED (flujo)**: el formulario de datos pasa a estar **antes** del pago, no después (ADR-008)
+- **ADDED**: popup de diagnóstico gratuito con árbol de preguntas y bifurcación cobro/correo
+- **ADDED**: `POST /api/v1/leads` con validación Zod compartida y rate limit
+- **ADDED**: `docs/00-roadmap.md` — 14 fases en 2 bloques (front end / back end)
+- **CHANGED (UI)**: header con el logo más grande y el slogan de la clienta en dorado
+
+### Archivos creados
+
+**Documentación (primero, Mandamiento III):**
+- `docs/features/lead-diagnostic.md` — la feature completa, escrita antes del código
+- `docs/00-roadmap.md` — orden de trabajo, criterios de cierre y mapeo con la numeración vieja
+
+**Lógica y datos:**
+- `src/types/diagnostic.types.ts` — tipos del árbol de preguntas y del resultado
+- `src/constants/content/diagnostic.ts` — textos y **árbol de 4 preguntas** (contenido, no lógica)
+- `src/services/diagnostic.service.ts` — recorre el árbol, deduce servicio y rama. Funciones puras
+- `src/services/lead.service.ts` — envío del lead al endpoint
+- `src/lib/validation/lead.schema.ts` — esquema Zod **compartido** cliente ↔ servidor
+- `src/lib/utils/rateLimit.ts` — límite por IP en memoria
+- `src/lib/utils/formatCurrency.ts` — `formatPrice` movido aquí (lo necesitan Client Components)
+- `src/app/api/v1/leads/route.ts` — endpoint público
+
+**Componentes:**
+- `ui/Modal` — modal sobre `<dialog>` nativo, con modo **no descartable**
+- `ui/Input` — campo con label, hint y error accesibles
+- `features/diagnostic/DiagnosticDialog/` — `DiagnosticDialog` (máquina de estados) + `Intro`,
+  `QuestionStep`, `ContactStep`, `Result`, `Thread`, `Progress`
+- `features/diagnostic/DiagnosticTrigger/` — decide cuándo abrir; reutilizable en la portada
+- `src/hooks/useDiagnosticPrompt.ts` — disparo por tiempo/scroll y memoria de la respuesta
+
+### Archivos modificados
+- `src/components/layout/Header/Header.tsx` — franja superior con el slogan en dorado; logo de 48 px
+  a 56 px (móvil) / 72 px (escritorio); fila de 80 px a 96 px
+- `src/constants/business.ts` — `COMPANY.slogan`, `DIAGNOSTIC_PROMPT`, `LEAD_RATE_LIMIT`
+- `src/constants/routes.ts` — `API_ROUTES.leads`
+- `src/services/service.service.ts` — `formatPrice` ahora se reexporta desde `lib/utils`
+- `src/components/ui/Button/index.ts` — exporta también `ButtonVariant` y `ButtonSize`
+- `src/app/(public)/servicios/[slug]/page.tsx` — popup automático + CTA del diagnóstico en el aside
+  (el teléfono pasa a ser la acción secundaria); `sticky top-28` → `top-32` por el header más alto
+- `src/app/(public)/servicios/page.tsx` — banda "¿No sabes cuál de todos necesitas?"
+- Docs: `01-project-overview.md`, `02-architecture.md` (**ADR-008**), `DB_SCHEMA.md` (tabla `leads`),
+  `API_DOCS.md`, `SKILLS.md`, `features/README.md`, `features/public-site.md`
+- Reglas de IA: `CLAUDE.md`, `.windsurfrules`, `.cursorrules`, `.clinerules`,
+  `.github/copilot-instructions.md`
+
+### Cambios en base de datos
+- Ninguno aplicado. Se **diseñó** la tabla `leads` en `DB_SCHEMA.md` (+ enums `lead_outcome` y
+  `lead_status`), que será la **primera migración** del proyecto en la FASE 6.
+
+### Documentación actualizada
+- [x] `CHANGELOG.md` — esta entrada
+- [x] `docs/features/lead-diagnostic.md`
+- [x] `docs/00-roadmap.md`
+- [x] `docs/01-project-overview.md` (roadmap de 14 fases + flujo con la bifurcación)
+- [x] `docs/02-architecture.md` (ADR-008, `lib/validation/`, `features/diagnostic/`, flujo paso 0)
+- [x] `docs/DB_SCHEMA.md` (tabla `leads`, RLS, enums)
+- [x] `docs/API_DOCS.md` (`POST /api/v1/leads` + fases renumeradas)
+- [x] `docs/SKILLS.md`, `docs/features/README.md`, `docs/features/public-site.md`
+
+### Validación (Mandamiento X)
+- [x] `npx tsc --noEmit` — sin errores de tipos
+- [x] `npm run build` — 18 rutas (17 + `/api/v1/leads`)
+- [x] `npm run lint` — sin errores
+- [x] Flujo completo verificado en el navegador (escritorio 1280 px y móvil 390 px): popup → 3
+      preguntas → contacto → resultado, en las **dos** ramas
+- [x] Validación del formulario: los 5 campos muestran su error y el envío se bloquea
+- [x] `POST /api/v1/leads`: `400` con `details` por campo · `201` correcto · `429` con `Retry-After`
+      a partir de la 6.ª petición
+- [x] Log de producción sin PII (solo rama, servicio, país y `hasUsEntity`) + advertencia de falta
+      de entrega
+- [x] "Solo estoy viendo" cierra el popup y **no reaparece** ni al recargar
+- [x] Sin colores arbitrarios, sin `any`, **sin dependencias nuevas**
+
+### Notas importantes
+- ⚠️ **El endpoint todavía no entrega el lead.** Valida, limita y responde `201` con
+  `delivery: "pending"`, pero no guarda en Supabase ni envía correo a Claudia: no existe el proyecto
+  de Supabase ni el service account de Google. **Publicar el sitio antes de la FASE 6 significa
+  perder todos los leads.** Está declarado en el resultado del popup, en `API_DOCS.md`,
+  `DB_SCHEMA.md`, `00-roadmap.md` y en el log del servidor.
+- El resultado **no simula** lo que no existe: la rama de cobro muestra el botón de pago
+  deshabilitado y ambas ramas ofrecen el teléfono de la firma.
+- Solo 2 de los 8 servicios tienen cobro automático (los que tienen precio). La rama se decide
+  leyendo `priceCents` del catálogo, así que cuando la clienta defina precios para los demás, esos
+  servicios pasan solos a la rama de pago **sin tocar código**.
+- El slogan del header **no** viene de `context.md`: lo pidió la clienta el 2026-08-03. Quedó
+  registrado en `COMPANY.slogan` y trazado en `features/public-site.md`.
+- El popup **no tiene X** por decisión de negocio. Es accesible porque usa `<dialog showModal()>`
+  (trampa de foco nativa) y el botón de rechazo es una salida real, enfocable con teclado.
+
+### Lección aprendida
+Un componente de cliente que importa `service.service.ts` arrastra la capa de datos al bundle, y en
+la FASE 6 ese módulo pasará a importar el cliente de Supabase **server-only**: el build habría
+fallado entonces, no ahora. Se movió `formatPrice` a `lib/utils/formatCurrency.ts` y
+`service.service.ts` lo reexporta, así que ningún import existente cambió.
+→ *Antes de importar algo desde un Client Component, preguntarse qué va a importar ESE módulo dentro
+de tres fases.*
+
+### Request original
+> Claude necesito que modifiquemos el flujo de la pagina. Te puse que el formulario deberia aparecer
+> despues del pago pero fue un error. Ahora necesito que cuando la persona consulte el servicio el
+> formulario aparezca en el menu de cada servicio (…) popup con el formulario (…) sin X (…) resumen
+> del servicio y un boton para dejar los datos y un segundo boton que diga "no quiero mi diagnostico
+> gratuito, solo estoy viendo" (…) El logo está muy pequeño, pon el slogan en el header (…) dorado
+> (…) Utiliza el metodo AInnovate (…) dime si el proyecto está estructurado en fases (…) la clienta
+> NO tiene todos los datos necesarios para automatizar el cobro de todos sus servicios
+
+---
+
 ## [2026-08-02] — Sitio público (FASE 2) — v0.2.0
 
 ### Tipo de cambio

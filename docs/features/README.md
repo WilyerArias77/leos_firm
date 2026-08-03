@@ -8,6 +8,7 @@ FASE 2.1) y se actualiza al terminar.
 | Doc | Feature | Estado |
 |-----|---------|--------|
 | [`public-site.md`](./public-site.md) | Sitio público: portada, catálogo, detalle, Claudia, FAQ, políticas | ✅ Completo |
+| [`lead-diagnostic.md`](./lead-diagnostic.md) | Diagnóstico interactivo en popup y captación de leads | ✅ Completo (entrega en FASE 6) |
 
 ## Ciclo de cada feature
 
@@ -57,15 +58,18 @@ FASE 2.1) y se actualiza al terminar.
 - [ ] [Cosa que falta]
 ```
 
-## Features planificadas (ver `docs/01-project-overview.md`)
+## Features planificadas (ver `docs/00-roadmap.md`)
 
 | Fase | Feature | Doc esperado |
 |------|---------|--------------|
 | 2 | Sitio público (home, servicios, sobre Claudia, FAQ) | ✅ `public-site.md` |
-| 3 | Checkout con Square + webhook | `payments.md` |
-| 4 | Agente IA + intake form | `intake.md` |
-| 5 | Google Calendar + Meet | `scheduling.md` |
-| 6 | Notificaciones por Gmail | `notifications.md` |
-| 7 | CRM + panel admin + estados | `dashboard.md` |
-| 8 | Enlace de calendario para referidos | `referrals.md` |
-| 9 | Resumen IA post-cita + propuestas | `post-meeting.md` |
+| 3 | Diagnóstico interactivo + captación de leads | ✅ `lead-diagnostic.md` |
+| 4 | Front end de agendamiento y pago (intake §7, calendario, pago) | `booking-ui.md` |
+| 6 | Supabase + entrega real del lead (correo a Claudia) | `leads-backend.md` |
+| 7 | Checkout con Square + webhook | `payments.md` |
+| 8 | Google Calendar + Meet | `scheduling.md` |
+| 9 | Notificaciones por Gmail | `notifications.md` |
+| 10 | Agente IA en el intake | `ai-intake.md` |
+| 11 | CRM + panel admin + estados | `dashboard.md` |
+| 12 | Enlace de calendario para referidos | `referrals.md` |
+| 13 | Resumen IA post-cita + propuestas | `post-meeting.md` |

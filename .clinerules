@@ -179,8 +179,15 @@
 # src/app/(public)/**                    → docs/features/public-site.md
 # src/components/ui/** · layout/**       → docs/features/public-site.md + 02-architecture.md
 # src/components/features/services/**    → docs/features/public-site.md
+# src/components/features/diagnostic/**  → docs/features/lead-diagnostic.md
+# src/hooks/useDiagnosticPrompt.ts       → docs/features/lead-diagnostic.md
+# src/constants/content/diagnostic.ts    → docs/features/lead-diagnostic.md (ÁRBOL DE PREGUNTAS)
+# src/services/diagnostic.service.ts     → docs/features/lead-diagnostic.md
+# src/services/lead.service.ts           → docs/features/lead-diagnostic.md
+# src/app/api/v1/leads/**                → docs/API_DOCS.md + features/lead-diagnostic.md
+# src/lib/validation/**                  → docs/03-security.md (esquema Zod compartido)
 # src/constants/content/**               → docs/features/public-site.md + context.md (FUENTE ÚNICA)
-# src/services/service.service.ts        → docs/features/public-site.md (migra a Supabase en FASE 3)
+# src/services/service.service.ts        → docs/features/public-site.md (migra a Supabase en FASE 6)
 # src/types/content.types.ts             → docs/DB_SCHEMA.md (refleja la tabla services)
 # src/app/(admin)/**                     → docs/03-security.md + features/dashboard.md
 # src/app/api/v1/**                      → docs/API_DOCS.md + features/[feature].md

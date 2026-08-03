@@ -30,21 +30,9 @@ export async function getServiceSlugs(): Promise<string[]> {
 }
 
 /**
- * Formats a cents amount as USD — e.g. `15000` → `"$150"`.
- *
- * Uses `en-US` deliberately: the `es-MX` locale renders USD as `"USD 150"`,
- * which then reads as "USD 150 USD" wherever the UI appends the currency code.
- * Callers add the " USD" suffix themselves.
- *
- * Returns `null` for quote-based services so callers must handle that case
- * explicitly instead of rendering "$0".
+ * Re-exported so existing callers keep importing it from here. The
+ * implementation moved to `lib/utils/formatCurrency.ts` because Client
+ * Components need it, and in FASE 6 this module starts importing a
+ * server-only Supabase client.
  */
-export function formatPrice(priceCents: number | null): string | null {
-  if (priceCents === null) return null;
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(priceCents / 100);
-}
+export { formatPrice } from "@/lib/utils/formatCurrency";

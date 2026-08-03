@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/layout/Container";
+import { COMPANY } from "@/constants/business";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "./Header.types";
@@ -26,8 +27,17 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-navy-700 bg-navy-900">
+      {/* Franja del slogan: visible en todos los tamaños, por pedido de la clienta */}
+      <div className="border-b border-navy-800 bg-navy-950">
+        <Container>
+          <p className="py-2 text-center text-[11px] leading-snug font-medium tracking-wide text-gold sm:text-sm">
+            {COMPANY.slogan}
+          </p>
+        </Container>
+      </div>
+
       <Container>
-        <div className="flex h-20 items-center justify-between gap-4">
+        <div className="flex h-20 items-center justify-between gap-4 sm:h-24">
           <Link
             href={ROUTES.home}
             className="flex items-center gap-3"
@@ -36,12 +46,12 @@ export function Header() {
             <Image
               src="/logo.png"
               alt="Leos Firm LLC"
-              width={48}
-              height={48}
+              width={72}
+              height={72}
               priority
-              className="h-12 w-12 rounded-md object-cover"
+              className="h-14 w-14 rounded-md object-cover sm:h-[72px] sm:w-[72px]"
             />
-            <span className="font-serif text-lg tracking-wide text-platinum">
+            <span className="font-serif text-lg tracking-wide text-platinum sm:text-xl">
               Leos Firm
             </span>
           </Link>

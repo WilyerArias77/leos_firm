@@ -1,11 +1,12 @@
 # Esquema de Base de Datos — Leos Firm LLC
 
 **Base de datos:** Supabase (PostgreSQL 15)
-**Última actualización:** 2026-08-02 · **Estado global:** DISEÑADO — ninguna migración aplicada todavía
+**Última actualización:** 2026-08-03 · **Estado global:** DISEÑADO — ninguna migración aplicada todavía
 
 > ⚠️ **Importante:** este documento describe el modelo **diseñado** en FASE 1. Las tablas se crean
-> durante FASE 2, una por feature, con su migración correspondiente. Cada vez que se cree una tabla
-> real hay que actualizar aquí su estado a `Aplicada` y registrar la migración al final.
+> en **FASE 6** (ver [`00-roadmap.md`](./00-roadmap.md)), una por feature, con su migración
+> correspondiente. Cada vez que se cree una tabla real hay que actualizar aquí su estado a
+> `Aplicada` y registrar la migración al final.
 > **Mandamiento V:** ningún cambio de schema existe sin actualizar este archivo.
 
 ---
@@ -16,6 +17,8 @@
 erDiagram
     services      ||--o{ orders          : "se compra"
     services      ||--o{ appointments    : "agenda"
+    services      ||--o{ leads           : "se recomienda"
+    leads         ||--o| clients         : "se convierte en"
     clients       ||--o{ orders          : "realiza"
     clients       ||--o{ appointments    : "asiste"
     clients       ||--o{ intake_forms    : "diligencia"
@@ -33,6 +36,16 @@ erDiagram
         integer price_cents
         boolean requires_appointment
         boolean is_active
+    }
+    leads {
+        uuid id PK
+        text email
+        text full_name
+        text phone
+        text country
+        text recommended_service_slug
+        text outcome
+        text status
     }
     clients {
         uuid id PK
@@ -114,6 +127,7 @@ erDiagram
 
 | # | Tabla | Descripción | RLS | Estado |
 |---|-------|-------------|-----|--------|
+| 0 | [`leads`](#leads) | Contactos capturados por el diagnóstico, **antes** del pago | SÍ | Diseñada |
 | 1 | [`services`](#services) | Catálogo de servicios y precios | SÍ | Diseñada |
 | 2 | [`clients`](#clients) | CRM — personas y empresas | SÍ | Diseñada |
 | 3 | [`orders`](#orders) | Órdenes de compra | SÍ | Diseñada |
@@ -167,11 +181,79 @@ CREATE TYPE coupon_kind AS ENUM (
   'fixed',          -- descuento en centavos
   'free_minutes'    -- primeros N minutos gratis (referidos de abogados)
 );
+
+CREATE TYPE lead_outcome AS ENUM (
+  'checkout',       -- servicio con precio fijo: puede pagarse en línea
+  'contact'         -- precio variable: lo revisa Claudia y responde por correo
+);
+
+CREATE TYPE lead_status AS ENUM (
+  'nuevo',          -- recién capturado por el diagnóstico
+  'contactado',     -- Claudia ya respondió
+  'convertido',     -- se transformó en cliente (`clients.id`)
+  'descartado'      -- no aplica o no respondió
+);
 ```
 
 ---
 
 ## Tablas
+
+### leads
+
+> Contacto capturado por el **diagnóstico gratuito**, antes de cualquier pago (ADR-008).
+> Es la puerta de entrada del CRM: un lead existe aunque el visitante nunca compre. Cuando compra,
+> se crea su `clients` y el lead queda enlazado.
+> Feature: [`features/lead-diagnostic.md`](./features/lead-diagnostic.md)
+
+| Columna | Tipo | Nullable | Default | Descripción |
+|---------|------|----------|---------|-------------|
+| `id` | `uuid` | NO | `gen_random_uuid()` | PK |
+| `full_name` | `text` | NO | — | Nombre completo |
+| `email` | `text` | NO | — | Normalizado a minúsculas. **No** es único: la misma persona puede diagnosticarse dos veces |
+| `phone` | `text` | NO | — | Número de contacto tal como lo escribió |
+| `country` | `text` | NO | — | País de residencia (texto libre; el visitante lo escribe) |
+| `has_us_entity` | `boolean` | SÍ | `null` | Derivado de la 1.ª respuesta (`context.md` §7) |
+| `situation` | `text` | SÍ | `null` | Id de la opción elegida en `situacion` |
+| `need` | `text` | SÍ | `null` | Id de la opción elegida en `objetivo-*` |
+| `urgency` | `text` | SÍ | `null` | Id de la opción elegida en `urgencia` |
+| `answers` | `jsonb` | NO | `'[]'` | Recorrido completo `[{questionId, optionId}]` — permite reconstruir el diagnóstico si el árbol cambia |
+| `recommended_service_id` | `uuid` | SÍ | `null` | FK → `services(id)` |
+| `recommended_service_slug` | `text` | NO | — | Slug al momento de la captura (histórico, sobrevive a un rename) |
+| `outcome` | `lead_outcome` | NO | — | Rama a la que cayó |
+| `viewed_service_slug` | `text` | SÍ | `null` | Servicio que estaba viendo cuando se abrió el popup |
+| `source_path` | `text` | SÍ | `null` | Ruta donde completó el diagnóstico |
+| `status` | `lead_status` | NO | `'nuevo'` | Seguimiento comercial |
+| `client_id` | `uuid` | SÍ | `null` | FK → `clients(id)` cuando el lead se convierte |
+| `consent_at` | `timestamptz` | NO | `now()` | Evidencia de la autorización de contacto |
+| `consent_ip` | `inet` | SÍ | `null` | Evidencia — IP |
+| `notified_at` | `timestamptz` | SÍ | `null` | Cuándo se envió el correo a Claudia |
+| `notes` | `text` | SÍ | `null` | Notas internas |
+| `created_at` | `timestamptz` | NO | `now()` | — |
+| `updated_at` | `timestamptz` | NO | `now()` | — |
+
+**Constraints:** `CHECK (email = lower(email))` · `CHECK (jsonb_typeof(answers) = 'array')`
+**FK:** `recommended_service_id` → `services(id)` `ON DELETE SET NULL` ·
+`client_id` → `clients(id)` `ON DELETE SET NULL`
+**Índices:** `leads_created_at_idx (created_at DESC)` · `leads_status_idx (status)` ·
+`leads_email_idx (email)` · `leads_outcome_idx (outcome)`
+
+> **Por qué `email` NO es único aquí y sí en `clients`:** un lead es un evento de captación, no una
+> identidad. La misma persona puede hacer el diagnóstico dos veces con necesidades distintas, y
+> perder el segundo registro sería perder información comercial.
+
+**RLS:** contiene PII → **sin acceso anónimo**. El endpoint público escribe con `service_role`.
+```sql
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "leads_admin_all" ON leads
+  FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM admin_profiles p WHERE p.id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM admin_profiles p WHERE p.id = auth.uid()));
+-- INSERT del sitio público: vía service_role desde POST /api/v1/leads.
+```
+
+---
 
 ### services
 
@@ -532,7 +614,8 @@ END;
 $$;
 ```
 
-Aplicar como `BEFORE UPDATE` en: `services`, `clients`, `orders`, `intake_forms`, `appointments`.
+Aplicar como `BEFORE UPDATE` en: `leads`, `services`, `clients`, `orders`, `intake_forms`,
+`appointments`.
 
 > `SET search_path = ''` y `SECURITY INVOKER` son obligatorios: son la recomendación de los
 > advisors de seguridad de Supabase para evitar secuestro de `search_path`.
@@ -543,6 +626,7 @@ Aplicar como `BEFORE UPDATE` en: `services`, `clients`, `orders`, `intake_forms`
 
 | Tabla | anon SELECT | admin (authenticated) | Flujo público |
 |-------|-------------|----------------------|---------------|
+| `leads` | ❌ | ALL | INSERT vía `service_role` |
 | `services` | ✅ solo `is_active` | ALL | lectura directa |
 | `clients` | ❌ | ALL | vía `service_role` |
 | `orders` | ❌ | ALL | vía `service_role` |
@@ -581,7 +665,11 @@ Fuente: `context.md` §5. Los precios de cotización van con `price_cents = NULL
 
 | # | Archivo | Fecha | Descripción | Estado |
 |---|---------|-------|-------------|--------|
-| — | — | — | _Ninguna migración aplicada. Se crean en FASE 2, una por feature._ | — |
+| — | — | — | _Ninguna migración aplicada. Se crean en FASE 6, una por feature._ | — |
+
+> **Deuda abierta (FASE 6):** el diagnóstico de la FASE 3 ya captura leads en producción vía
+> `POST /api/v1/leads`, pero **no hay dónde guardarlos**. La primera migración del proyecto debe ser
+> la de `leads`. Ver [`00-roadmap.md`](./00-roadmap.md).
 
 ---
 
