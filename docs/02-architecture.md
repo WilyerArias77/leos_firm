@@ -431,9 +431,15 @@ para poner el formulario.
 **Decisión:** Un **diagnóstico gratuito** en popup, que aparece mientras el visitante lee un
 servicio, hace 3 preguntas de filtro, deduce qué servicio necesita y **pide sus datos antes de
 mostrarle el resultado**. El lead se registra en ese momento (`POST /api/v1/leads`), con
-independencia de que pague o no. El popup no tiene X: se sale por el botón
-*"No quiero mi diagnóstico gratuito, solo estoy viendo"*, decisión de la clienta para reducir
-abandonos por reflejo.
+independencia de que pague o no.
+
+**Enmienda del 2026-08-03 (misma clienta, pedido posterior):** el popup **sí tiene X**. La versión
+original no la tenía —se salía solo por *"No quiero mi diagnóstico gratuito, solo estoy viendo"*—
+para reducir abandonos por reflejo. La clienta pidió después una salida explícita en todos los pasos
+para no retener a nadie dentro del formulario. Todas las salidas (rechazo, X, `Esc`) marcan la
+sesión igual: el popup no reaparece solo, pero sigue disponible desde los botones de las páginas.
+El botón de inicio pasó a decir *"Quiero acceder al servicio"* y el de envío del formulario,
+*"Enviar formulario"*.
 Después del diagnóstico el flujo se bifurca **según el catálogo**:
 - servicio **con** `price_cents` → checkout de Square y agendamiento (flujo automático completo);
 - servicio **sin** `price_cents` → correo a Claudia con los datos del posible cliente y el servicio

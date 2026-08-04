@@ -24,6 +24,7 @@ export function DiagnosticContactStep({
   fieldErrors,
   onBack,
   onSubmit,
+  onDismiss,
 }: DiagnosticContactStepProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,7 +38,7 @@ export function DiagnosticContactStep({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="p-6 sm:p-8">
+    <form onSubmit={handleSubmit} noValidate className="p-6 pt-16 sm:p-8 sm:pt-16">
       <DiagnosticProgress value={progress} />
 
       <div className="mt-6">
@@ -139,6 +140,16 @@ export function DiagnosticContactStep({
       <Button type="submit" size="lg" disabled={isSubmitting} className="mt-6 w-full">
         {isSubmitting ? DIAGNOSTIC_COPY.submittingLabel : DIAGNOSTIC_COPY.submitLabel}
       </Button>
+
+      {/* Salida explícita del formulario (pedido de la clienta, 2026-08-03) */}
+      <button
+        type="button"
+        onClick={onDismiss}
+        disabled={isSubmitting}
+        className="mt-3 w-full rounded-card px-4 py-2.5 text-sm text-ink-muted underline underline-offset-4 transition-colors hover:text-ink disabled:opacity-50"
+      >
+        {DIAGNOSTIC_COPY.dismissLabel}
+      </button>
 
       <button
         type="button"

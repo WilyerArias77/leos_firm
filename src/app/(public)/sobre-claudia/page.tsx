@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Container } from "@/components/layout/Container";
 import { Section, SectionHeading } from "@/components/layout/Section";
 import { ButtonLink } from "@/components/ui/Button";
@@ -6,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import {
   CLIENT_LOCATIONS,
   FOUNDER,
+  FOUNDER_MEDIA,
   MISSION,
   VALUES,
   VISION,
@@ -36,17 +38,42 @@ export default function AboutPage() {
               </p>
             </div>
 
-            {/* Placeholder: el material audiovisual está pendiente (context.md §2) */}
+            {/* Fotografía profesional entregada por la firma (context.md §2) */}
             <div className="lg:col-span-2">
-              <div className="flex aspect-4/5 flex-col items-center justify-center rounded-card border border-dashed border-navy-600 bg-navy-800 p-8 text-center">
-                <p className="text-sm text-platinum-dim">
-                  Fotografía profesional y video de presentación
-                </p>
-                <p className="mt-2 text-xs text-platinum-dim/70">
-                  Pendiente de entrega por parte de la firma
-                </p>
-              </div>
+              <Image
+                src={FOUNDER_MEDIA.photo}
+                alt={FOUNDER_MEDIA.photoAlt}
+                width={FOUNDER_MEDIA.photoWidth}
+                height={FOUNDER_MEDIA.photoHeight}
+                priority
+                sizes="(min-width: 1024px) 40vw, 100vw"
+                className="aspect-4/5 w-full rounded-card border border-navy-700 object-cover shadow-elevated"
+              />
             </div>
+          </div>
+
+          {/* Video de presentación, debajo del texto (context.md §2) */}
+          <div className="mt-16 border-t border-navy-700 pt-12">
+            <p className="text-xs font-medium tracking-widest text-gold uppercase">
+              Video de presentación
+            </p>
+            <h2 className="mt-3 text-3xl text-platinum sm:text-4xl">
+              Conoce a {FOUNDER.name}
+            </h2>
+
+            <video
+              controls
+              preload="metadata"
+              playsInline
+              className="mt-8 aspect-video w-full max-w-3xl rounded-card border border-navy-700 bg-navy-950 shadow-elevated"
+            >
+              <source src={FOUNDER_MEDIA.video} type={FOUNDER_MEDIA.videoType} />
+              Tu navegador no puede reproducir este video.{" "}
+              <a href={FOUNDER_MEDIA.video} className="text-gold underline">
+                Descárgalo aquí
+              </a>
+              .
+            </video>
           </div>
         </Container>
       </section>

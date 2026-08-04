@@ -19,6 +19,8 @@ export type DiagnosticDialogProps = {
   onComplete: () => void;
   /** Close from the result screen. */
   onClose: () => void;
+  /** Close from any step — the X of the modal and the button of the form. */
+  onDismiss: () => void;
 };
 
 export type DiagnosticIntroProps = {
@@ -50,6 +52,7 @@ export type DiagnosticContactStepProps = {
   fieldErrors: Record<string, string>;
   onBack: () => void;
   onSubmit: (contact: DiagnosticContact) => void;
+  onDismiss: () => void;
 };
 
 export type DiagnosticResultProps = {

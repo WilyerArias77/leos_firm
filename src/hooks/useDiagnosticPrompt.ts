@@ -11,8 +11,9 @@ import { DIAGNOSTIC_PROMPT } from "@/constants/business";
  * anything gets dismissed on reflex, and a dismissal costs us the lead.
  *
  * Storage is deliberately split:
- * - declined  → `sessionStorage`, so "solo estoy viendo" is respected for this
- *   visit but a later visit gets another chance.
+ * - dismissed → `sessionStorage`, so "solo estoy viendo" — or closing the form
+ *   to keep browsing — is respected for this visit but a later visit gets
+ *   another chance.
  * - completed → `localStorage`, so someone who already left their details is
  *   never asked again on that device.
  */
@@ -89,7 +90,11 @@ export function useDiagnosticPrompt({ autoOpen }: UseDiagnosticPromptOptions) {
 
   const close = useCallback(() => setIsOpen(false), []);
 
-  const decline = useCallback(() => {
+  /**
+   * Closing without answering — the decline button, the X or Esc. All three
+   * mean the same thing for this visit: stop asking and let them browse.
+   */
+  const dismiss = useCallback(() => {
     writeFlag(window.sessionStorage, DIAGNOSTIC_PROMPT.declinedStorageKey);
     setIsOpen(false);
   }, []);
@@ -98,5 +103,5 @@ export function useDiagnosticPrompt({ autoOpen }: UseDiagnosticPromptOptions) {
     writeFlag(window.localStorage, DIAGNOSTIC_PROMPT.completedStorageKey);
   }, []);
 
-  return { isOpen, open, close, decline, complete };
+  return { isOpen, open, close, dismiss, complete };
 }

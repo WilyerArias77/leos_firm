@@ -39,6 +39,7 @@ export function DiagnosticDialog({
   onDecline,
   onComplete,
   onClose,
+  onDismiss,
 }: DiagnosticDialogProps) {
   const titleId = useId();
 
@@ -119,7 +120,12 @@ export function DiagnosticDialog({
   }
 
   return (
-    <Modal open={open} dismissible={false} labelledBy={titleId}>
+    <Modal
+      open={open}
+      onDismiss={onDismiss}
+      closeLabel={DIAGNOSTIC_COPY.dismissLabel}
+      labelledBy={titleId}
+    >
       {stage === "intro" ? (
         <DiagnosticIntro
           titleId={titleId}
@@ -150,6 +156,7 @@ export function DiagnosticDialog({
           fieldErrors={fieldErrors}
           onBack={handleBack}
           onSubmit={handleSubmit}
+          onDismiss={onDismiss}
         />
       ) : null}
 

@@ -19,7 +19,7 @@ export function DiagnosticQuestionStep({
   if (!question) return null;
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="p-6 pt-16 sm:p-8 sm:pt-16">
       <DiagnosticProgress value={progress} />
 
       {steps.length > 0 ? (

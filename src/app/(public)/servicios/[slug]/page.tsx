@@ -131,7 +131,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
             </div>
 
             <aside className="lg:col-span-1">
-              <Card className="sticky top-32 p-6">
+              <Card className="sticky top-40 p-6">
                 <p className="text-xs font-medium tracking-widest text-accent uppercase">
                   Diagnóstico gratuito
                 </p>
@@ -149,7 +149,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
                   services={services}
                   contextService={service}
                   autoOpen
-                  label="Quiero mi diagnóstico gratuito"
+                  label="Quiero acceder al servicio"
                   className="mt-5 w-full"
                 />
 

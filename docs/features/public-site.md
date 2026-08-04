@@ -1,9 +1,9 @@
 # Feature: Sitio Público
 
 > **Estado:** ✅ Completo — 6 páginas en línea, 18 rutas
-> **Fase:** 2 · Última actualización: 2026-08-03 (FASE 3: slogan en el header + diagnóstico)
+> **Fase:** 2 · Última actualización: 2026-08-03 (material audiovisual de Claudia + logo más grande)
 > **Archivos clave:** `src/app/(public)/**`, `src/components/layout/**`, `src/components/ui/**`, `src/constants/content/**`
-> **Dependencias:** ninguna nueva (solo `next/image`, `next/link` y `lucide-react` ya instalado)
+> **Dependencias:** ninguna nueva (solo `next/image`, `next/link`, `<video>` nativo y `lucide-react` ya instalado)
 
 ---
 
@@ -36,6 +36,7 @@ de pago y agendamiento de FASE 3–5 no tiene puerta de entrada.
 | Política de cancelación (9 puntos) | §8 |
 | 7 preguntas frecuentes | §9 |
 | Dirección, teléfono, sitio | §1 |
+| **Fotografía y video de presentación de Claudia** | §2 — **entregados por la firma el 2026-08-03**. Viven en `public/` y se referencian desde `FOUNDER_MEDIA` |
 
 > Las FAQ de `context.md` §9 vienen **sin respuesta**. Se marcan como pendientes de redacción por
 > Claudia en vez de inventarlas: son afirmaciones fiscales y legales, y una respuesta inventada
@@ -78,10 +79,10 @@ FASE 3:   componentes → service.service.ts → Supabase (tabla services)
 | `src/app/(public)/page.tsx` | Portada |
 | `src/app/(public)/servicios/page.tsx` | Catálogo completo |
 | `src/app/(public)/servicios/[slug]/page.tsx` | Detalle de un servicio (`generateStaticParams`) |
-| `src/app/(public)/sobre-claudia/page.tsx` | Storytelling, misión, visión y valores |
+| `src/app/(public)/sobre-claudia/page.tsx` | Storytelling, foto profesional, video de presentación, misión, visión y valores |
 | `src/app/(public)/faq/page.tsx` | Preguntas frecuentes |
 | `src/app/(public)/politicas/page.tsx` | Política de cancelación y reprogramación |
-| `src/components/layout/Header` | Franja con el slogan en dorado + logo, navegación, CTA y menú móvil |
+| `src/components/layout/Header` | Franja con el slogan en dorado + logo (64 px móvil / 88 px escritorio), navegación, CTA y menú móvil |
 | `src/components/layout/Footer` | Contacto, enlaces legales, husos |
 | `src/components/layout/Container` | Ancho máximo y padding horizontal |
 | `src/components/layout/Section` | Bloque vertical con variantes de fondo |
@@ -145,12 +146,19 @@ y confirmar que el HTML servido contiene el contenido nuevo antes de dar por bue
 - Los CTA de agendamiento apuntan a `/agendar`, que **aún no existe** (FASE 4) — deben comunicar que
   el agendamiento llega en una fase posterior, no simular que funciona.
 - **A11Y** (FASE 4.4): toda imagen con `alt`, navegación operable con teclado, contraste ≥ 4.5:1.
+  El video lleva `controls` (nunca `autoplay`) y un texto alternativo con enlace de descarga.
+- **El header es `sticky`:** si cambia su altura hay que ajustar el `sticky top-*` del aside de
+  `/servicios/[slug]`, o la tarjeta se mete debajo del header al hacer scroll.
+- **Los medios de `public/` se sirven desde el repo.** Solo vale para archivos livianos; lo pesado
+  va a Storage o CDN.
 
 ## Pendiente
 
 - [ ] **Respuestas de las 7 FAQ** — las redacta Claudia; hoy se muestran con aviso de "próximamente"
-- [ ] **Material audiovisual de Claudia** (`context.md` §2: video de presentación y fotos
-      profesionales) — hoy hay un placeholder marcado como tal
+- [x] ~~**Material audiovisual de Claudia**~~ — entregado el 2026-08-03: `public/claudia-leos.jpg`
+      (retrato 4:5) y `public/claudia-leos-presentacion.mp4` (37 s, 848×480, 1.6 MB), ambos en
+      `/sobre-claudia`. Si en el futuro llegan videos más pesados, hay que sacarlos del repo y
+      servirlos desde Supabase Storage o un CDN, no desde `public/`
 - [ ] **Métricas de impacto** (§3, valor "Impacto": respaldar con estadísticas de empresas
       atendidas) — faltan los números reales
 - [ ] Textos legales definitivos (aviso de privacidad, términos) — necesarios ahora que el

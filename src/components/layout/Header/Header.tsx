@@ -37,7 +37,7 @@ export function Header() {
       </div>
 
       <Container>
-        <div className="flex h-20 items-center justify-between gap-4 sm:h-24">
+        <div className="flex h-20 items-center justify-between gap-4 sm:h-28">
           <Link
             href={ROUTES.home}
             className="flex items-center gap-3"
@@ -46,10 +46,10 @@ export function Header() {
             <Image
               src="/logo.png"
               alt="Leos Firm LLC"
-              width={72}
-              height={72}
+              width={88}
+              height={88}
               priority
-              className="h-14 w-14 rounded-md object-cover sm:h-[72px] sm:w-[72px]"
+              className="h-16 w-16 rounded-md object-cover sm:h-[88px] sm:w-[88px]"
             />
             <span className="font-serif text-lg tracking-wide text-platinum sm:text-xl">
               Leos Firm

@@ -6,6 +6,61 @@
 
 ---
 
+## [2026-08-03] — Material audiovisual de Claudia y ajustes de UI pedidos por la clienta — v0.3.1
+
+### Request original
+> 1. que el logo se vea más grande respetando el diseño · 2. adjuntar la foto en la sección
+> "sobre Claudia" · 3. mostrar el video debajo del texto, conservando medidas y diseño ·
+> 4. cambiar el texto del botón "Quiero mi diagnóstico gratuito" por "Quiero acceder al servicio" ·
+> 5. un botón para cerrar el formulario y seguir navegando · 6. el botón de envío del formulario
+> debe decir "Enviar formulario" · 7. commit para publicar en Vercel.
+
+### Tipo de cambio
+- **ADDED**: fotografía profesional y video de presentación de Claudia en `/sobre-claudia`
+  (cierra el pendiente de material audiovisual de la FASE 2)
+- **CHANGED (UI)**: logo del header de 56/72 px a **64/88 px**; fila del header de 80/96 px a 80/112 px
+- **CHANGED (UX)**: el popup de diagnóstico ahora **se puede cerrar en cualquier paso**
+  (X + `Esc` + botón de texto en el formulario) — **enmienda al ADR-008**
+- **CHANGED (copy)**: `"Quiero mi diagnóstico gratuito"` → `"Quiero acceder al servicio"`;
+  `"Ver mi diagnóstico"` → `"Enviar formulario"`
+
+### Archivos creados
+- `public/claudia-leos.jpg` — retrato profesional 1024×1280 (4:5), 88 KB
+- `public/claudia-leos-presentacion.mp4` — video de presentación 848×480, 37 s, 1.6 MB
+
+### Archivos modificados
+- `src/components/layout/Header/Header.tsx` — logo más grande y fila más alta en escritorio
+- `src/app/(public)/servicios/[slug]/page.tsx` — `sticky top-32` → `top-40` (header más alto);
+  label del CTA del aside
+- `src/app/(public)/sobre-claudia/page.tsx` — la foto reemplaza el placeholder; bloque de video
+  debajo del texto, dentro del mismo `Container` (mismo ancho y ritmo vertical de la página)
+- `src/constants/content/company.ts` — `FOUNDER_MEDIA` (rutas, medidas intrínsecas y `alt`)
+- `src/constants/content/diagnostic.ts` — `acceptLabel`, `submitLabel` y nuevo `dismissLabel`
+- `src/components/ui/Modal/**` — botón de cierre opcional (`onDismiss` + `closeLabel`), foco inicial
+  en el panel para no mostrar anillo al abrir
+- `src/components/features/diagnostic/DiagnosticDialog/**` — prop `onDismiss`, `pt-16` en los pasos
+  para que la X no pise la barra de avance, salida de texto en el paso de contacto
+- `src/components/features/diagnostic/DiagnosticTrigger/DiagnosticTrigger.tsx` — cablea `dismiss`
+- `src/hooks/useDiagnosticPrompt.ts` — `decline` pasa a llamarse `dismiss` y cubre rechazo, X y `Esc`
+- Docs: `02-architecture.md` (enmienda ADR-008), `features/lead-diagnostic.md`,
+  `features/public-site.md`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run lint` ✅ · `npm run build` ✅ (18 rutas, sin errores de TypeScript)
+- Revisión visual con Chrome headless: `/sobre-claudia` (foto + video) y
+  `/servicios/consultoria-fiscal-extranjeros` (popup con X, sin solapamientos)
+
+### Notas
+- El video se sirve desde `public/` porque pesa 1.6 MB. Material más pesado debe migrar a Supabase
+  Storage o a un CDN antes de subirlo al repo.
+- Queda **fuera de este cambio** el botón del catálogo (`/servicios`), que sigue diciendo
+  *"Hacer mi diagnóstico gratuito"*: ahí el visitante todavía no eligió servicio.
+
+---
+
 ## [2026-08-03] — Diagnóstico interactivo y captación de leads (FASE 3) — v0.3.0
 
 ### Tipo de cambio

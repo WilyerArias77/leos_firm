@@ -49,6 +49,20 @@ export const FOUNDER = {
   quote: "Una contadora en San Antonio que también es contadora en México.",
 } as const;
 
+/**
+ * Audiovisual material delivered by the firm (`context.md` §2 — the pending
+ * item of FASE 2). Intrinsic sizes are kept here because `next/image` needs
+ * them and the video keeps its own aspect ratio in the layout.
+ */
+export const FOUNDER_MEDIA = {
+  photo: "/claudia-leos.jpg",
+  photoWidth: 1024,
+  photoHeight: 1280,
+  photoAlt: "Claudia Leos en la oficina de Leos Firm LLC en San Antonio, Texas",
+  video: "/claudia-leos-presentacion.mp4",
+  videoType: "video/mp4",
+} as const;
+
 /** Source: `context.md` §4. */
 export const TARGET_AUDIENCE: readonly string[] = [
   "Empresarios e inversionistas extranjeros",

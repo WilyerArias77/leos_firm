@@ -20,15 +20,21 @@ export const DIAGNOSTIC_COPY = {
     "Son 3 preguntas rápidas. Con tus respuestas identificamos qué servicio corresponde a tu caso y cuál es el siguiente paso.",
   introBodyWithService:
     "Antes de seguir leyendo: son 3 preguntas rápidas y te decimos si este es el servicio que tu caso necesita, o si te conviene otro.",
-  acceptLabel: "Quiero mi diagnóstico gratuito",
+  /** Wording requested by the client, 2026-08-03. */
+  acceptLabel: "Quiero acceder al servicio",
   /** Wording requested by the client, word for word. */
   declineLabel: "No quiero mi diagnóstico gratuito, solo estoy viendo",
+  /**
+   * Exit available at every step (client request, 2026-08-03): the visitor can
+   * close the form whenever they want and keep browsing.
+   */
+  dismissLabel: "Cerrar el formulario y seguir navegando",
   contactTitle: "¿A dónde te enviamos tu diagnóstico?",
   contactHelper:
     "Con estos datos Claudia puede darle seguimiento a tu caso concreto, no una respuesta genérica.",
   consentLabel:
     "Autorizo a Leos Firm LLC a contactarme por correo o teléfono sobre esta consulta.",
-  submitLabel: "Ver mi diagnóstico",
+  submitLabel: "Enviar formulario",
   submittingLabel: "Analizando tu caso…",
   resultTitle: "Tu diagnóstico",
   backLabel: "Volver",

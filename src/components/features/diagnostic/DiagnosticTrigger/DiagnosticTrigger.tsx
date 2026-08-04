@@ -27,7 +27,7 @@ export function DiagnosticTrigger({
   className,
 }: DiagnosticTriggerProps) {
   const pathname = usePathname();
-  const { isOpen, open, close, decline, complete } = useDiagnosticPrompt({ autoOpen });
+  const { isOpen, open, close, dismiss, complete } = useDiagnosticPrompt({ autoOpen });
 
   return (
     <>
@@ -48,9 +48,10 @@ export function DiagnosticTrigger({
         services={services}
         contextService={contextService}
         sourcePath={pathname}
-        onDecline={decline}
+        onDecline={dismiss}
         onComplete={complete}
         onClose={close}
+        onDismiss={dismiss}
       />
     </>
   );

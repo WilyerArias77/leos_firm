@@ -30,7 +30,7 @@ export function DiagnosticResult({
     : DIAGNOSTIC_RESULT_COPY.checkoutHeadingProcedure;
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="p-6 pt-16 sm:p-8 sm:pt-16">
       <p className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-accent uppercase">
         <CircleCheckBig className="h-4 w-4" aria-hidden="true" />
         {DIAGNOSTIC_COPY.resultTitle}

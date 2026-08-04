@@ -1,7 +1,7 @@
 # Feature: Diagnóstico Interactivo y Captación de Leads
 
 > **Estado:** ✅ Completo (front end) — la entrega del lead se conecta en FASE 6
-> **Fase:** 3 · Última actualización: 2026-08-03
+> **Fase:** 3 · Última actualización: 2026-08-03 (salida del formulario + textos de botones)
 > **Archivos clave:** `src/components/features/diagnostic/**`, `src/services/diagnostic.service.ts`,
 > `src/services/lead.service.ts`, `src/app/api/v1/leads/route.ts`, `src/constants/content/diagnostic.ts`
 > **Dependencias:** ninguna nueva (`zod` y `lucide-react` ya instalados)
@@ -15,10 +15,19 @@ Hace 3 preguntas tipo filtro, deduce qué servicio corresponde a su caso, pide s
 y recién entonces lo empuja al pago (si el servicio tiene cobro automático) o lo pasa a Claudia
 (si el servicio es de precio variable).
 
-El popup **no tiene X**. Se cierra únicamente con uno de sus dos botones:
+El popup se cierra de tres maneras, todas equivalentes para esta visita:
 
-1. **"Quiero mi diagnóstico gratuito"** → inicia el cuestionario.
+1. **"Quiero acceder al servicio"** → inicia el cuestionario.
 2. **"No quiero mi diagnóstico gratuito, solo estoy viendo"** → lo descarta por esa sesión.
+3. **La X de la esquina** (o `Esc`, o el botón *"Cerrar el formulario y seguir navegando"* del paso
+   de contacto) → lo cierra desde **cualquier** paso y deja seguir navegando.
+
+> **Cambio del 2026-08-03 — el popup ahora sí tiene X.** El diseño original no la tenía, por pedido
+> expreso de la clienta: se buscaba reducir los abandonos por reflejo. La misma clienta pidió
+> después la salida explícita en todos los pasos, y esa decisión gana. La conversión ya no se
+> defiende encerrando al visitante en el modal, sino con el valor del diagnóstico.
+> Las tres salidas escriben la misma marca de sesión (`sessionStorage`): el popup no vuelve a
+> abrirse solo durante esa visita, pero sigue disponible desde los botones de las páginas.
 
 ## Objetivo
 
@@ -62,9 +71,9 @@ Visitante entra a /servicios/[slug]
    │
    ├─ lee la página (10 s o 30 % de scroll)
    ▼
-POPUP (sin X)
-   ├─ "No quiero mi diagnóstico…" → se cierra, no vuelve a abrirse en la sesión. FIN
-   └─ "Quiero mi diagnóstico gratuito"
+POPUP (con X en todos los pasos)
+   ├─ "No quiero mi diagnóstico…" / X / Esc → se cierra, no vuelve a abrirse en la sesión. FIN
+   └─ "Quiero acceder al servicio"
         ▼
    P1 ¿En qué punto estás?  →  P2 ¿Qué necesitas resolver?  →  P3 ¿Para cuándo?
         (cada respuesta devuelve una observación inmediata: sensación de asesoría en vivo)
@@ -109,7 +118,7 @@ código.
 | `src/lib/utils/formatCurrency.ts` | `formatPrice` — movido aquí para que lo use el popup sin arrastrar la capa de datos |
 | `src/lib/utils/rateLimit.ts` | Límite por IP en memoria para el endpoint público |
 | `src/app/api/v1/leads/route.ts` | `POST /api/v1/leads` — valida, limita y registra el lead |
-| `src/components/ui/Modal` | Modal accesible sobre `<dialog>`; soporta modo **no descartable** |
+| `src/components/ui/Modal` | Modal accesible sobre `<dialog>`; botón de cierre opcional (`onDismiss`) y modo **no descartable** para otros usos |
 | `src/components/ui/Input` | Campo de formulario con label, error y `aria-describedby` |
 | `.../diagnostic/DiagnosticDialog/DiagnosticDialog.tsx` | Máquina de estados: intro → preguntas → contacto → resultado |
 | `.../DiagnosticDialog/DiagnosticIntro.tsx` | Resumen del servicio + los 2 botones |
@@ -117,7 +126,7 @@ código.
 | `.../DiagnosticDialog/DiagnosticContactStep.tsx` | Datos de contacto + autorización |
 | `.../DiagnosticDialog/DiagnosticResult.tsx` | Diagnóstico y CTA según la rama |
 | `.../diagnostic/DiagnosticTrigger/` | Monta el diálogo y decide cuándo abrirlo. **Reutilizable** |
-| `src/hooks/useDiagnosticPrompt.ts` | Cuándo abrir, cuándo no volver a molestar |
+| `src/hooks/useDiagnosticPrompt.ts` | Cuándo abrir, cuándo no volver a molestar (`dismiss` cubre rechazo, X y `Esc`) |
 
 ### Por qué el `DiagnosticTrigger` está separado del `DiagnosticDialog`
 
@@ -152,15 +161,18 @@ Detalle completo en [`../API_DOCS.md`](../API_DOCS.md).
 
 ## Accesibilidad
 
-Un modal sin botón de cierre es, en general, una mala práctica. Aquí es aceptable **solo porque**:
+Desde el 2026-08-03 el modal cumple el patrón estándar y ya no necesita justificación especial:
 
-- Existe una salida explícita y visible: el botón de rechazo, que es un `<button>` real, enfocable
-  y anunciado por lector de pantalla.
+- **Botón de cierre en todos los pasos** (X arriba a la derecha), con nombre accesible
+  *"Cerrar el formulario y seguir navegando"*. El paso de contacto repite esa salida como botón de
+  texto, debajo del envío.
+- **`Esc` cierra** el diálogo (`dismissible` en `Modal`).
 - El diálogo usa `<dialog showModal()>`: el navegador aporta trampa de foco correcta, `inert` en el
   resto de la página y rol `dialog` nativo.
-- `Esc` está deshabilitado a propósito (`onCancel` → `preventDefault`). **No** constituye una trampa
-  de teclado porque la salida por botón está a un `Tab` de distancia.
-- El popup aparece **una sola vez por sesión**. Si se rechaza, no vuelve.
+- El **foco inicial va al panel** (`tabIndex={-1}` + `autoFocus`), no a la X: el lector de pantalla
+  anuncia el diálogo por su título y no aparece un anillo de foco al abrir. `Tab` lleva a la X.
+- Los pasos reservan `pt-16` para que la X **nunca** se superponga a la barra de avance.
+- El popup aparece **una sola vez por sesión**. Si se cierra o se rechaza, no vuelve solo.
 
 ## Restricciones
 
@@ -174,6 +186,10 @@ Un modal sin botón de cierre es, en general, una mala práctica. Aquí es acept
 - **Nada de PII en los logs de producción** (`03-security.md` §PII).
 - **El popup no simula un pago que no existe.** Mientras el checkout no esté implementado, el
   resultado de la rama `checkout` lo dice con todas sus letras y ofrece el teléfono de la firma.
+- **El visitante siempre puede salir.** Cerrar el popup no puede bloquear la navegación ni volver a
+  abrirlo automáticamente en la misma sesión.
+- **Los textos de los botones viven en `DIAGNOSTIC_COPY`**, nunca sueltos en el JSX: la clienta los
+  cambia sin tocar componentes.
 - **Ningún color arbitrario** — solo tokens de `globals.css`.
 
 ## Pendiente

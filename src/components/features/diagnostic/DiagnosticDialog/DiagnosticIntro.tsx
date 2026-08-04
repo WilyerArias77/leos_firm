@@ -8,9 +8,9 @@ import type { DiagnosticIntroProps } from "./DiagnosticDialog.types";
 /**
  * First screen of the popup.
  *
- * By explicit request of the client there is NO close icon: the only way out is
- * the decline button, worded exactly as she asked. See the accessibility note
- * in `docs/features/lead-diagnostic.md`.
+ * The decline button keeps the wording the client asked for, word for word.
+ * Since 2026-08-03 the popup also has a close button on every step (client
+ * request) — see the accessibility note in `docs/features/lead-diagnostic.md`.
  */
 export function DiagnosticIntro({
   titleId,
@@ -21,7 +21,7 @@ export function DiagnosticIntro({
   const price = service ? formatPrice(service.priceCents) : null;
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="p-6 pt-16 sm:p-8 sm:pt-16">
       <p className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-accent uppercase">
         <Sparkles className="h-4 w-4" aria-hidden="true" />
         {DIAGNOSTIC_COPY.eyebrow}
