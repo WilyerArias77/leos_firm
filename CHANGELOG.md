@@ -6,6 +6,43 @@
 
 ---
 
+## [2026-08-03] — Respuestas oficiales de las 7 preguntas frecuentes — v0.3.2
+
+### Request original
+> ayudame incluyendo esta informacion en la seccion de "preguntas frecuentes": [las 7 respuestas
+> redactadas por Claudia] · despues ayudame con el commit para ver la pagina en vercel actualizada.
+
+### Tipo de cambio
+- **ADDED**: las 7 respuestas oficiales en `/faq` (cierra el pendiente de contenido de la FASE 2 y
+  quita un bloqueante de la FASE 5)
+- **CHANGED (tipos)**: `FaqItem.answer` pasa de `string | null` a `string` — ya no se puede publicar
+  una pregunta sin respuesta oficial
+- **REMOVED**: el aviso de "esta respuesta depende de tu situación particular" y su rama de
+  renderizado, que quedaron sin uso
+
+### Archivos modificados
+- `src/constants/content/faq.ts` — respuestas literales de Claudia, sin reescribir ni resumir
+- `src/types/content.types.ts` — `answer` obligatorio
+- `src/app/(public)/faq/page.tsx` — se elimina la rama de "pendiente"; entradilla del hero ajustada
+  (ya no anuncia que las respuestas se dan en la consultoría)
+- Docs: `features/public-site.md` (fuente del contenido + pendiente cerrado), `00-roadmap.md`
+  (FASE 5 pierde el bloqueante de FAQ)
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run lint` ✅ · `npm run build` ✅ (18 rutas, sin errores de TypeScript)
+
+### Notas
+- ⚠️ **Contradicción de política a resolver antes de la FASE 7.** La respuesta de reembolso dice que
+  *"los pagos realizados no son reembolsables"*, mientras `context.md` §8 y `/politicas` mantienen
+  que con **≥24 h** de anticipación hay reembolso (menos comisiones) o crédito. Se publica el texto
+  tal como lo entregó la clienta, pero ambos textos deben unificarse antes de cobrar de verdad.
+- Las respuestas son afirmaciones fiscales y migratorias: **no se editan sin aprobación de la firma**.
+
+---
+
 ## [2026-08-03] — Material audiovisual de Claudia y ajustes de UI pedidos por la clienta — v0.3.1
 
 ### Request original

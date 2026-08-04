@@ -26,8 +26,8 @@ export type Service = {
 
 export type FaqItem = {
   question: string;
-  /** `null` while Claudia has not written the official answer yet. */
-  answer: string | null;
+  /** Official answer written by the firm. Required: never publish a question we cannot answer. */
+  answer: string;
 };
 
 export type PolicyItem = {

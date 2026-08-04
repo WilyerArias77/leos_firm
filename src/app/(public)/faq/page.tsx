@@ -26,8 +26,9 @@ export default function FaqPage() {
           </p>
           <h1 className="mt-4 text-4xl sm:text-5xl">Dudas comunes</h1>
           <p className="mt-5 text-lg leading-relaxed text-platinum-dim">
-            Las respuestas a estas preguntas dependen de cada caso concreto. Por eso las
-            resolvemos en la consultoría, con tu situación específica sobre la mesa.
+            Estas son las dudas que más nos llegan sobre crear y operar una empresa en
+            Estados Unidos siendo extranjero. Lo que dependa de tu caso concreto lo
+            revisamos en la consultoría.
           </p>
         </Container>
       </section>
@@ -39,15 +40,7 @@ export default function FaqPage() {
               <li key={item.question}>
                 <Card className="p-6">
                   <h2 className="font-serif text-lg text-navy-900">{item.question}</h2>
-
-                  {item.answer ? (
-                    <p className="mt-3 leading-relaxed text-ink-muted">{item.answer}</p>
-                  ) : (
-                    <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-                      Esta respuesta depende de tu situación particular. Agenda una
-                      consultoría y la resolvemos con los datos de tu caso.
-                    </p>
-                  )}
+                  <p className="mt-3 leading-relaxed text-ink-muted">{item.answer}</p>
                 </Card>
               </li>
             ))}

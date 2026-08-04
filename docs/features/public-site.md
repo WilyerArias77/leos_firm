@@ -34,13 +34,15 @@ de pago y agendamiento de FASE 3–5 no tiene puerta de entrada.
 | Catálogo de 8 servicios y precios | §5 |
 | Campos del intake (mostrados como "qué necesitarás") | §7 |
 | Política de cancelación (9 puntos) | §8 |
-| 7 preguntas frecuentes | §9 |
+| 7 preguntas frecuentes | §9 (preguntas) + **respuestas oficiales entregadas por Claudia el 2026-08-03** |
 | Dirección, teléfono, sitio | §1 |
 | **Fotografía y video de presentación de Claudia** | §2 — **entregados por la firma el 2026-08-03**. Viven en `public/` y se referencian desde `FOUNDER_MEDIA` |
 
-> Las FAQ de `context.md` §9 vienen **sin respuesta**. Se marcan como pendientes de redacción por
-> Claudia en vez de inventarlas: son afirmaciones fiscales y legales, y una respuesta inventada
-> sería un riesgo real para la firma. Ver [Pendiente](#pendiente).
+> Las FAQ de `context.md` §9 venían **sin respuesta** y se mostraban como pendientes en vez de
+> inventarlas: son afirmaciones fiscales y legales, y una respuesta inventada sería un riesgo real
+> para la firma. **Claudia entregó las 7 respuestas el 2026-08-03** y ya están publicadas.
+> `FaqItem.answer` es ahora **obligatorio** (`string`, no `string | null`): el tipo impide publicar
+> una pregunta sin respuesta oficial. El texto se copia literal — **no se reescribe ni se resume**.
 
 ## Modelo de Datos
 
@@ -154,7 +156,10 @@ y confirmar que el HTML servido contiene el contenido nuevo antes de dar por bue
 
 ## Pendiente
 
-- [ ] **Respuestas de las 7 FAQ** — las redacta Claudia; hoy se muestran con aviso de "próximamente"
+- [x] ~~**Respuestas de las 7 FAQ**~~ — entregadas por Claudia el 2026-08-03 y publicadas en
+      `src/constants/content/faq.ts`. Ojo: la respuesta de reembolso dice *"los pagos no son
+      reembolsables"*, más restrictiva que `context.md` §8 (con ≥24 h: reembolso menos comisiones o
+      crédito). Hay que unificar ambos textos antes de cobrar de verdad en la FASE 7
 - [x] ~~**Material audiovisual de Claudia**~~ — entregado el 2026-08-03: `public/claudia-leos.jpg`
       (retrato 4:5) y `public/claudia-leos-presentacion.mp4` (37 s, 848×480, 1.6 MB), ambos en
       `/sobre-claudia`. Si en el futuro llegan videos más pesados, hay que sacarlos del repo y

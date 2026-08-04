@@ -89,12 +89,11 @@ datos falsos, y cada pantalla sabe exactamente qué datos va a necesitar del bac
 
 ### FASE 5 — Cierre de front end ⬜
 **Entregable:** A11Y (contraste, foco, teclado, lectores de pantalla), responsive verificado,
-SEO y metadata, `not-found.tsx` y `error.tsx`, textos legales, material audiovisual de Claudia,
-respuestas de las 7 FAQ.
+SEO y metadata, `not-found.tsx` y `error.tsx`, textos legales.
 **Criterio de salida:** la clienta aprueba el sitio completo. **A partir de aquí no se toca más
 diseño hasta terminar el back end.**
-**Bloqueantes conocidos (dependen de la clienta):** respuestas de FAQ, video y fotos, métricas de
-impacto, aviso de privacidad.
+**Bloqueantes conocidos (dependen de la clienta):** métricas de impacto, aviso de privacidad.
+**Ya entregado por la clienta:** video y fotos (2026-08-03), respuestas de las 7 FAQ (2026-08-03).
 
 ---
 
