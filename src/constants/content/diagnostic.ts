@@ -45,22 +45,25 @@ export const DIAGNOSTIC_COPY = {
 /**
  * Result screen.
  *
- * `pendingDelivery` and `checkoutPending` are TEMPORARY: they exist only while
- * the lead is not delivered (FASE 6) and the checkout is not live (FASE 7).
- * Both disappear from here — and nowhere else — when those phases close.
+ * There is a single next step since ADR-009: agendar y pagar. The old second
+ * branch — "Claudia revisa tu caso y te cotiza por correo" — no longer exists,
+ * because no service is left without a price.
+ *
+ * `schedulingPendingLabel` and `schedulingPending` are TEMPORARY: they hold the
+ * place until the scheduling screen ships. `deliveryFailed` is permanent — it
+ * only shows when the CRM did not take the lead, and then the phone number is
+ * the recovery path.
  */
 export const DIAGNOSTIC_RESULT_COPY = {
   leadIn: "Según lo que nos contaste, esto es lo que tu caso necesita:",
-  checkoutHeading: "Siguiente paso: agendar y pagar tu consultoría",
-  checkoutHeadingProcedure: "Siguiente paso: contratar el trámite",
-  checkoutPendingLabel: "Pagar y agendar (próximamente)",
-  checkoutPending:
-    "El pago en línea todavía no está activo en el sitio. Llámanos y agendamos tu cita ahora mismo.",
-  contactHeading: "Siguiente paso: revisión personal de tu caso",
-  contactBody:
-    "Este servicio se cotiza según tu situación, por eso Claudia lo revisa personalmente antes de darte un precio.",
-  pendingDelivery:
-    "El envío automático de tu diagnóstico a Leos Firm se activa en la siguiente etapa del sitio. Para que no pierdas tiempo, llámanos y te atendemos con tu diagnóstico en la mano.",
+  nextStepHeading: "Siguiente paso: agenda tu sesión y confirma el pago",
+  nextStepBody:
+    "Eliges el día y la hora directamente en la agenda de Claudia. La cita queda confirmada en cuanto se registra el pago.",
+  schedulingPendingLabel: "Agendar y pagar (próximamente)",
+  schedulingPending:
+    "La agenda en línea se activa en los próximos días. Llámanos y agendamos tu cita ahora mismo.",
+  deliveryFailed:
+    "Tus datos quedaron registrados en este dispositivo, pero no pudimos enviarlos a Leos Firm. Llámanos y te atendemos con tu diagnóstico en la mano.",
   callLabel: "Llamar a Leos Firm",
   closeLabel: "Seguir explorando el sitio",
 } as const;

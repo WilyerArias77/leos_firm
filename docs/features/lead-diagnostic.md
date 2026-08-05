@@ -1,10 +1,11 @@
 # Feature: Diagnóstico Interactivo y Captación de Leads
 
-> **Estado:** ✅ Completo (front end) — la entrega del lead se conecta en FASE 6
-> **Fase:** 3 · Última actualización: 2026-08-03 (salida del formulario + textos de botones)
+> **Estado:** ✅ Completo — el lead se entrega de verdad al CRM
+> **Fase:** 3 (popup) + 4 (entrega) · Última actualización: 2026-08-04
 > **Archivos clave:** `src/components/features/diagnostic/**`, `src/services/diagnostic.service.ts`,
 > `src/services/lead.service.ts`, `src/app/api/v1/leads/route.ts`, `src/constants/content/diagnostic.ts`
 > **Dependencias:** ninguna nueva (`zod` y `lucide-react` ya instalados)
+> **Ver también:** [`crm-sheets.md`](./crm-sheets.md) — a dónde va el lead
 
 ---
 
@@ -12,8 +13,12 @@
 
 Un **popup de diagnóstico** que aparece cuando el visitante lleva unos segundos viendo un servicio.
 Hace 3 preguntas tipo filtro, deduce qué servicio corresponde a su caso, pide sus datos de contacto
-y recién entonces lo empuja al pago (si el servicio tiene cobro automático) o lo pasa a Claudia
-(si el servicio es de precio variable).
+y recién entonces lo empuja a agendar y pagar.
+
+> **Cambio del 2026-08-04 (ADR-009): se acabaron las dos ramas.** Hasta ese día el resultado se
+> bifurcaba: los dos servicios con precio iban al checkout y los otros seis terminaban en un correo a
+> Claudia. Ahora los ocho tienen precio, así que **todos** siguen el mismo camino. `DiagnosticOutcome`
+> y `getOutcome()` fueron eliminados: no queda nada que decidir.
 
 El popup se cierra de tres maneras, todas equivalentes para esta visita:
 
@@ -46,23 +51,21 @@ corresponde. El diagnóstico lo decide por él.
 
 ## Modelo de Datos
 
-Nueva tabla **`leads`** (diseñada en [`../DB_SCHEMA.md`](../DB_SCHEMA.md), aplicada en FASE 6).
-Un lead es un contacto capturado **sin pago**: es la entrada del CRM, anterior a `clients`.
+El lead se escribe como una **fila de la hoja de Google** — no en una tabla. Las columnas y el
+contrato completo están en [`crm-sheets.md`](./crm-sheets.md). Lo que aporta este popup:
 
-Mapeo entre las respuestas del diagnóstico y las columnas:
-
-| Respuesta del diagnóstico | Columna |
-|---------------------------|---------|
-| Pregunta 1 (`situacion`) | `situation` + `has_us_entity` (derivado) |
-| Pregunta 2 (`objetivo-*`) | `need` |
-| Pregunta 3 (`urgencia`) | `urgency` |
-| Servicio deducido | `recommended_service_slug` |
-| Rama del resultado | `outcome` (`checkout` \| `contact`) |
+| Respuesta del diagnóstico | Campo del CRM |
+|---------------------------|---------------|
+| Pregunta 1 (`situacion`) | `p1_situacion` + `has_us_entity` (derivado) |
+| Pregunta 2 (`objetivo-*`) | `p2_objetivo` |
+| Pregunta 3 (`urgencia`) | `p3_urgencia` |
+| Servicio deducido | `recommended_service` + `recommended_service_slug` |
 | Datos de contacto | `full_name`, `email`, `phone`, `country` |
 | Casilla de autorización | `consent_at` + `consent_ip` |
+| — | `lead_id`, acuñado por el navegador; es la clave de la fila |
 
 `has_us_entity` se deriva de la primera respuesta, así el lead ya trae respondida la pregunta
-bisagra del intake de `context.md` §7 y no se le vuelve a preguntar más adelante.
+bisagra de `context.md` §7 y no se le vuelve a preguntar al agendar.
 
 ## Flujo de Uso
 
@@ -80,40 +83,38 @@ POPUP (con X en todos los pasos)
         ▼
    Datos de contacto (nombre · correo · teléfono · país · autorización)
         ▼
-   POST /api/v1/leads   ← el dato ya está capturado en este punto
-        ▼
+   POST /api/v1/leads  →  n8n  →  Google Sheets (stage=formulario)
+        ▼                            ← el dato ya está guardado en este punto
    RESULTADO — "Según lo que nos contaste, necesitas: [servicio]"
-        │
-        ├─ servicio CON cobro automático  →  pagar y agendar (FASE 7)
-        └─ servicio SIN cobro automático  →  correo a Claudia con los datos + el servicio (FASE 6)
+        ▼
+   Agendar y pagar  (mismo camino para los 8 servicios)
 ```
 
 **Regla clave:** el lead se envía **antes** de mostrar el resultado. Si el visitante cierra la
 pestaña al ver la recomendación, la firma ya tiene sus datos.
 
-### Las dos ramas del resultado
+### El precio que se muestra
 
-La rama **no se decide a mano ni se hardcodea**: sale de `priceCents` del catálogo.
+Sale del catálogo, y su lectura depende de `pricingModel` (ADR-009):
 
-| Servicio | `priceCents` | Rama |
-|----------|-------------|------|
-| Consultoría fiscal para empresarios extranjeros | `15000` | `checkout` — cobro automático |
-| Elecciones fiscales | `25000` | `checkout` — cobro automático |
-| Los otros 6 | `null` | `contact` — correo a Claudia |
+| Servicio | Precio | `pricingModel` | Qué dice la pantalla |
+|----------|--------|----------------|---------------------|
+| Consultoría fiscal para empresarios extranjeros | $150 | `full-service` | "Precio cerrado del servicio" |
+| Elecciones fiscales | $250 | `full-service` | "Precio cerrado del servicio" |
+| Los otros 6 | $50 | `initial-consultation` | "Consulta inicial · Se abona al costo total del servicio" |
 
-Motivo: Claudia **no tiene todavía** la información necesaria para automatizar el cobro de los otros
-6 servicios (precios variables y cobro por otra infraestructura). El día que la tenga, basta poner
-el precio en el catálogo y ese servicio pasa solo a la rama de cobro automático. Cero cambios de
-código.
+El texto sale de `PRICING_COPY` (`src/constants/content/services.ts`), nunca del JSX: la clienta
+puede reformular qué significa el cobro sin que nadie toque un componente.
 
 ## Componentes / Archivos
 
 | Archivo | Responsabilidad |
 |---------|----------------|
-| `src/types/diagnostic.types.ts` | `DiagnosticQuestion`, `DiagnosticOption`, `DiagnosticStep`, `DiagnosticRecommendation`, `DiagnosticContact` |
+| `src/types/diagnostic.types.ts` | `DiagnosticQuestion`, `DiagnosticOption`, `DiagnosticStep`, `DiagnosticContact` |
 | `src/constants/content/diagnostic.ts` | Textos del popup y **árbol de preguntas** (contenido, no lógica) |
-| `src/services/diagnostic.service.ts` | Recorre el árbol, deduce el servicio y la rama. **Sin React, sin fetch** |
-| `src/services/lead.service.ts` | Envía el lead al endpoint desde el navegador |
+| `src/services/diagnostic.service.ts` | Recorre el árbol y deduce el servicio. **Sin React, sin fetch** |
+| `src/services/lead.service.ts` | Acuña el `leadId`, lo guarda en `sessionStorage` y envía el lead |
+| `src/services/crm.service.ts` | Arma la fila del CRM en el servidor ([`crm-sheets.md`](./crm-sheets.md)) |
 | `src/lib/validation/lead.schema.ts` | Esquema Zod **compartido** cliente ↔ servidor + tipo `LeadPayload` inferido |
 | `src/lib/utils/formatCurrency.ts` | `formatPrice` — movido aquí para que lo use el popup sin arrastrar la capa de datos |
 | `src/lib/utils/rateLimit.ts` | Límite por IP en memoria para el endpoint público |
@@ -179,7 +180,9 @@ Desde el 2026-08-03 el modal cumple el patrón estándar y ya no necesita justif
 - **No inventar contenido fiscal.** Las observaciones que devuelve cada respuesta son operativas
   ("lo marcamos como prioritario"), nunca afirmaciones fiscales o legales. Los textos de servicio
   salen del catálogo, que sale de `context.md`.
-- **La rama se deriva del catálogo** (`priceCents`), nunca de una lista de slugs hardcodeada.
+- **El precio se deriva del catálogo**, nunca de una lista de slugs hardcodeada.
+- **Nunca vender el $50 como el precio del servicio.** Es una consulta inicial que se abona al total,
+  y la pantalla tiene que decirlo (ADR-009).
 - **El lead se envía antes del resultado.** No al revés.
 - **Validación en las dos puntas** con el mismo esquema Zod. La del cliente es UX; la del servidor
   es la que manda (`03-security.md`).
@@ -194,13 +197,9 @@ Desde el 2026-08-03 el modal cumple el patrón estándar y ya no necesita justif
 
 ## Pendiente
 
-- [ ] **FASE 6 — Entregar el lead de verdad:** tabla `leads` en Supabase + correo a Claudia por
-      Gmail API. Hoy el endpoint valida y responde `201`, pero **no persiste ni envía**: registra
-      en el log del servidor (sin PII en producción) y devuelve `delivery: "pending"`.
-      ⚠️ **El sitio no debe publicarse hasta cerrar este punto**, o los leads se pierden.
-- [ ] **FASE 7 — Conectar la rama `checkout`** con `/agendar` (Square). Hoy el resultado explica
-      que el pago en línea todavía no está activo.
+- [x] ~~Entregar el lead de verdad~~ — cerrado el 2026-08-04: va al CRM de Google Sheets vía n8n.
+- [ ] **FASE 5 — Conectar el botón "Agendar y pagar"** con `/agendar`. Hoy el resultado dice con
+      todas sus letras que la agenda en línea todavía no está activa y ofrece el teléfono.
 - [ ] Desplegar el trigger en la portada (una línea, cuando la clienta lo apruebe).
-- [ ] Precargar el intake completo (`context.md` §7) con los datos del lead, para no volver a
-      preguntar lo mismo.
-- [ ] Métrica de conversión del popup (visto / iniciado / completado / rechazado) — panel admin.
+- [ ] Métrica de conversión del popup (visto / iniciado / completado / rechazado) — se puede resolver
+      con una segunda pestaña de la hoja, sin panel.

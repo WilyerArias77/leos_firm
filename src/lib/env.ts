@@ -37,8 +37,21 @@ const clientSchema = z.object({
   NEXT_PUBLIC_SQUARE_LOCATION_ID: z.string().min(1),
 });
 
+/**
+ * n8n webhooks — the integration layer (ADR-010).
+ *
+ * Validated apart from `serverSchema` on purpose: Square, Google and Anthropic
+ * are not configured yet, so demanding all of them to read two n8n variables
+ * would take down the only integration that IS live.
+ */
+const n8nSchema = z.object({
+  N8N_CRM_WEBHOOK_URL: z.string().url(),
+  N8N_WEBHOOK_TOKEN: z.string().min(16),
+});
+
 export type ServerEnv = z.infer<typeof serverSchema>;
 export type ClientEnv = z.infer<typeof clientSchema>;
+export type N8nEnv = z.infer<typeof n8nSchema>;
 
 function formatIssues(issues: z.core.$ZodIssue[]): string {
   return issues.map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`).join("\n");
@@ -82,6 +95,29 @@ export function getClientEnv(): ClientEnv {
       `Invalid public environment variables:\n${formatIssues(parsed.error.issues)}\n` +
         `See .env.example and docs/02-architecture.md`,
     );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * n8n configuration, or `null` when it is missing or malformed.
+ *
+ * This is the ONE getter that does not throw, and the exception is deliberate.
+ * A missing n8n variable must never return a 500 to a visitor who just filled
+ * in the diagnosis: that loses the lead AND the person. The caller logs the
+ * misconfiguration, reports `delivery: "failed"` and the UI offers the phone
+ * number instead. Verifying this in production is a line of the deploy
+ * checklist (`docs/04-deployment.md`), not a runtime crash.
+ */
+export function getN8nEnv(): N8nEnv | null {
+  const parsed = n8nSchema.safeParse(process.env);
+
+  if (!parsed.success) {
+    console.error(
+      `[env] n8n sin configurar — el CRM no recibirá datos:\n${formatIssues(parsed.error.issues)}`,
+    );
+    return null;
   }
 
   return parsed.data;

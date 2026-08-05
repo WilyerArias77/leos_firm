@@ -20,15 +20,32 @@ IDE, sin escribir código de prueba desechable.
 
 ## MCP Servers Conectados
 
+> **⚠️ Cambio del 2026-08-04 (ADR-010).** El MCP de **n8n** pasó de utilidad opcional a
+> **herramienta central del proyecto**: todas las integraciones con Google viven ahí. El MCP de
+> Supabase ya no aplica — no hay proyecto y no lo habrá mientras dure el arreglo actual.
+>
+> **Los MCP de Supabase, Google Calendar, Gmail y Drive no siempre están conectados** en la sesión.
+> Verificar antes de planificar con ellos; n8n sí lo está.
+
 | # | Servidor | Herramientas clave | Usar cuando |
 |---|----------|-------------------|-------------|
-| 1 | **Supabase** | `list_projects`, `create_project`, `list_tables`, `apply_migration`, `execute_sql`, `generate_typescript_types`, `get_advisors`, `get_logs`, `deploy_edge_function`, `search_docs` | Crear el proyecto, aplicar migraciones, inspeccionar el schema, generar tipos, **auditar seguridad con `get_advisors`**, depurar con `get_logs` |
-| 2 | **Google Calendar** | `list_calendars`, `list_events`, `search_events`, `create_event`, `update_event`, `delete_event`, `suggest_time` | Descubrir el `GOOGLE_CALENDAR_ID` real, inspeccionar la estructura de eventos y probar disponibilidad antes de codear la integración |
-| 3 | **Gmail** | `search_threads`, `get_message`, `create_draft`, `update_draft`, `list_labels`, `create_label` | Prototipar plantillas de correo y verificar cómo se ven realmente antes de automatizarlas |
-| 4 | **Google Drive** | `search_files`, `read_file_content`, `create_file` | Leer material aportado por la clienta (bio de Claudia, fotos, documentos de servicios) |
-| 5 | **n8n** | `search_nodes`, `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `execute_workflow` | **Scheduler externo de los cron jobs** si no se contrata Vercel Pro (ver `04-deployment.md`) |
-| 6 | **Canva** | `generate-design`, `export-design`, `read-design` | Piezas gráficas del sitio, si la clienta las necesita |
+| 1 | **n8n** ⭐ | `search_nodes`, `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, `execute_workflow`, `get_execution` | **Toda integración con Google** (Sheets, Calendar, Gmail) y los cron. Instancia: `https://ain8n.growingup.digital` |
+| 2 | **Google Calendar** | `list_calendars`, `list_events`, `create_event`, `update_event`, `delete_event` | Descubrir el `GOOGLE_CALENDAR_ID` real de Claudia e inspeccionar eventos antes de escribir el workflow de agendamiento |
+| 3 | **Gmail** | `create_draft`, `get_message`, `list_labels` | Prototipar plantillas de correo antes de automatizarlas en n8n |
+| 4 | **Google Drive** | `search_files`, `read_file_content`, `create_file` | Leer material aportado por la clienta (bio, fotos, documentos) |
+| 5 | **Canva** | `generate-design`, `export-design`, `read-design` | Piezas gráficas del sitio, si la clienta las necesita |
+| 6 | **Supabase** | — | ⏸️ **Congelado (ADR-010).** No crear proyecto ni aplicar migraciones |
 | 7 | **Vercel** | — | ⚠️ **Requiere autorización.** Ver nota abajo |
+
+### Protocolo para trabajar con n8n
+
+1. `search_nodes` con los servicios que se necesitan.
+2. `get_node_types` con **todos** los nodos, incluidos sus discriminadores. **No adivinar nombres de
+   parámetros** — un parámetro inventado produce un workflow que no corre.
+3. `validate_workflow` hasta que devuelva `valid: true`.
+4. `create_workflow_from_code` (o `update_workflow` si ya existe).
+5. **Publicar es un acto de producción**: activar un workflow pone un webhook en vivo.
+   → **pedir autorización antes** (Ley 4).
 
 ### ⚠️ Vercel — pendiente de autorizar
 
@@ -60,14 +77,11 @@ desde el dashboard de Vercel o con la CLI (`vercel`).
 
 | Feature | Skill / MCP a usar primero |
 |---------|---------------------------|
-| Guardar los leads del diagnóstico (FASE 6) | MCP **Supabase**: `apply_migration` para la tabla `leads` → `get_advisors` → `generate_typescript_types` |
-| Correo del lead a Claudia (FASE 6) | MCP **Gmail**: `create_draft` para diseñar la plantilla antes de automatizarla |
-| Crear el proyecto y las tablas en Supabase | MCP **Supabase**: `create_project` → `apply_migration` → `generate_typescript_types` |
-| Verificar seguridad de RLS | MCP **Supabase**: `get_advisors` (tipo `security`) tras cada migración |
-| Integración con Google Calendar | MCP **Google Calendar**: inspeccionar eventos reales antes de escribir `src/lib/google/calendar.ts` |
-| Plantillas de correo | MCP **Gmail**: `create_draft` para iterar el diseño del correo antes de automatizarlo |
-| Agente IA del intake | Skill **`claude-api`** (modelo, parámetros y tool use vigentes) |
-| Cron de recordatorios sin Vercel Pro | MCP **n8n** + skill `n8n-workflow-patterns` |
+| Guardar los leads del diagnóstico ✅ | MCP **n8n** — workflow `Leos Firm - CRM de leads` (`NYy88hBunUSkrcZk`) |
+| Agendamiento (FASE 5) | MCP **Google Calendar** para descubrir el calendario real → MCP **n8n** para los 4 workflows de `features/scheduling.md` |
+| Correos de confirmación y recordatorio (FASE 7) | MCP **Gmail**: `create_draft` para iterar la plantilla → MCP **n8n** para automatizarla |
+| Cron de recordatorios | MCP **n8n** (Schedule Trigger) + skill `n8n-workflow-patterns` |
+| Depurar un workflow que falló | MCP **n8n**: `get_execution` con el id de la ejecución |
 | Antes de cerrar features de pago/PII | Skill **`security-review`** |
 
 ---
@@ -101,4 +115,7 @@ desde el dashboard de Vercel o con la CLI (`vercel`).
 | 2026-08-02 | Registrado | Skill `claude-api` | Referencia obligatoria para el agente IA |
 | 2026-08-02 | Registrado | Skill `security-review` | Auditoría de pagos, RLS y PII |
 | 2026-08-02 | Usado | Supabase MCP `list_projects` | FASE 2: verificar si existía proyecto para Leos Firm (no existe → catálogo en constantes) |
-| 2026-08-03 | No usado | Supabase / Gmail MCP | FASE 3: el diagnóstico no persiste ni envía correo todavía; ambos MCP se usan en la FASE 6 |
+| 2026-08-03 | No usado | Supabase / Gmail MCP | FASE 3: el diagnóstico no persiste ni envía correo todavía |
+| 2026-08-04 | **Usado** | n8n MCP | FASE 4: `search_nodes` → `get_node_types` → `validate_workflow` → `create_workflow_from_code` para el CRM en Google Sheets |
+| 2026-08-04 | **Congelado** | Supabase MCP | ADR-010: el CRM es una hoja de Google; no hay proyecto que administrar |
+| 2026-08-04 | **Promovido** | n8n MCP | Pasa a ser la herramienta central: todas las integraciones con Google viven ahí |

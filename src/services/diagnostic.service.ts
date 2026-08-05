@@ -6,10 +6,8 @@ import {
 import type { Service } from "@/types/content.types";
 import type {
   DiagnosticOption,
-  DiagnosticOutcome,
   DiagnosticQuestion,
   DiagnosticQuestionId,
-  DiagnosticRecommendation,
   DiagnosticStep,
 } from "@/types/diagnostic.types";
 
@@ -76,28 +74,21 @@ export function resolveRecommendedSlug(steps: readonly DiagnosticStep[]): string
 }
 
 /**
- * Which branch the visitor falls into (ADR-008).
+ * The service the answers point to, resolved against the catalog.
  *
- * A service with a price can be charged online; one without a price depends on
- * the case and goes to Claudia by email. This reads the catalog on purpose: the
- * day a quote-based service gets a fixed price, it moves to the checkout branch
- * with zero code changes.
+ * There is no branch left to compute: since ADR-009 every service is priced
+ * and every visitor continues to the same schedule-and-pay flow. The old
+ * `getOutcome` (checkout vs. email to Claudia) is gone with the unpriced
+ * services that justified it.
  */
-export function getOutcome(service: Service): DiagnosticOutcome {
-  return service.priceCents === null ? "contact" : "checkout";
-}
-
 export function resolveRecommendation(
   steps: readonly DiagnosticStep[],
   services: readonly Service[],
-): DiagnosticRecommendation | null {
+): Service | null {
   const slug = resolveRecommendedSlug(steps);
   if (!slug) return null;
 
-  const service = services.find((item) => item.slug === slug);
-  if (!service) return null;
-
-  return { service, outcome: getOutcome(service) };
+  return services.find((item) => item.slug === slug) ?? null;
 }
 
 /**

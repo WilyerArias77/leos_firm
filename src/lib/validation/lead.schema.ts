@@ -16,21 +16,38 @@ export const leadStepSchema = z.object({
 });
 
 export const leadSchema = z.object({
+  /**
+   * Row key of the CRM (`docs/features/crm-sheets.md`). Minted in the browser
+   * when the form is submitted and carried through scheduling and payment, so
+   * the three stages update ONE row instead of appending three.
+   *
+   * It is opaque and carries no privilege: it names a row, it does not grant
+   * access to it. Nothing is read back by id.
+   */
+  leadId: z.string().uuid("Identificador de solicitud inválido"),
+
+  // `.trim()` va ANTES de las validaciones a propósito: pegar un correo desde
+  // otra app arrastra espacios, y rechazar "ana@ejemplo.com " por eso es
+  // castigar al visitante por algo que el navegador puede arreglar solo.
   fullName: z
     .string()
+    .trim()
     .min(2, "Escribe tu nombre completo")
     .max(120, "El nombre es demasiado largo"),
   email: z
     .string()
+    .trim()
     .min(1, "Escribe tu correo electrónico")
     .email("Ese correo electrónico no parece válido")
     .max(180, "El correo es demasiado largo"),
   phone: z
     .string()
+    .trim()
     .min(6, "Escribe un número de contacto válido")
     .max(30, "El número es demasiado largo"),
   country: z
     .string()
+    .trim()
     .min(2, "Indica tu país de residencia")
     .max(80, "El país es demasiado largo"),
   consent: z
@@ -42,7 +59,6 @@ export const leadSchema = z.object({
   /** Answers, in order. Bounded so a crafted request cannot grow unbounded. */
   steps: z.array(leadStepSchema).min(1, "Falta responder el diagnóstico").max(10),
   recommendedServiceSlug: z.string().min(1).max(80),
-  outcome: z.enum(["checkout", "contact"]),
   /** Service being viewed when the popup opened; `null` outside a detail page. */
   viewedServiceSlug: z.string().max(80).nullable(),
   sourcePath: z.string().max(300),
@@ -51,17 +67,15 @@ export const leadSchema = z.object({
 export type LeadPayload = z.infer<typeof leadSchema>;
 
 /**
- * Normalizes before validating: trims everything and lowercases the email so
- * `clients.email` stays unique (`DB_SCHEMA.md` requires `email = lower(email)`).
+ * Lowercases the email so the same person is one row in the CRM, not two
+ * ("Ana@ejemplo.com" and "ana@ejemplo.com" are the same inbox).
+ *
+ * Trimming already happened inside the schema — doing it here too would have
+ * been too late: validation runs first, and a trailing space would have failed
+ * the email check before this function ever saw it.
  */
 export function normalizeLead(payload: LeadPayload): LeadPayload {
-  return {
-    ...payload,
-    fullName: payload.fullName.trim(),
-    email: payload.email.trim().toLowerCase(),
-    phone: payload.phone.trim(),
-    country: payload.country.trim(),
-  };
+  return { ...payload, email: payload.email.toLowerCase() };
 }
 
 /** Turns a Zod error into `{ campo: "mensaje" }` for the API `details` object. */

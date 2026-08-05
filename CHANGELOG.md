@@ -6,6 +6,82 @@
 
 ---
 
+## [2026-08-04] — Cobro universal + CRM en Google Sheets — v0.4.0
+
+### Request original
+> Necesitamos modificar totalmente esto, estamos cobrando sólo dos servicios en 150 y 250$ necesito
+> que estos se queden cómo están y todos los demás valgan 50$ […] Ahora queremos que todos los
+> servicios sean pagos, de esta forma sin importar que servicio escojan seguirán el mismo flujo de
+> agenda y pago. Ya en la llamada Claudia se encargará de recibir el resto del pago.
+> Ahora necesitamos que todos los clientes que diligenciaron el formulario se guarden en un crm en
+> google sheet […] con las respuestas a cada pregunta […] y sus datos personales, al final un estado
+> de hasta donde llegó, sólo llenó el formulario o avanzó hasta el calendario o pago realizado.
+> Necesitamos que empieces con el cambio del punto 2 y comiences también con el diseño del flujo de
+> n8n para agendar las citas en el calendario, la idea es evitar usar un agente de IA y simplemente
+> clonar el google calendar en la pagina […] Luego […] finalizamos esta parte con el pago en Square.
+
+### Tipo de cambio
+- **CHANGED (negocio)**: los ocho servicios se cobran en línea. Los seis que antes se cotizaban ahora
+  cobran **$50 de consulta inicial abonable** al costo total → **ADR-009**
+- **CHANGED (arquitectura)**: **n8n pasa a ser la capa de integración** y el CRM es una hoja de
+  Google. **Supabase queda congelado** → **ADR-010**
+- **ADDED**: entrega real del lead — `POST /api/v1/leads` escribe en la hoja de Claudia
+- **ADDED**: `leadId` (UUID del navegador) que atraviesa el embudo, para que las tres etapas
+  actualicen **una sola fila** por persona
+- **REMOVED**: la bifurcación del diagnóstico. `DiagnosticOutcome`, `getOutcome()`,
+  `DiagnosticRecommendation`, `Service.requiresAppointment` y la pantalla de "Claudia revisa tu caso"
+- **ADDED (n8n)**: workflow `Leos Firm - CRM de leads` (`NYy88hBunUSkrcZk`)
+- **ADDED (diseño)**: flujo completo de agendamiento con calendario propio → **ADR-011**
+
+### Archivos modificados
+**Catálogo y precios**
+- `src/types/content.types.ts` — `priceCents: number` (ya no `| null`), nuevo `pricingModel`,
+  `durationMinutes` obligatorio, se elimina `requiresAppointment`
+- `src/constants/content/services.ts` — los 8 con precio + `PRICING_COPY`
+- `src/constants/business.ts` — `INITIAL_CONSULTATION`, `LEAD_STORAGE_KEY`
+- `src/lib/utils/formatCurrency.ts` — `formatPrice` devuelve `string`, ya no `string | null`
+- `src/components/features/services/ServiceCard/ServiceCard.tsx`,
+  `src/app/(public)/servicios/[slug]/page.tsx` — se elimina la insignia "Cotización"
+
+**Diagnóstico**
+- `src/types/diagnostic.types.ts`, `src/services/diagnostic.service.ts` — sin ramas
+- `src/constants/content/diagnostic.ts` — un solo siguiente paso; nuevo aviso `deliveryFailed`
+- `.../DiagnosticDialog/{DiagnosticDialog,DiagnosticIntro,DiagnosticResult}.tsx` y sus tipos
+
+**CRM (nuevo)**
+- `src/types/crm.types.ts`, `src/services/crm.service.ts`, `src/lib/n8n/client.ts` — nuevos
+- `src/services/lead.service.ts` — acuña el `leadId` y devuelve el estado de entrega
+- `src/lib/validation/lead.schema.ts` — `+leadId`, `-outcome`
+- `src/app/api/v1/leads/route.ts` — entrega real
+- `src/lib/env.ts` — `getN8nEnv()`, el único getter que no lanza (y por qué)
+- `.env.example` — variables de n8n; Supabase marcado como congelado
+
+**Docs**
+- Nuevos: `features/crm-sheets.md`, `features/scheduling.md`
+- `02-architecture.md` (ADR-009, ADR-010, variables, diagrama), `00-roadmap.md` (14 → 12 fases),
+  `API_DOCS.md` (endpoints eliminados y por qué), `features/lead-diagnostic.md`, `CLAUDE.md`
+
+### Cambios en base de datos
+- Ninguno, y ya no habrá: **Supabase está congelado** (ADR-010). `DB_SCHEMA.md` queda como diseño de
+  referencia, no aplicado.
+
+### Validación
+- `npm run lint` ✅ · `npm run build` ✅
+
+### Notas
+- ⚠️ **Pasos manuales pendientes en n8n antes de que el CRM funcione**: crear la hoja `Leads` con sus
+  encabezados, crear la credencial Header Auth, verificar el acceso de Google Sheets y **publicar** el
+  workflow. Lista completa en `features/crm-sheets.md`.
+- ⚠️ **Riesgo declarado:** si n8n está caído, ese lead no se recupera solo. No se loguea la PII y no
+  hay base de datos local. El visitante ve el teléfono de la firma como alternativa.
+- ⚠️ **`Elecciones fiscales` cambió de naturaleza**: era un trámite sin cita y ahora empieza con una
+  sesión de 60 minutos, como el resto. Se añadió una frase a su descripción explicándolo —
+  **conviene que Claudia la revise**.
+- La contradicción de la política de reembolso (v0.3.2) **sigue abierta** y ahora es más urgente:
+  con ocho servicios cobrando, hay que unificar el texto de la FAQ con `/politicas` antes de cobrar.
+
+---
+
 ## [2026-08-03] — Respuestas oficiales de las 7 preguntas frecuentes — v0.3.2
 
 ### Request original

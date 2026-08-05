@@ -103,7 +103,37 @@ SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public';
 
 ---
 
+## n8n — la capa de integración (ADR-010)
+
+Desde el 2026-08-04, **ninguna credencial de Google vive en la aplicación**. Next.js publica a
+webhooks de n8n y n8n habla con Google. Eso mueve la superficie de riesgo, no la elimina:
+
+- **El webhook está autenticado**, no solo escondido. La ruta poco adivinable de n8n **no cuenta como
+  autenticación**: cada webhook lleva credencial **Header Auth** y Next.js manda el secreto en
+  `x-leosfirm-token`.
+- `N8N_WEBHOOK_TOKEN` es **secreta y de servidor**. `src/lib/n8n/client.ts` empieza con
+  `import "server-only"` para que un import accidental desde el cliente sea un **error de build**,
+  no una filtración en el bundle.
+- **El payload que sale hacia n8n lleva PII** (nombre, correo, teléfono). Va por HTTPS y queda en el
+  historial de ejecuciones de n8n: ese historial es un almacén de PII y hereda las mismas políticas
+  de retención que el resto (§PII).
+- **Los errores de n8n no se propagan al visitante.** `postToN8n` nunca lanza; loguea el nombre del
+  webhook y el tipo de fallo, **nunca el cuerpo**.
+- `getN8nEnv()` es el **único** getter de entorno que devuelve `null` en vez de lanzar. Es una
+  excepción deliberada a la regla de "si falta una variable, la app no arranca": un 500 en el
+  diagnóstico pierde el lead *y* a la persona. A cambio, **verificar las dos variables de n8n es una
+  línea obligatoria del checklist de despliegue** — nada más va a avisar.
+- Rotar el token: al cambiarlo hay que actualizarlo **en los dos lados a la vez** (variable de
+  entorno y credencial de n8n). Mientras no coincidan, el CRM devuelve `failed` en silencio.
+
+---
+
 ## Integraciones de Google
+
+> ⏸️ **Hoy no aplica:** las credenciales de Google viven en n8n (ADR-010) y la app no tiene service
+> account. Esta sección se mantiene porque las reglas siguen siendo las correctas si algo vuelve a
+> hablar con Google directamente — y porque los scopes mínimos aplican igual a las credenciales
+> configuradas dentro de n8n.
 
 - Autenticación con **service account** + delegación a nivel de dominio (necesaria para enviar
   correo como la firma y para crear enlaces de Meet).

@@ -179,18 +179,16 @@ leos_firm/
 
 ```
 Visitante en /servicios/[slug]
-   └─ popup de diagnóstico (sin X) ── "solo estoy viendo" ──▶ FIN (no vuelve en la sesión)
+   └─ popup de diagnóstico ── "solo estoy viendo" / X / Esc ──▶ FIN (no vuelve en la sesión)
         └─ 3 preguntas filtro ──▶ datos de contacto ──▶ POST /api/v1/leads
-             │                                              └─ leads (Supabase) + correo a Claudia
+             │                                              └─ n8n ──▶ Google Sheets (stage=formulario)
              ▼
-        servicio deducido
-             ├─ precio fijo (checkout) ──▶ sigue el flujo de pago de abajo
-             └─ precio variable (contact) ──▶ Claudia responde por correo. FIN del flujo automático
+        servicio deducido ──▶ agendar y pagar (un solo camino, ADR-009)
 ```
 
-Solo los servicios **con precio en el catálogo** entran al flujo de cobro automático. Los demás
-terminan en el correo a Claudia: la firma no tiene aún la infraestructura para cobrarlos
-automáticamente (precios variables y otro medio de cobro).
+**Un solo camino.** Desde ADR-009 los ocho servicios tienen precio, así que todo visitante que
+termina el diagnóstico sigue el mismo flujo de agenda y pago. La antigua rama de "correo a Claudia"
+para servicios sin precio ya no existe.
 
 ### Pasos 1–N — Compra, cita y seguimiento
 
@@ -294,9 +292,11 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | Variable | Descripción | Tipo | Requerida |
 |----------|-------------|------|-----------|
 | `NEXT_PUBLIC_SITE_URL` | URL pública del sitio | pública | SÍ |
-| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | pública | SÍ |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anónima (respeta RLS) | pública | SÍ |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio — **solo servidor** | secreta | SÍ |
+| `N8N_CRM_WEBHOOK_URL` | Webhook del CRM en n8n (ADR-010) | secreta | SÍ |
+| `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n, header `x-leosfirm-token` | secreta | SÍ |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | pública | ⏸️ congelada |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anónima (respeta RLS) | pública | ⏸️ congelada |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio — **solo servidor** | secreta | ⏸️ congelada |
 | `NEXT_PUBLIC_SQUARE_APPLICATION_ID` | App ID de Square (Web Payments SDK) | pública | SÍ |
 | `NEXT_PUBLIC_SQUARE_LOCATION_ID` | Location ID de Square | pública | SÍ |
 | `SQUARE_ACCESS_TOKEN` | Token de API de Square | secreta | SÍ |
@@ -311,6 +311,11 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `BUSINESS_TIMEZONE` | Default `America/Chicago` | config | NO |
 | `CRON_SECRET` | Autenticación de los cron jobs | secreta | SÍ |
 | `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Proveedor alternativo a Meet | secreta | NO |
+
+> **⏸️ congelada** significa que la variable sigue documentada pero **no se usa** desde ADR-010.
+> Las `GOOGLE_*` quedan igual: las credenciales de Google viven en n8n, no en la app. Ninguna de las
+> dos familias se borra — el día que Supabase se reactive o que algo necesite hablar con Google
+> directamente, están ahí y validadas.
 
 Detalle de manejo seguro: [`03-security.md`](./03-security.md).
 
@@ -452,3 +457,76 @@ Después del diagnóstico el flujo se bifurca **según el catálogo**:
   la cita, con `accepted_at` e IP. El diagnóstico solo pide autorización para contactar.
 - La bifurcación no se hardcodea: el día que un servicio de cotización reciba precio, pasa solo a la
   rama de cobro automático.
+
+> **Superado parcialmente por ADR-009 (2026-08-04).** La captación antes del pago sigue vigente y es
+> el corazón del flujo. Lo que desapareció es la **bifurcación**: ya no hay servicios sin precio, así
+> que la rama del correo a Claudia no existe. La frase final de este ADR se cumplió, solo que para
+> los seis servicios a la vez.
+
+### ADR-009: Todos los servicios se cobran en línea
+
+**Fecha:** 2026-08-04
+**Contexto:** Solo dos de los ocho servicios tenían precio cerrado ($150 y $250). Los otros seis
+terminaban en un correo a Claudia con los datos del interesado, porque su precio depende del caso.
+Eso tenía dos costos que se hicieron evidentes al operarlo: Claudia quedaba obligada a vivir dentro
+del correo para saber si tenía clientes nuevos, y el sitio mantenía **dos flujos distintos** —uno
+automatizado y uno manual— para el mismo tipo de visitante.
+
+**Decisión:** Los seis servicios sin precio pasan a cobrar una **consulta inicial de $50**, que se
+abona al costo total del servicio que el cliente contrate. Claudia da el precio final durante esa
+llamada y cobra el resto por su infraestructura habitual. Los dos servicios con precio cerrado no
+cambian.
+
+Modelado con `Service.pricingModel`:
+
+| Modelo | Servicios | Qué significa |
+|--------|-----------|---------------|
+| `full-service` | Consultoría fiscal ($150) · Elecciones fiscales ($250) | El pago cierra el servicio |
+| `initial-consultation` | Los otros seis ($50) | Paga la primera sesión y se abona a la cotización |
+
+**Consecuencias:**
+- `Service.priceCents` deja de ser `number | null` y pasa a `number`. **No existe un camino sin
+  precio en el catálogo**, y el compilador lo garantiza.
+- `DiagnosticOutcome` (`checkout` | `contact`) se elimina, junto con `getOutcome()` y la pantalla de
+  "Claudia revisa tu caso". Todo visitante que termina el diagnóstico va a agendar y pagar.
+- `Service.requiresAppointment` se elimina: ahora es siempre `true`. `Elecciones fiscales`, que era
+  un trámite sin cita, pasa a empezar con una sesión de 60 minutos como el resto.
+- `durationMinutes` deja de ser opcional.
+- El precio de la consulta inicial vive en `INITIAL_CONSULTATION` (`src/constants/business.ts`):
+  cambiarlo es un número en un archivo, no seis ediciones en el catálogo.
+- **Contrapartida asumida:** un visitante que antes podía pedir una cotización gratis ahora encuentra
+  un cobro. Se acepta a cambio de que ninguna solicitud se pierda en una bandeja de entrada. El texto
+  siempre dice que el monto se abona al servicio, para que no se lea como una barrera.
+
+### ADR-010: n8n es la capa de integración; Supabase queda congelado
+
+**Fecha:** 2026-08-04
+**Contexto:** El CRM que la firma necesita hoy es *"que Claudia vea de un vistazo quién llenó el
+formulario y hasta dónde llegó"*. La respuesta documentada era un proyecto de Supabase con 13 tablas,
+RLS y un panel administrativo por construir — meses de trabajo y una cuenta nueva para resolver algo
+que una hoja de cálculo resuelve hoy. Al mismo tiempo, el proyecto ya tiene una instancia de n8n en
+producción con credenciales de Google conectadas.
+
+**Decisión:** El CRM es una **hoja de Google** y **n8n es la única pieza que habla con Google**.
+Next.js publica eventos a webhooks de n8n; n8n decide qué hacer con ellos (Sheets, Calendar, Gmail).
+El proyecto de Supabase **no se crea**: su diseño queda documentado en `DB_SCHEMA.md` sin aplicar.
+
+```
+Next.js ──POST webhook──▶ n8n ──┬──▶ Google Sheets   (CRM)
+   (sin credenciales             ├──▶ Google Calendar (agenda)
+    de Google)                   └──▶ Gmail           (correos)
+```
+
+**Consecuencias:**
+- **Una sola superficie de credenciales.** Ningún service account de Google entra a Vercel.
+  `GOOGLE_*` y `SUPABASE_*` quedan sin usar mientras dure este arreglo.
+- Claudia puede filtrar, ordenar y anotar en la hoja sin que nadie programe un panel.
+- **Se pierde la integridad referencial.** Una hoja no tiene claves foráneas ni transacciones. El
+  antídoto es que cada etapa escriba solo sus columnas y que la clave (`lead_id`) la genere el
+  cliente una vez. A partir de unos cientos de filas al mes esto deja de alcanzar y hay que
+  reactivar Supabase — n8n podrá escribir a las dos a la vez sin tocar la app.
+- **Se depende de que n8n esté arriba.** Se acepta porque ninguna caída suya rompe el sitio: los
+  fallos son suaves y devuelven `delivery: "failed"` (ver `features/crm-sheets.md`).
+- `getN8nEnv()` es el único getter de entorno que **no lanza** cuando falta una variable. Está
+  justificado en el propio archivo: un 500 en el diagnóstico pierde el lead *y* la persona.
+- Los cron de recordatorios dejan de necesitar Vercel Pro: los ejecuta n8n (`04-deployment.md`).

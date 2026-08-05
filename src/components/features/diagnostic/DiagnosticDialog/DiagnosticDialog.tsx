@@ -10,11 +10,9 @@ import {
   resolveRecommendation,
 } from "@/services/diagnostic.service";
 import { submitLead } from "@/services/lead.service";
-import type {
-  DiagnosticContact,
-  DiagnosticRecommendation,
-  DiagnosticStep,
-} from "@/types/diagnostic.types";
+import type { Service } from "@/types/content.types";
+import type { CrmDelivery } from "@/types/crm.types";
+import type { DiagnosticContact, DiagnosticStep } from "@/types/diagnostic.types";
 import { DiagnosticContactStep } from "./DiagnosticContactStep";
 import { DiagnosticIntro } from "./DiagnosticIntro";
 import { DiagnosticQuestionStep } from "./DiagnosticQuestionStep";
@@ -46,9 +44,8 @@ export function DiagnosticDialog({
   const [stage, setStage] = useState<Stage>("intro");
   const [steps, setSteps] = useState<DiagnosticStep[]>([]);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
-  const [recommendation, setRecommendation] = useState<DiagnosticRecommendation | null>(
-    null,
-  );
+  const [recommendation, setRecommendation] = useState<Service | null>(null);
+  const [delivery, setDelivery] = useState<CrmDelivery>("delivered");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -100,8 +97,7 @@ export function DiagnosticDialog({
     const result = await submitLead({
       ...contact,
       steps,
-      recommendedServiceSlug: resolved.service.slug,
-      outcome: resolved.outcome,
+      recommendedServiceSlug: resolved.slug,
       viewedServiceSlug: contextService?.slug ?? null,
       sourcePath,
     });
@@ -114,6 +110,7 @@ export function DiagnosticDialog({
       return;
     }
 
+    setDelivery(result.delivery);
     setRecommendation(resolved);
     setStage("result");
     onComplete();
@@ -163,7 +160,8 @@ export function DiagnosticDialog({
       {stage === "result" && recommendation ? (
         <DiagnosticResult
           titleId={titleId}
-          recommendation={recommendation}
+          service={recommendation}
+          delivery={delivery}
           onClose={onClose}
         />
       ) : null}

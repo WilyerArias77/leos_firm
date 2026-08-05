@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Check, Clock, Phone } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { Section } from "@/components/layout/Section";
-import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { DiagnosticTrigger } from "@/components/features/diagnostic/DiagnosticTrigger";
 import {
@@ -15,6 +14,7 @@ import {
 } from "@/services/service.service";
 import { COMPANY } from "@/constants/business";
 import { INTAKE_REQUIREMENTS } from "@/constants/content/policies";
+import { PRICING_COPY } from "@/constants/content/services";
 import { ROUTES } from "@/constants/routes";
 
 const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
@@ -48,6 +48,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
   // without a round trip (`docs/features/lead-diagnostic.md`).
   const services = await getServices();
   const price = formatPrice(service.priceCents);
+  const pricing = PRICING_COPY[service.pricingModel];
 
   return (
     <>
@@ -63,19 +64,17 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
 
           <h1 className="mt-6 max-w-3xl text-4xl sm:text-5xl">{service.name}</h1>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {price ? (
-              <span className="font-serif text-3xl text-gold">{price} USD</span>
-            ) : (
-              <Badge variant="quote">Requiere cotización</Badge>
-            )}
+          <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <span className="font-serif text-3xl text-gold">{price} USD</span>
 
-            {service.durationMinutes ? (
-              <span className="inline-flex items-center gap-1.5 text-sm text-platinum-dim">
-                <Clock className="h-4 w-4" aria-hidden="true" />
-                {service.durationMinutes} minutos
-              </span>
+            {pricing.label ? (
+              <span className="text-sm text-platinum-dim">{pricing.label}</span>
             ) : null}
+
+            <span className="inline-flex items-center gap-1.5 text-sm text-platinum-dim">
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              {service.durationMinutes} minutos
+            </span>
 
             {service.isSubscription ? (
               <span className="text-sm text-platinum-dim">
@@ -83,6 +82,8 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
               </span>
             ) : null}
           </div>
+
+          <p className="mt-3 max-w-2xl text-sm text-platinum-dim">{pricing.note}</p>
         </Container>
       </section>
 
@@ -108,26 +109,22 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
                 ))}
               </ul>
 
-              {service.requiresAppointment ? (
-                <>
-                  <h2 className="mt-12 text-2xl text-navy-900">
-                    Qué necesitarás tener a la mano
-                  </h2>
-                  <ul className="mt-4 space-y-3">
-                    {INTAKE_REQUIREMENTS.map((requirement) => (
-                      <li key={requirement} className="flex gap-3">
-                        <span
-                          className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold"
-                          aria-hidden="true"
-                        />
-                        <span className="text-sm leading-relaxed text-ink-muted">
-                          {requirement}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
+              <h2 className="mt-12 text-2xl text-navy-900">
+                Qué necesitarás tener a la mano
+              </h2>
+              <ul className="mt-4 space-y-3">
+                {INTAKE_REQUIREMENTS.map((requirement) => (
+                  <li key={requirement} className="flex gap-3">
+                    <span
+                      className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold"
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm leading-relaxed text-ink-muted">
+                      {requirement}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <aside className="lg:col-span-1">

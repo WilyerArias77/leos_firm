@@ -13,17 +13,19 @@ EE. UU. para empresarios hispanos. No es un sitio informativo: es un **ecosistem
 
 ```
 Servicio → DIAGNÓSTICO GRATUITO (popup, captura el lead ANTES del pago)
-   ├─ servicio con precio  → Pago Square → Intake + Agente IA → Google Calendar
-   │                          → Google Meet → CRM → Correos → Estado de la cita
-   └─ servicio sin precio  → Correo a Claudia con los datos y el servicio solicitado
+   → CRM en Google Sheets (stage=formulario)
+   → Calendario propio dentro del sitio → reserva tentativa (stage=agenda)
+   → Pago Square → cita confirmada + Google Meet (stage=pagado) → correos
 ```
 
-Solo **2 de los 8 servicios** tienen cobro automático (los que tienen precio cerrado). El resto se
-cobra con otra infraestructura y con precios variables → caen en la rama del correo. La rama se
-decide leyendo `priceCents` del catálogo, nunca una lista de slugs (ADR-008).
+**Un solo camino para los 8 servicios** (ADR-009). Dos tienen precio cerrado ($150 y $250); los otros
+seis cobran una **consulta inicial de $50 que se abona al costo total** del servicio, y Claudia da el
+precio final durante esa llamada. No existe un servicio sin precio, ni una rama de "correo a
+Claudia": eso desapareció con ADR-009.
 
-**Stack:** Next.js 16 (App Router) · TypeScript · TailwindCSS v4 · Supabase
-**Integraciones:** Square · Google Calendar · Google Meet/Zoom · Gmail · Anthropic
+**Stack:** Next.js 16 (App Router) · TypeScript · TailwindCSS v4
+**Integraciones:** todo pasa por **n8n** (ADR-010) → Google Sheets · Google Calendar · Gmail.
+Square se integra directo. **Supabase está congelado** y **no se usa**.
 
 ### Principio fundamental
 
@@ -32,6 +34,8 @@ decide leyendo `priceCents` del catálogo, nunca una lista de slugs (ADR-008).
 > Ninguna cita existe sin **pago confirmado** y sin **slot bloqueado en Google Calendar**.
 > El **webhook de Square** es la única fuente de verdad del pago.
 > **Google Calendar** es la única fuente de verdad de la disponibilidad.
+> **n8n tiene las credenciales; Next.js tiene las reglas de negocio.** Ninguna clave de Google entra
+> a la app.
 
 ---
 
@@ -40,13 +44,16 @@ decide leyendo `priceCents` del catálogo, nunca una lista de slugs (ADR-008).
 1. LEER `docs/00-roadmap.md` — en qué fase estamos y qué corresponde hacer
 2. LEER `docs/01-project-overview.md`
 3. LEER `docs/02-architecture.md`
-3. LEER `docs/SKILLS.md` — hay MCP servers para Supabase, Google Calendar y Gmail; úsalos
+3. LEER `docs/SKILLS.md` — el MCP de **n8n** es la herramienta central del proyecto
 4. IDENTIFICAR qué feature se modifica
 5. LEER `docs/features/[feature].md` — si NO existe → **CREARLO antes de codear**
-6. Si se toca DB → LEER `docs/DB_SCHEMA.md`
+6. Si se toca el CRM o un workflow → LEER `docs/features/crm-sheets.md`
 7. Si se toca API → LEER `docs/API_DOCS.md`
-8. Si se toca auth, pagos, credenciales, RLS o PII → LEER `docs/03-security.md`
+8. Si se toca auth, pagos, credenciales o PII → LEER `docs/03-security.md`
 9. Si se toca deploy o cron → LEER `docs/04-deployment.md`
+
+> ⚠️ **`docs/DB_SCHEMA.md` describe un diseño CONGELADO** (ADR-010). Las 13 tablas están diseñadas
+> pero **no aplicadas**, y no hay proyecto de Supabase. No escribas código contra ellas.
 
 ---
 
@@ -76,7 +83,7 @@ Documentación local y confiable: `node_modules/next/dist/docs/`
 | # | Mandamiento | Regla aplicada a este proyecto |
 |---|-------------|-------------------------------|
 | I | NO ALUCINARÁS | Solo implementar lo pedido. Ante duda → PREGUNTAR. Ninguna dependencia nueva sin autorización |
-| II | SEPARARÁS LÓGICA DE ESTILOS | Clases Tailwind en el JSX, pero la lógica de negocio va en `src/services/`. **Nunca** llamar a Supabase/Square/Google desde un componente |
+| II | SEPARARÁS LÓGICA DE ESTILOS | Clases Tailwind en el JSX, pero la lógica de negocio va en `src/services/`. **Nunca** llamar a n8n/Square desde un componente |
 | III | DOCUMENTARÁS CADA CAMBIO | Ningún cambio sin su doc de feature |
 | IV | ACTUALIZARÁS EL CHANGELOG | Cada request → nueva entrada en `CHANGELOG.md` |
 | V | DOCUMENTARÁS LA DB | Cada migración → `DB_SCHEMA.md` + regenerar `src/types/database.types.ts` |
@@ -97,8 +104,8 @@ Documentación local y confiable: `node_modules/next/dist/docs/`
    explicar el impacto y pedir autorización.
 3. **DOCUMENTACIÓN CONTINUA** — actualizar docs + CHANGELOG después de cada cambio.
 4. **SEGURIDAD** — nunca deploy, `git push` ni cambios destructivos sin confirmación explícita.
-   Nunca usar el MCP de Supabase (`execute_sql`, `apply_migration`) contra producción sin permiso:
-   escribe **directo** en el proyecto real.
+   El MCP de n8n escribe **directo** en la instancia real: crear o modificar un workflow está bien,
+   pero **publicar** (activar) uno pone un webhook en producción → pedir permiso antes.
 
 ---
 
@@ -111,8 +118,11 @@ Documentación local y confiable: `node_modules/next/dist/docs/`
 - Tolerancia de 15 min; la sesión termina a la hora originalmente programada.
 - El cliente **debe** aceptar la política de cancelación en el intake → se registra `accepted_at` + IP.
 - Referidos de abogados de inmigración: **primeros 30 minutos gratis** (vía cupón).
-- Precios **siempre en centavos** y leídos en el servidor desde `services`, nunca del cliente.
-- Fechas **siempre en UTC** en la base de datos; la firma opera en `America/Chicago`.
+- Precios **siempre en centavos** y leídos en el servidor desde el catálogo, nunca del cliente.
+- **Todos los servicios se cobran** (ADR-009). Los seis de `pricingModel: "initial-consultation"`
+  cobran $50 que **se abonan al costo total** — decirlo siempre, nunca vender el $50 como el precio
+  del servicio.
+- Fechas **siempre en UTC**; la firma opera en `America/Chicago`.
 
 ---
 
@@ -137,15 +147,17 @@ Estilo: serio, profesional y discreto. Serif para titulares, sans para cuerpo.
 
 | Doc | Cuándo leerlo |
 |-----|--------------|
-| `docs/00-roadmap.md` | SIEMPRE (14 fases, front end → back end). **Fuente de verdad del orden** |
+| `docs/00-roadmap.md` | SIEMPRE (12 fases). **Fuente de verdad del orden** |
 | `docs/01-project-overview.md` | SIEMPRE (visión, stack, estado) |
 | `docs/02-architecture.md` | SIEMPRE (estructura, convenciones, ADRs, Next 16) |
-| `docs/03-security.md` | Auth, credenciales, RLS, pagos, PII |
+| `docs/03-security.md` | Auth, credenciales, pagos, PII |
 | `docs/04-deployment.md` | Deploy, CI/CD, cron |
-| `docs/DB_SCHEMA.md` | Base de datos |
+| `docs/features/crm-sheets.md` | CRM, leads, workflows de n8n |
+| `docs/features/scheduling.md` | Calendario, disponibilidad, reserva de slots |
 | `docs/API_DOCS.md` | Endpoints |
 | `docs/SKILLS.md` | ANTES de implementar cualquier feature |
 | `docs/features/*.md` | La feature que se modifica |
+| `docs/DB_SCHEMA.md` | ⏸️ **Congelado** (ADR-010). Diseño de referencia, no implementado |
 | `context.md` | Contexto de negocio original de la clienta |
 
 ---
@@ -160,6 +172,9 @@ Estilo: serio, profesional y discreto. Serif para titulares, sans para cuerpo.
 | `src/components/features/diagnostic/**` · `src/hooks/useDiagnosticPrompt.ts` | `docs/features/lead-diagnostic.md` |
 | `src/constants/content/diagnostic.ts` | `docs/features/lead-diagnostic.md` (**árbol de preguntas**: contenido, no lógica) |
 | `src/services/diagnostic.service.ts` · `src/services/lead.service.ts` | `docs/features/lead-diagnostic.md` |
+| `src/services/crm.service.ts` · `src/types/crm.types.ts` | `docs/features/crm-sheets.md` (**columnas de la hoja**) |
+| `src/lib/n8n/**` | `docs/features/crm-sheets.md` + `03-security.md` (token compartido) |
+| Cualquier workflow de n8n | `docs/features/crm-sheets.md` o `features/scheduling.md` según el flujo |
 | `src/app/api/v1/leads/**` | `docs/API_DOCS.md` + `features/lead-diagnostic.md` + `03-security.md` (PII) |
 | `src/lib/validation/**` | `docs/03-security.md` (el mismo esquema corre en cliente y servidor) |
 | `src/constants/content/**` | `docs/features/public-site.md` + `context.md` (**fuente única del contenido**) |

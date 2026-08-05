@@ -1,9 +1,6 @@
 import type { Service } from "@/types/content.types";
-import type {
-  DiagnosticContact,
-  DiagnosticRecommendation,
-  DiagnosticStep,
-} from "@/types/diagnostic.types";
+import type { CrmDelivery } from "@/types/crm.types";
+import type { DiagnosticContact, DiagnosticStep } from "@/types/diagnostic.types";
 
 export type DiagnosticDialogProps = {
   open: boolean;
@@ -57,6 +54,9 @@ export type DiagnosticContactStepProps = {
 
 export type DiagnosticResultProps = {
   titleId: string;
-  recommendation: DiagnosticRecommendation;
+  /** The service the answers point to. No branch left to choose (ADR-009). */
+  service: Service;
+  /** Whether the lead reached the CRM — decides if the fallback notice shows. */
+  delivery: CrmDelivery;
   onClose: () => void;
 };

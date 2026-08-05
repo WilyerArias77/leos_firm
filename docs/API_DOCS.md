@@ -2,9 +2,13 @@
 
 **Base URL:** `/api/v1`
 **Autenticación:** ver tabla por endpoint (el sitio público **no** usa JWT de cliente — ADR-001)
-**Última actualización:** 2026-08-03
-**Estado global:** `/health` y `/leads` implementados. El resto se construye en el bloque de back
-end (fases 6–14 de [`00-roadmap.md`](./00-roadmap.md)).
+**Última actualización:** 2026-08-04
+**Estado global:** `/health` y `/leads` implementados. El resto se construye en las fases 5–10 de
+[`00-roadmap.md`](./00-roadmap.md).
+
+> **La superficie de API se redujo con ADR-010.** Varios endpoints planeados desaparecieron porque
+> su trabajo lo hace n8n o porque dependían de Supabase. Están listados abajo con el motivo, para que
+> nadie los reimplemente por inercia al leer un commit viejo.
 
 > **Mandamiento III:** ningún endpoint existe sin su fila en el índice y su sección en este archivo.
 
@@ -29,28 +33,27 @@ end (fases 6–14 de [`00-roadmap.md`](./00-roadmap.md)).
 | Método | Ruta | Descripción | Auth | Estado |
 |--------|------|-------------|------|--------|
 | GET | `/api/v1/health` | Estado del servidor | Pública | ✅ Implementado |
-| POST | `/api/v1/leads` | Registrar lead del diagnóstico gratuito | Pública + rate limit | ✅ Implementado (entrega en FASE 6) |
-| GET | `/api/v1/services` | Catálogo de servicios activos | Pública | ⏳ FASE 6 |
-| GET | `/api/v1/services/[slug]` | Detalle de un servicio | Pública | ⏳ FASE 6 |
-| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 7 |
-| POST | `/api/v1/checkout/validate-coupon` | Validar un cupón de referido | Pública | ⏳ FASE 12 |
-| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 7 |
-| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 7 |
-| POST | `/api/v1/agent/intake-schema` | Generar el formulario inteligente | Pública | ⏳ FASE 10 |
-| POST | `/api/v1/intake` | Guardar el intake + validación | Pública | ⏳ FASE 6 |
-| POST | `/api/v1/intake/documents` | Subir adjuntos | Pública | ⏳ FASE 6 |
-| GET | `/api/v1/availability` | Slots libres desde Google Calendar | Pública | ⏳ FASE 8 |
-| POST | `/api/v1/availability/hold` | Bloquear un slot 10 min | Pública | ⏳ FASE 8 |
-| POST | `/api/v1/appointments` | Crear cita + Meet + CRM + correos | Pública | ⏳ FASE 8 |
-| GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 8 |
-| PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 11 |
-| DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 11 |
-| GET | `/api/v1/cron/reminders` | Recordatorios 24 h / 1 h | Cron | ⏳ FASE 9 |
-| GET | `/api/v1/cron/close-appointments` | `pendiente_atencion` → `atendido` | Cron | ⏳ FASE 11 |
-| GET | `/api/v1/admin/leads` | Listado de leads del diagnóstico | Admin | ⏳ FASE 11 |
-| GET | `/api/v1/admin/appointments` | Listado del panel | Admin | ⏳ FASE 11 |
-| PATCH | `/api/v1/admin/appointments/[id]` | Cambiar estado / notas | Admin | ⏳ FASE 11 |
-| POST | `/api/v1/admin/refunds` | Reembolso según política | Admin | ⏳ FASE 11 |
+| POST | `/api/v1/leads` | Registrar lead del diagnóstico → CRM | Pública + rate limit | ✅ Implementado |
+| GET | `/api/v1/availability` | Slots libres (ocupados de Calendar ∩ horario) | Pública | ⏳ FASE 5 |
+| POST | `/api/v1/appointments` | Reservar el slot (tentativo) + CRM `agenda` | Pública | ⏳ FASE 5 |
+| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 6 |
+| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 6 |
+| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 6 |
+| GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 9 |
+| PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 9 |
+| DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 9 |
+| POST | `/api/v1/checkout/validate-coupon` | Validar un cupón de referido | Pública | ⏳ FASE 10 |
+
+### Endpoints eliminados del plan
+
+| Ruta | Por qué |
+|------|---------|
+| `GET /api/v1/services`, `/services/[slug]` | El catálogo vive en constantes y se prerrenderiza. Sin Supabase no hay nada que servir por API (ADR-007, ADR-010) |
+| `POST /api/v1/agent/intake-schema` | La clienta descartó el agente de IA en el flujo de agendamiento |
+| `POST /api/v1/intake`, `/intake/documents` | El diagnóstico ya captura lo que el intake preguntaba. Los adjuntos requerían Storage de Supabase |
+| `POST /api/v1/availability/hold` | La retención es el propio evento tentativo en Calendar (ADR-011), no una tabla |
+| `GET /api/v1/cron/*` | Los cron los ejecuta n8n con su Schedule Trigger, no Vercel |
+| `GET/PATCH/POST /api/v1/admin/*` | La hoja de Google **es** el panel de administración (ADR-010) |
 
 ---
 
@@ -106,6 +109,7 @@ Feature: [`features/lead-diagnostic.md`](./features/lead-diagnostic.md)
 **Request**
 ```json
 {
+  "leadId": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
   "fullName": "Ana Rivera",
   "email": "ana@ejemplo.com",
   "phone": "+52 55 1234 5678",
@@ -117,72 +121,80 @@ Feature: [`features/lead-diagnostic.md`](./features/lead-diagnostic.md)
     { "questionId": "urgencia", "optionId": "este-mes" }
   ],
   "recommendedServiceSlug": "payroll",
-  "outcome": "contact",
   "viewedServiceSlug": "payroll",
   "sourcePath": "/servicios/payroll"
 }
 ```
 
 Reglas:
-- `consent` debe ser `true`; se guardará con `consent_at` y `consent_ip` como evidencia.
+- `leadId` es un UUID que **acuña el navegador** y es la clave de la fila del CRM. Viaja después al
+  agendamiento y al pago para que las tres etapas actualicen **una sola fila**
+  ([`features/crm-sheets.md`](./features/crm-sheets.md)). Es opaco y no otorga acceso a nada.
+- `consent` debe ser `true`; se guarda con `consent_at` y `consent_ip` como evidencia.
 - El esquema Zod es el **mismo** que corre el formulario (`src/lib/validation/lead.schema.ts`).
 - `email` se normaliza a minúsculas en el servidor.
-- `outcome` lo calcula el cliente pero el servidor **lo recalculará** contra `services.price_cents`
-  cuando el catálogo viva en Supabase (FASE 6): el cliente nunca decide si algo se cobra (ADR-006).
+- **El precio y el nombre del servicio los resuelve el servidor** leyendo el catálogo por el slug.
+  El cliente no manda montos (ADR-006).
+- `outcome` **fue eliminado** (ADR-009): ya no hay dos ramas.
 
 **Response 201**
 ```json
 {
   "data": {
     "received": true,
-    "outcome": "contact",
+    "leadId": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
     "recommendedServiceSlug": "payroll",
-    "delivery": "pending"
+    "delivery": "delivered"
   },
   "message": "Datos recibidos"
 }
 ```
 
-> ⚠️ **`delivery: "pending"` es literal.** Hoy el endpoint valida, limita y responde, pero **no
-> persiste ni envía correo**: no existen aún el proyecto de Supabase ni el service account de
-> Google. En producción registra en el log solo campos **sin PII** (`03-security.md`) y una
-> advertencia. **FASE 6 lo convierte en `delivered`.** El sitio no debe publicarse antes.
+`delivery` es `"delivered"` o `"failed"`. **Un fallo del CRM no cambia el código de estado**: el
+endpoint responde `201` igual, porque el visitante no tiene la culpa de que n8n esté caído y no debe
+ver un error. La UI usa `delivery` para decidir si muestra el teléfono de la firma como alternativa.
 
 **Errores:** `400 VALIDATION_ERROR` (con `details` por campo) · `429 RATE_LIMITED` (con
 `Retry-After`)
 
 ---
 
-### Catálogo ⏳
+### Disponibilidad y citas ⏳ FASE 5
 
-**`GET /api/v1/services`** — Pública
-Devuelve los servicios con `is_active = true`, ordenados por `display_order`.
+Diseño completo en [`features/scheduling.md`](./features/scheduling.md).
 
-**`GET /api/v1/services/[slug]`** — Pública · `404` si no existe o está inactivo.
+**`GET /api/v1/availability?from=2026-08-10&to=2026-08-31&tz=America/Mexico_City`** — Pública
+
+Pide a n8n los eventos de Claudia en el rango, los cruza con `BUSINESS_HOURS` y devuelve los slots
+libres en UTC **y** en el huso del cliente. Los eventos **tentativos también ocupan** (ADR-011).
+Si no hay nada libre → `200` con `slots: []` y `nextAvailableFrom`.
+
+**`POST /api/v1/appointments`** — Pública
+
+Revalida el slot, crea el evento **tentativo** en el calendario de Claudia vía n8n y avanza la fila
+del CRM a `stage='agenda'`. Devuelve el `eventId` que viajará hasta el webhook de Square.
+Aquí se registran `policyAccepted`, `policy_accepted_at` y la IP (`context.md` §8.9).
+
+**Errores:** `409 SLOT_TAKEN` (con slots alternativos) · `400 VALIDATION_ERROR`
 
 ---
 
-### Checkout ⏳
+### Checkout ⏳ FASE 6
 
 **`POST /api/v1/checkout`** — Pública
 
 ```json
 {
-  "serviceId": "uuid",
+  "leadId": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
+  "serviceSlug": "payroll",
+  "eventId": "abc123def456",
   "sourceId": "cnon:card-nonce-ok",
-  "couponCode": "REFERIDO30",
-  "client": {
-    "fullName": "Juan Pérez",
-    "email": "juan@ejemplo.com",
-    "phone": "+525512345678",
-    "country": "MX",
-    "timezone": "America/Mexico_City"
-  }
+  "couponCode": "REFERIDO30"
 }
 ```
 
 Reglas críticas:
-- El **monto NO se acepta del cliente**: se lee de `services.price_cents` (ADR-006).
+- El **monto NO se acepta del cliente**: se lee del catálogo por `serviceSlug` (ADR-006).
 - `sourceId` es el token del Web Payments SDK; la tarjeta nunca llega al servidor.
 - Se genera `idempotency_key` por intento.
 - La respuesta **no** confirma el pago: devuelve `orderId` en estado `pending`. La confirmación
@@ -198,114 +210,44 @@ Reglas críticas:
 
 ---
 
-### Webhook de Square ⏳
+### Webhook de Square ⏳ FASE 6
 
 **`POST /api/v1/webhooks/square`** — Firma HMAC
 
 Secuencia obligatoria:
 1. Leer el body **crudo** (`await req.text()`) — parsearlo antes rompe la verificación.
 2. Verificar HMAC-SHA256 de `notificationUrl + rawBody` con `crypto.timingSafeEqual`.
-3. Si el `event_id` ya está en `webhook_events` → `200 OK` sin reprocesar (anti-replay).
-4. Actualizar `orders.status` y crear/actualizar `payments`.
+3. Descartar `event_id` ya procesados (anti-replay).
+4. Confirmar el evento tentativo en Calendar (vía n8n) y avanzar el CRM a `stage='pagado'`.
 5. Responder `200` **rápido**; el trabajo pesado va en background.
 
 Responder siempre `200` ante evento duplicado o ya procesado. Un `401` solo cuando la firma es
 inválida — Square reintenta durante 72 h.
 
----
-
-### Agente IA — Formulario Inteligente ⏳
-
-**`POST /api/v1/agent/intake-schema`** — Pública
-
-Genera las preguntas del intake según el servicio y las respuestas previas (`context.md` §7:
-las preguntas cambian si el cliente ya tiene o no una entidad en EE. UU.).
-
-- El agente **solo** propone preguntas; nunca decide precio, disponibilidad ni estado de pago (ADR-005).
-- La salida se valida con Zod antes de usarse.
-- **Fallback obligatorio:** si la IA falla o tarda, se devuelve el esquema estático de
-  `src/constants/intakeSchemas.ts` con `"source": "fallback"`. El intake nunca se bloquea por la IA.
+> **Sin base de datos, la idempotencia necesita otro lugar.** Definir dónde vive el registro de
+> `event_id` procesados es parte del trabajo de la FASE 6: candidatos son la hoja de cálculo (una
+> pestaña `Pagos`) o el Data Table de n8n. **No dejarlo sin resolver:** un reintento de Square
+> confirmando dos veces la misma cita es un cobro duplicado esperando a pasar.
 
 ---
 
-### Intake ⏳
-
-**`POST /api/v1/intake`** — Pública
-
-Requiere que `orders.status = 'paid'`. Valida con Zod, opcionalmente con revisión semántica de IA, y
-persiste en `intake_forms`.
-
-`policyAccepted: true` es **obligatorio**; se registran `policy_accepted_at` y `policy_accepted_ip`
-como evidencia (`context.md` §8.9). Sin eso, el `CHECK` de la tabla rechaza el registro.
-
-**`POST /api/v1/intake/documents`** — Pública · `multipart/form-data`
-Valida MIME real, extensión y tamaño (≤ 10 MB); sube al bucket **privado** `intake-documents`.
-
----
-
-### Disponibilidad ⏳
-
-**`GET /api/v1/availability?serviceId=uuid&from=2026-08-10&to=2026-08-17&tz=America/Mexico_City`**
-
-Cruza `freeBusy` de Google Calendar con el horario de oficina y descuenta los `slot_holds` vigentes.
-Devuelve los slots en UTC **y** en el huso del cliente.
-
-Si no hay disponibilidad → `200` con `slots: []` y `nextAvailableFrom`, para que la UI ofrezca
-fechas alternativas (rama "¿Existe disponibilidad? → No" del flujo).
-
-**`POST /api/v1/availability/hold`** — bloquea un slot 10 minutos mientras se llena el intake.
-
----
-
-### Citas ⏳
-
-**`POST /api/v1/appointments`** — Pública
-
-Orquesta el tramo final del flujo. Orden de operaciones (importa):
-
-1. Verificar `orders.status = 'paid'` e `intake_forms.is_complete = true`.
-2. Revalidar disponibilidad del slot (pudo ocuparse mientras tanto).
-3. Crear el evento en Google Calendar **con** `conferenceData` (genera el enlace de Meet).
-4. Insertar `appointments` con `status = 'pendiente_atencion'` y `access_token`.
-5. Actualizar el CRM (`clients`).
-6. Encolar correos: confirmación al cliente + copia a `ADMIN_NOTIFICATION_EMAIL`.
-
-Compensación: si falla el paso 4 después del 3, hay que **borrar el evento de Calendar**; de lo
-contrario queda un slot bloqueado sin cita. Los pasos 5 y 6 no deben tumbar la petición: se
-registran en `notification_log` para reintento.
-
-**Errores:** `409 SLOT_TAKEN` (con slots alternativos) · `412 INTAKE_INCOMPLETE` · `402 ORDER_NOT_PAID`
+### Gestión de la cita ⏳ FASE 9
 
 **`GET|PATCH|DELETE /api/v1/appointments/[token]`** — Token de cita
 
 `PATCH` (reprogramar) y `DELETE` (cancelar) aplican la política §8: ≥24 h sin costo /
 reembolso menos comisiones; <24 h no reembolsable. La decisión de reembolso se calcula en el
-servidor a partir de `scheduled_at`, nunca se acepta del cliente.
+servidor a partir de la fecha de la cita, nunca se acepta del cliente.
 Rate limit por IP para impedir enumeración de tokens.
 
 ---
 
-### Cron ⏳
+### Cron — los ejecuta n8n
 
-Ambos exigen `Authorization: Bearer ${CRON_SECRET}` → `401` sin él.
-
-| Ruta | Qué hace |
-|------|----------|
-| `GET /api/v1/cron/reminders` | Envía recordatorios 24 h y 1 h antes; `UNIQUE (appointment_id, kind)` en `notification_log` impide duplicados |
-| `GET /api/v1/cron/close-appointments` | Pasa a `atendido` las citas ya vencidas; limpia `slot_holds` expirados |
-
----
-
-### Panel Admin ⏳
-
-Todos requieren sesión de Supabase Auth **y** fila en `admin_profiles`. La verificación se hace en
-el endpoint, no solo en la UI.
-
-| Ruta | Descripción |
-|------|-------------|
-| `GET /api/v1/admin/appointments` | Listado con filtros de estado, fecha y cliente |
-| `PATCH /api/v1/admin/appointments/[id]` | Cambiar estado (`atendido`, `no_show`), notas |
-| `POST /api/v1/admin/refunds` | Reembolso vía Square según política de cancelación |
+No hay endpoints `/api/v1/cron/*`. Los recordatorios (24 h y 1 h) y la limpieza de reservas vencidas
+corren dentro de n8n con su **Schedule Trigger**, que ya tiene las credenciales de Calendar y Gmail
+(ADR-010). Un endpoint intermedio solo añadiría un salto y un secreto más que rotar.
+Ver [`features/scheduling.md`](./features/scheduling.md) y [`04-deployment.md`](./04-deployment.md).
 
 ---
 

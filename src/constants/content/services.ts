@@ -1,14 +1,43 @@
-import type { Service } from "@/types/content.types";
+import { INITIAL_CONSULTATION } from "@/constants/business";
+import type { PricingModel, Service } from "@/types/content.types";
+
+/**
+ * How each pricing model is announced to the visitor (ADR-009).
+ *
+ * Kept next to the catalog and out of the components so the client can reword
+ * what the $50 means without anyone touching JSX (Mandamiento II). `label` is
+ * `null` when there is nothing to clarify: the price simply is the price.
+ */
+export const PRICING_COPY: Record<PricingModel, { label: string | null; note: string }> = {
+  "full-service": {
+    label: null,
+    note: "Precio cerrado del servicio.",
+  },
+  "initial-consultation": {
+    label: "Consulta inicial",
+    note: "Se abona al costo total del servicio que contrates.",
+  },
+};
 
 /**
  * Service catalog — source: `context.md` §5.
  *
- * Temporary home for the catalog until the `services` table exists (FASE 3).
- * Shape matches `docs/DB_SCHEMA.md` so the migration is a one-function change
- * inside `service.service.ts`.
+ * Temporary home for the catalog until it moves to a database. Shape matches
+ * `docs/DB_SCHEMA.md` so the migration is a one-function change inside
+ * `service.service.ts`.
  *
- * Prices are in USD cents (ADR-006). `null` means the price depends on the
- * case and requires a prior consultation — never render it as $0.
+ * Prices are in USD cents (ADR-006) and every service has one (ADR-009):
+ *
+ * - Two services carry their own closed price and `full-service` pricing —
+ *   paying closes the service.
+ * - The other six charge `INITIAL_CONSULTATION.priceCents` as an
+ *   `initial-consultation`: it books the first session with Claudia and is
+ *   credited toward the quote she gives during that call. Their final price
+ *   still depends on the case, which is exactly why it is quoted live and not
+ *   printed here.
+ *
+ * There is no unpriced path any more: a visitor who finishes the diagnosis
+ * always lands on the same schedule-and-pay flow.
  */
 export const SERVICES: readonly Service[] = [
   {
@@ -19,8 +48,8 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Una consultoría enfocada en empresarios e inversionistas extranjeros que necesitan entender sus obligaciones fiscales en Estados Unidos. Revisamos tu caso concreto, las implicaciones entre tu país de residencia y EE. UU., y salimos con una recomendación clara sobre cómo estructurar o regularizar tu operación.",
     priceCents: 15_000,
+    pricingModel: "full-service",
     durationMinutes: 60,
-    requiresAppointment: true,
     isSubscription: false,
     includes: [
       "Revisión de tu situación actual",
@@ -36,10 +65,10 @@ export const SERVICES: readonly Service[] = [
     shortDescription:
       "Trámite puntual para presentar las elecciones fiscales que corresponden a tu entidad.",
     longDescription:
-      "Preparación y presentación de las elecciones fiscales aplicables a tu empresa en Estados Unidos. Es un trámite puntual: se ejecuta sobre una estructura que ya existe y cuyas necesidades ya están definidas.",
+      "Preparación y presentación de las elecciones fiscales aplicables a tu empresa en Estados Unidos. Es un trámite puntual: se ejecuta sobre una estructura que ya existe y cuyas necesidades ya están definidas. Empieza con una sesión en la que se confirma qué elecciones corresponden a tu caso antes de presentar nada.",
     priceCents: 25_000,
-    durationMinutes: null,
-    requiresAppointment: false,
+    pricingModel: "full-service",
+    durationMinutes: 60,
     isSubscription: false,
     includes: ["Preparación del trámite", "Presentación ante la autoridad correspondiente"],
     displayOrder: 2,
@@ -52,9 +81,9 @@ export const SERVICES: readonly Service[] = [
       "Soft Landing: creamos y estructuramos correctamente tu empresa en Estados Unidos desde el inicio.",
     longDescription:
       "Acompañamiento completo para extranjeros que necesitan crear y estructurar una empresa en Estados Unidos. No se trata solo de registrar una entidad: se define la estructura que corresponde a tu operación, tus socios y tus objetivos fiscales, para no tener que corregirla después.",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [
       "Definición de la estructura adecuada",
@@ -71,9 +100,9 @@ export const SERVICES: readonly Service[] = [
       "Contabilidad mes a mes para empresas en operación, con reportes financieros al día.",
     longDescription:
       "Manejo contable mensual para empresas que ya están operando en Estados Unidos, con entrega de reportes financieros. Se contrata por suscripción con cobro automático y una cuota inicial de configuración (set-up).",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: [
       "Contabilidad mensual",
@@ -89,9 +118,9 @@ export const SERVICES: readonly Service[] = [
     shortDescription: "Administración de la nómina de tu empresa en Estados Unidos.",
     longDescription:
       "Gestión de la nómina para empresas con empleados en Estados Unidos, cumpliendo con las obligaciones que corresponden a tu estado y a tu tipo de entidad.",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: ["Procesamiento de nómina", "Cumplimiento de obligaciones asociadas"],
     displayOrder: 5,
@@ -104,9 +133,9 @@ export const SERVICES: readonly Service[] = [
       "Registro, cálculo y presentación del impuesto sobre ventas, según tu estado.",
     longDescription:
       "Cumplimiento del Sales Tax y de las obligaciones estatales que aplican a tu operación. Cada estado tiene reglas distintas: definimos cuáles te corresponden y mantenemos la empresa al día.",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: ["Determinación de obligaciones estatales", "Presentaciones periódicas"],
     displayOrder: 6,
@@ -119,9 +148,9 @@ export const SERVICES: readonly Service[] = [
       "Para empresas que ya existen pero no están al día con sus obligaciones en Estados Unidos.",
     longDescription:
       "Diagnóstico y regularización de empresas ya constituidas que se atrasaron en sus obligaciones fiscales o que fueron estructuradas sin considerar sus implicaciones. Ordenamos la situación y dejamos la entidad en cumplimiento.",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [
       "Diagnóstico de la situación actual",
@@ -138,9 +167,9 @@ export const SERVICES: readonly Service[] = [
       "Para empresas ya consolidadas fuera de EE. UU. que quieren operar formalmente en el país.",
     longDescription:
       "Acompañamiento a empresas extranjeras que quieren expandir su operación a Estados Unidos: qué estructura conviene, cómo se relaciona con la empresa de origen y qué obligaciones nacen de esa decisión.",
-    priceCents: null,
-    durationMinutes: 60,
-    requiresAppointment: true,
+    priceCents: INITIAL_CONSULTATION.priceCents,
+    pricingModel: "initial-consultation",
+    durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [
       "Análisis de la operación actual",

@@ -2,6 +2,7 @@ import { Clock, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DIAGNOSTIC_COPY } from "@/constants/content/diagnostic";
+import { PRICING_COPY } from "@/constants/content/services";
 import { formatPrice } from "@/lib/utils/formatCurrency";
 import type { DiagnosticIntroProps } from "./DiagnosticDialog.types";
 
@@ -18,7 +19,7 @@ export function DiagnosticIntro({
   onAccept,
   onDecline,
 }: DiagnosticIntroProps) {
-  const price = service ? formatPrice(service.priceCents) : null;
+  const pricing = service ? PRICING_COPY[service.pricingModel] : null;
 
   return (
     <div className="p-6 pt-16 sm:p-8 sm:pt-16">
@@ -35,27 +36,25 @@ export function DiagnosticIntro({
         {service ? DIAGNOSTIC_COPY.introBodyWithService : DIAGNOSTIC_COPY.introBody}
       </p>
 
-      {service ? (
+      {service && pricing ? (
         <div className="mt-6 rounded-card border border-border bg-surface-muted p-5">
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-serif text-base text-navy-900">{service.name}</h3>
-            {price ? (
-              <Badge variant="price">{price} USD</Badge>
-            ) : (
-              <Badge variant="quote">Cotización</Badge>
-            )}
+
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <Badge variant="price">{formatPrice(service.priceCents)} USD</Badge>
+              {pricing.label ? <Badge variant="quote">{pricing.label}</Badge> : null}
+            </div>
           </div>
 
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             {service.shortDescription}
           </p>
 
-          {service.durationMinutes ? (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-muted">
-              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-              Sesión de {service.durationMinutes} minutos
-            </p>
-          ) : null}
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-muted">
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            Sesión de {service.durationMinutes} minutos
+          </p>
         </div>
       ) : null}
 

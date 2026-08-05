@@ -1,5 +1,3 @@
-import type { Service } from "@/types/content.types";
-
 /**
  * Types for the free-diagnosis flow (`docs/features/lead-diagnostic.md`).
  *
@@ -46,19 +44,14 @@ export type DiagnosticStep = {
 };
 
 /**
- * What the visitor should do next.
+ * The diagnosis no longer branches.
  *
- * - `checkout` — the service has an automatic price, so it can be paid online.
- * - `contact`  — variable price: Claudia gets an email with the case.
- *
- * Derived from the catalog, never from a hardcoded list of slugs.
+ * Until ADR-009 the result had two outcomes: `checkout` for the two services
+ * with a fixed price, `contact` for the six that had to be quoted by email.
+ * Every service is priced now, so every visitor lands on the same
+ * schedule-and-pay flow and there is nothing left to decide here.
+ * The recommendation is simply the `Service` the answers point to.
  */
-export type DiagnosticOutcome = "checkout" | "contact";
-
-export type DiagnosticRecommendation = {
-  service: Service;
-  outcome: DiagnosticOutcome;
-};
 
 /** Contact details captured at the end of the questionnaire. */
 export type DiagnosticContact = {

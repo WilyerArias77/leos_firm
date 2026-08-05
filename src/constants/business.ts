@@ -39,6 +39,19 @@ export const BUSINESS_HOURS = {
 } as const;
 
 /**
+ * Price of the initial consultation (ADR-009).
+ *
+ * The six services that used to be quote-based now charge this amount to book
+ * the first session, and it is credited toward the final quote Claudia gives
+ * during the call. It lives here — not spread across the catalog — so changing
+ * it is one number in one file.
+ */
+export const INITIAL_CONSULTATION = {
+  priceCents: 5_000,
+  durationMinutes: 60,
+} as const;
+
+/**
  * Cancellation and rescheduling policy (`context.md` §8).
  * The server decides refunds from these values — never the client.
  */
@@ -77,6 +90,16 @@ export const DIAGNOSTIC_PROMPT = {
   /** Completed → do not ask again on this device. */
   completedStorageKey: "leosfirm:diagnostico:completado",
 } as const;
+
+/**
+ * Where the browser keeps the `leadId` after the diagnosis
+ * (`docs/features/crm-sheets.md`).
+ *
+ * `sessionStorage`, not `localStorage`: it has to survive the walk from the
+ * popup to scheduling and payment, and nothing more. A stale id from last
+ * month would update the wrong CRM row.
+ */
+export const LEAD_STORAGE_KEY = "leosfirm:lead:id";
 
 /** Rate limit for `POST /api/v1/leads` (`docs/03-security.md`). */
 export const LEAD_RATE_LIMIT = {
