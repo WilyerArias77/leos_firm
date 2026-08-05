@@ -22,6 +22,12 @@
 - **VERIFIED**: `/agendar?servicio=consultoria-fiscal-extranjeros` responde `200` y el log del
   servidor **no** muestra `[n8n] ⚠️ MOCK activo`
 - **VERIFIED**: los 4 workflows cumplen 5 de los 6 puntos del contrato (ver § Notas para el sexto)
+- **VERIFIED (escritura de punta a punta)**: `POST /api/v1/appointments` con un lead real devolvió
+  `201`, `eventId: 7gpr7fcrese3gcsv7u9h4l4c4c` y **`crmDelivery: "delivered"`**. Consultar la
+  disponibilidad justo después devuelve el día **sin la franja recién reservada**. El bucle completo
+  —reservar, revalidar, descontar— queda cerrado sobre datos reales
+- **CHANGED (n8n)**: el WF4 tiene el **nodo de borrar conectado**, después de verificar el filtro en
+  seco con las dos mitades de la condición de TTL (ejecuciones 437 y 438)
 
 ### Archivos modificados
 - `.env` — tres variables nuevas (**no se commitea**, está en `.gitignore`)
@@ -50,8 +56,13 @@
   y **funciona correctamente** — la conversión de día completo cubre de sobra la franja 9-17
   `America/Chicago`. Pero el contrato pide crudo y el doc lo llama "probablemente la más segura":
   menos nodos, menos que se rompa. **Queda como deuda, no como fallo.**
-- ⏳ El WF4 sigue con el nodo de borrar **desconectado**. Ahora que Reservar slot está publicado, cada
-  checkout abandonado deja basura real en la agenda.
+- ⏳ **El WF4 tiene el borrado conectado pero sigue sin publicar**: la actualización le reseteó la
+  credencial a `api_google_calendar_aiinovate` en sus dos nodos de Calendar. Publicarlo así solo
+  generaría un `404` cada 10 minutos. Falta reasignar `Google Calendar - Leos Firm` y publicar.
+- ⚠️ **Dos reservas de prueba vivas en el calendario**: `jopd89gge2hud9jkddlr14s72k` (14-sep) y
+  `7gpr7fcrese3gcsv7u9h4l4c4c` (16-sep, creada por el endpoint real). Las dos caen dentro de la
+  ventana de 60 días del limpiador, así que **se borrarán solas** en cuanto el WF4 se publique — que
+  es la mejor forma de estrenarlo. La segunda dejó además una fila de prueba en el CRM.
 - `N8N_CONFIRM_WEBHOOK_URL` queda puesta pero **no responde**: el WF3 existe y está probado, pero no
   se publica hasta la FASE 6 porque lo dispara Square.
 

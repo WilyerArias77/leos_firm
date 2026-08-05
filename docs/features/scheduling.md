@@ -100,7 +100,7 @@ cuarto es programado.
 | 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **PUBLICADO** y probado contra el calendario real |
 | 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **PUBLICADO** y probado con el contrato definitivo |
 | 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | 🔨 Corregido y listo · **sin publicar** — lo dispara Square en la FASE 6 |
-| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ⚠️ Filtro probado en seco · nodo de borrar **desconectado** |
+| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | 🔨 Borrado **conectado** tras verificarlo en seco · falta credencial y publicar |
 
 **Production URLs** (van a `.env.local` y a Vercel):
 
