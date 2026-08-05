@@ -269,6 +269,11 @@ pase.
 > sistema. **Arreglarlo antes de publicar:** añadir `description` al cuerpo del PATCH con los mismos
 > datos del lead y una línea de «Cita confirmada» en lugar de la advertencia.
 
+> ✅ **Repetida bien el 2026-08-05, con `Europe/Madrid`.** Del mismo instante:
+> **21:00 para el cliente · 14:00 en San Antonio**. El correo muestra las dos y son distintas, así
+> que la aritmética de husos quedó verificada de verdad ([`payments.md`](./payments.md) § Probado de
+> punta a punta). Lo que decía el aviso original:
+>
 > ⚠️ **La prueba de los dos husos horarios salió degenerada.** Con `start` el 4 de enero y
 > `timezone_cliente: America/Mexico_City`, las dos horas dieron idénticas (`09:00`) — y es
 > **correcto**: Ciudad de México ya no aplica horario de verano y en enero Chicago está en CST, así

@@ -6,6 +6,53 @@
 
 ---
 
+## [2026-08-05] — WF3 probado contra Calendar y Gmail reales — v0.6.4
+
+### Request original
+> ya actualicé los nodos
+
+### Tipo de cambio
+- **VERIFIED (de punta a punta, contra servicios reales)**: evento tentativo creado con el WF2
+  (`1c7lj6lmd2rfq128vftsid6jeg`) y WF3 corrido contra él:
+  - lectura del evento + ETag `200`
+  - **parseo de la `description`** del WF2: nombre, correo, teléfono, servicio, slug y huso salieron
+    correctos del texto plano
+  - PATCH con `If-Match` → `200`, `status: confirmed`, **Meet creado**
+    (`createRequest.status: success`)
+  - correo enviado
+  - **segunda llamada al mismo evento** → entra por `Ya estaba confirmada`, responde
+    `alreadyConfirmed` y **el nodo de Gmail no llega a ejecutarse**: cero segundo correo
+- **VERIFIED**: el bug de la descripción quedó cerrado — el evento ya dice *"CITA CONFIRMADA. Pago …
+  por USD … el …"* en vez de *"RESERVA SIN PAGAR"*
+- **VERIFIED**: 🎯 **la prueba de los dos husos, por fin no degenerada.** `scheduling.md` la tenía
+  pendiente porque las dos horas coincidían. Con `Europe/Madrid`: **21:00 del cliente · 14:00 en San
+  Antonio**, del mismo instante
+- **VERIFIED (antes, con un `event_id` inventado)**: `404` → `502` explícito. Es el camino del
+  limpiador borrando el slot mientras alguien paga, y antes habría sido un timeout de 8 s
+
+### Archivos modificados
+- `docs/features/payments.md` · `docs/features/scheduling.md` · `CHANGELOG.md`
+- Fuera del repo: credenciales del WF3 puestas a mano · evento de prueba en el calendario
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- Ejecuciones `490` (404 → 502), `491` (WF2 crea el tentativo), `492` (confirma + Meet + correo),
+  `493` (duplicado sin correo), todas verificadas nodo por nodo
+
+### Notas
+- ⚠️ **Lo único que la prueba NO pudo determinar: desde qué cuenta salió el correo.** Gmail devolvió
+  `labelIds: ["UNREAD","SENT","INBOX"]` y ese `INBOX` es ambiguo: aparece igual si envía la cuenta
+  correcta (que se auto-copia por el `ccList`) o la equivocada (que se auto-envía al destinatario de
+  prueba). **Se resuelve mirando el "De:" del correo recibido.**
+- ⛔ **El WF3 sigue sin publicar.** Probado y funcionando, pero inactivo.
+- 🧹 Dos limpiezas pendientes: la fila `PRUEBA-BORRAR-001` en `Pagos` y el evento
+  `1c7lj6lmd2rfq128vftsid6jeg` del calendario. **El limpiador no borrará el evento**: al confirmarse
+  dejó de cumplir su filtro, que es exactamente lo que se quería demostrar.
+
+---
+
 ## [2026-08-05] — WF3 reescrito: el candado contra confirmar dos veces — v0.6.3
 
 ### Request original

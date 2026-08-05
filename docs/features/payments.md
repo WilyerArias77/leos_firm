@@ -362,12 +362,34 @@ por correo, que además es donde el cliente lo va a buscar el día de la cita.
 | **412** — otra ejecución ganó la carrera | `200 { alreadyConfirmed: true }` | Igual. Es la idempotencia funcionando |
 | Evento borrado (404) o Google rechazó | `502` | `requestFromN8n` → `null` → fila en **`error`** |
 
-> ⛔ **No se puede publicar hasta hacer esto a mano** (n8n no lo hace, y lo pierde en cada
-> actualización desde el MCP):
-> 1. Los **tres nodos HTTP** quedan **sin credencial**. Elegir `Google Calendar - Leos Firm` en los
->    tres.
-> 2. El nodo de Gmail se auto-asignó **`api_gmail_aiinovate`** —la cuenta del equipo de desarrollo,
->    no la de la firma— exactamente el error que su nota advertía. Cambiarlo a `Gmail - Leos Firm`.
+> ⚠️ **Después de CADA actualización desde el MCP hay que rehacer esto a mano**, porque n8n no asigna
+> credenciales a los nodos HTTP Request y las pierde al actualizar:
+> 1. `Google Calendar - Leos Firm` en los **tres** nodos HTTP.
+> 2. `Gmail - Leos Firm` en el nodo de Gmail — al actualizar se auto-asignó `api_gmail_aiinovate`,
+>    la cuenta del equipo de desarrollo, exactamente el error que su nota advertía.
+
+### Probado de punta a punta contra Calendar y Gmail reales (2026-08-05)
+
+Evento tentativo real creado con el WF2 (`1c7lj6lmd2rfq128vftsid6jeg`), y el WF3 corrido contra él:
+
+| Qué | Resultado |
+|---|---|
+| Lectura del evento + ETag | `200`, `status: tentative`, ETag `"3571932386755550"` |
+| **Parseo de la `description`** | Nombre, correo, teléfono, servicio, slug y huso extraídos correctamente del texto que escribe el WF2 |
+| PATCH con `If-Match` | `200`. `status: confirmed`, `summary: "Consulta — …"` |
+| **Meet creado** | `https://meet.google.com/pie-iwco-tqv`, `createRequest.status: success` |
+| **Bug de la descripción** | Corregido: ahora dice *"CITA CONFIRMADA. Pago … por USD … el …"* |
+| Correo enviado | Gmail devolvió el id del mensaje |
+| **Segunda llamada al mismo evento** | Entra por `Ya estaba confirmada`, responde `alreadyConfirmed` y **el nodo de Gmail no llega a ejecutarse**: cero segundo correo |
+
+> 🎯 **La prueba de los dos husos horarios, por fin no degenerada.** `scheduling.md` registraba que
+> había quedado pendiente porque las dos horas coincidían. Con `Europe/Madrid` no coinciden:
+> **21:00 para el cliente · 14:00 en San Antonio**, del mismo instante. El correo muestra las dos.
+
+> ⚠️ **Lo único que la prueba NO pudo determinar: desde qué cuenta salió el correo.** Gmail devolvió
+> `labelIds: ["UNREAD","SENT","INBOX"]`, y ese `INBOX` es ambiguo — aparece tanto si envía la cuenta
+> correcta (que se auto-copia por el `ccList: marco@leosfirm.com`) como si envía la equivocada (que
+> se auto-envía al destinatario de prueba). **Se resuelve mirando el "De:" del correo recibido.**
 
 ### WF5 · `Leos Firm - Registrar pago` — creado el 2026-08-05 (`PkwmwCia2wqQzXwG`)
 
@@ -644,9 +666,14 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
       guardando cero leads en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**
 - [ ] Borrar la fila de prueba `PRUEBA-BORRAR-001` de la pestaña `Pagos` (fila 2)
 - [x] **WF3: contrato nuevo + `If-Match` + 404 explícito + bug de la descripción** (2026-08-05)
-- [ ] ⛔ **Poner las credenciales del WF3 a mano y publicarlo.** Tres nodos HTTP sin credencial
-      (`Google Calendar - Leos Firm`) y el de Gmail con la equivocada (`api_gmail_aiinovate` →
-      `Gmail - Leos Firm`). **Es lo último que separa un cobro de una cita confirmada**
+- [x] **Credenciales del WF3 puestas a mano y probado de punta a punta** (2026-08-05)
+- [ ] ⛔ **Publicar el WF3** — probado y funcionando, pero sigue inactivo. **Es lo último que separa
+      un cobro de una cita confirmada**
+- [ ] Confirmar en el correo de prueba que el **"De:"** es la cuenta de la firma y no
+      `api_gmail_aiinovate`. Es lo único que la prueba no pudo determinar
+- [ ] 🧹 Borrar el evento de prueba del calendario: **`1c7lj6lmd2rfq128vftsid6jeg`**, «Consulta —
+      PRUEBA BORRAR Wilyer Arias», 30-dic-2026. **El limpiador NO lo va a borrar**: al confirmarse
+      dejó de cumplir su filtro, que es justo lo que se quería demostrar
 - [x] **WF1 `CRM de leads`: `Enlace de la reunion` movido de `agenda` a `pagado`** y publicado
       (2026-08-05). No era solo la corrección documental anotada: **era un dato que se perdía.**
       *Guardar pago confirmado* no mapeaba esa columna, así que el `meeting_url` de
