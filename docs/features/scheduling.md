@@ -252,8 +252,12 @@ Probado el 2026-08-05 (ejecución 434). Google devolvió `conferenceData.createR
 relectura se mantiene, porque cuesta 300 ms y evita devolver un `meetingUrl` vacío el día que sí
 pase.
 
-> 🐛 **Bug abierto: la descripción del evento no se actualiza.** El PATCH cambia `summary` y `status`
-> pero **no toca `description`**, así que una cita **pagada y confirmada** sigue diciendo:
+> ✅ **CORREGIDO el 2026-08-05** al reescribir el WF3 para la FASE 6
+> ([`payments.md`](./payments.md) § WF3). El PATCH ahora reescribe la `description` con los mismos
+> datos del lead y una línea *«CITA CONFIRMADA. Pago … por USD … el …»*. Lo que decía el bug:
+>
+> 🐛 **La descripción del evento no se actualizaba.** El PATCH cambiaba `summary` y `status`
+> pero **no tocaba `description`**, así que una cita **pagada y confirmada** seguía diciendo:
 >
 > ```
 > RESERVA SIN PAGAR. Pasa a confirmada sola cuando entra el pago de Square.

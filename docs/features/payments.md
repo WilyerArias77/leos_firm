@@ -332,16 +332,42 @@ por correo, que además es donde el cliente lo va a buscar el día de la cita.
 | 3 | `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) | Listo, **sin publicar** | tentativo → confirmado + Meet + correos |
 | 5 | `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) | **Creado 2026-08-05, sin publicar** | Reclama el `payment_id` y escribe la fila en `Pagos` |
 
-### Cambios al WF3 antes de publicarlo
+### WF3 · Cambios aplicados el 2026-08-05 — **sin publicar todavía**
 
-1. **Contrato nuevo** (ADR-014): entra `{ eventId, lead_id, payment_id, amount_usd, paid_at }`. El
-   nombre, el correo y el servicio salen del propio evento, no del payload.
-2. **`If-Match` con el ETag** leído en el GET previo (ADR-013). Un **412** no es un fallo: es la
-   idempotencia funcionando. Debe responder `{ alreadyConfirmed: true }` con el `hangoutLink` que ya
-   tenía, y **no** mandar correos.
-3. Sigue vigente todo lo que ya está probado: `conferenceDataVersion=1`, la relectura del evento
-   porque el Meet es asíncrono, y `sendUpdates=none` en ambas llamadas para que Google no mande su
-   propia invitación además de la nuestra.
+1. ✅ **Contrato nuevo** (ADR-014): entra `{ event_id, lead_id, payment_id, amount_usd, paid_at }` —
+   **solo identificadores**. El nombre, el correo, el teléfono, el servicio y el huso del cliente se
+   **leen del propio evento tentativo**: del `summary` (`RESERVA SIN PAGAR — <nombre>`) y de las
+   líneas `Servicio:`, `Slug:`, `Telefono:`, `Correo:` y `Huso del cliente:` de la `description` que
+   escribe el WF2. El `start` sale de `start.dateTime`.
+2. ✅ **`If-Match` con el ETag** leído en un GET previo (ADR-013).
+3. ✅ **Los dos HTTP usan `fullResponse` + `neverError`.** Es la decisión que hace viable todo lo
+   anterior: así un **412 es un dato que se enruta**, no una excepción que tumba el flujo **sin
+   responderle a nadie** — y un webhook sin respuesta es un `null` en Next.js, es decir una fila en
+   `error` por algo que en realidad salió bien.
+4. ✅ **404 en el primer GET tratado explícitamente**: el limpiador borró el slot mientras se pagaba.
+   Responde `502` → Next.js deja la fila en `error`. Antes esto habría sido un timeout de 8 s.
+5. ✅ **Bug de la descripción corregido** (`scheduling.md` § 2): el PATCH ahora reescribe la
+   `description`, que seguía diciendo *"RESERVA SIN PAGAR… el limpiador la borra"* en citas ya
+   pagadas.
+6. Sigue vigente lo que ya estaba probado: `conferenceDataVersion=1`, la relectura del evento porque
+   el Meet es asíncrono, `sendUpdates=none` en ambas llamadas, y el cambio de `summary` a
+   `Consulta — …` que es **lo que saca al evento del filtro del limpiador**.
+
+**Los cuatro caminos de salida:**
+
+| Situación | Respuesta | Qué hace Next.js |
+|---|---|---|
+| Confirmada bien | `200 { meetingUrl }` | Fila `confirmado`, CRM a `pagado` |
+| Ya estaba confirmada (llegó antes el otro aviso) | `200 { alreadyConfirmed: true, meetingUrl }` | Igual, **sin segundo correo** |
+| **412** — otra ejecución ganó la carrera | `200 { alreadyConfirmed: true }` | Igual. Es la idempotencia funcionando |
+| Evento borrado (404) o Google rechazó | `502` | `requestFromN8n` → `null` → fila en **`error`** |
+
+> ⛔ **No se puede publicar hasta hacer esto a mano** (n8n no lo hace, y lo pierde en cada
+> actualización desde el MCP):
+> 1. Los **tres nodos HTTP** quedan **sin credencial**. Elegir `Google Calendar - Leos Firm` en los
+>    tres.
+> 2. El nodo de Gmail se auto-asignó **`api_gmail_aiinovate`** —la cuenta del equipo de desarrollo,
+>    no la de la firma— exactamente el error que su nota advertía. Cambiarlo a `Gmail - Leos Firm`.
 
 ### WF5 · `Leos Firm - Registrar pago` — creado el 2026-08-05 (`PkwmwCia2wqQzXwG`)
 
@@ -617,7 +643,10 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
       responde `503` igual que si el WF5 no existiera. Es la misma lección que ya costó tener el CRM
       guardando cero leads en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**
 - [ ] Borrar la fila de prueba `PRUEBA-BORRAR-001` de la pestaña `Pagos` (fila 2)
-- [ ] ⛔ **WF3: contrato nuevo + `If-Match`, y publicarlo** (hoy no lo está a propósito)
+- [x] **WF3: contrato nuevo + `If-Match` + 404 explícito + bug de la descripción** (2026-08-05)
+- [ ] ⛔ **Poner las credenciales del WF3 a mano y publicarlo.** Tres nodos HTTP sin credencial
+      (`Google Calendar - Leos Firm`) y el de Gmail con la equivocada (`api_gmail_aiinovate` →
+      `Gmail - Leos Firm`). **Es lo último que separa un cobro de una cita confirmada**
 - [x] **WF1 `CRM de leads`: `Enlace de la reunion` movido de `agenda` a `pagado`** y publicado
       (2026-08-05). No era solo la corrección documental anotada: **era un dato que se perdía.**
       *Guardar pago confirmado* no mapeaba esa columna, así que el `meeting_url` de

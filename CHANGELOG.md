@@ -6,6 +6,53 @@
 
 ---
 
+## [2026-08-05] — WF3 reescrito: el candado contra confirmar dos veces — v0.6.3
+
+### Request original
+> arranca
+
+### Tipo de cambio
+- **CHANGED**: `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) reescrito. **Sigue sin publicar**
+- **ADDED**: **contrato nuevo (ADR-014)** — entra `{ event_id, lead_id, payment_id, amount_usd,
+  paid_at }`, **solo identificadores**. El nombre, correo, teléfono, servicio y huso del cliente se
+  **leen del evento tentativo**: del `summary` y de las líneas de la `description` que escribe el WF2
+- **ADDED**: **`If-Match` con el ETag** leído en un GET previo (ADR-013). Es el candado real: el WF5
+  frena los duplicados que llegan **en serie** mirando la hoja, pero una hoja no es atómica. Si los
+  dos avisos de Square llegan **a la vez**, Google responde `412` a la segunda y esa ejecución no
+  hace nada — ni segundo Meet, ni segundo correo
+- **DECIDED**: los dos HTTP usan **`fullResponse` + `neverError`** en vez de ramas de error. Así el
+  `412` es **un dato que se enruta**, no una excepción que tumba el flujo **sin responderle a
+  nadie** — y un webhook mudo es un `null` en Next.js, o sea una fila en `error` por algo que en
+  realidad salió bien
+- **ADDED**: **404 en el primer GET tratado explícitamente** — el limpiador borró el slot mientras se
+  pagaba. Responde `502` y la fila queda en `error`. Antes habría sido un timeout de 8 s
+- **FIXED**: 🐛 **el bug de la descripción** (`scheduling.md`): una cita pagada y confirmada seguía
+  diciendo *"RESERVA SIN PAGAR… el limpiador la borra"* en el calendario de Claudia
+- **FOUND**: al actualizar, n8n auto-asignó al nodo de Gmail la credencial **`api_gmail_aiinovate`**
+  —la del equipo de desarrollo, no la de la firma—, que es **exactamente** lo que advertía la nota
+  del propio workflow. Los tres nodos HTTP quedaron **sin credencial**
+
+### Archivos modificados
+- `docs/features/payments.md` · `docs/features/scheduling.md` · `CHANGELOG.md`
+- Fuera del repo: workflow `5Tx6yxAmPBMghDBS` (borrador, sin publicar)
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- `validate_workflow` ✅ (20 nodos)
+- ❌ **Sin ejecutar**: los nodos HTTP no tienen credencial, así que cualquier prueba daría 401.
+
+### Notas
+- ⛔ **Antes de publicar, a mano:** `Google Calendar - Leos Firm` en los **tres** nodos HTTP, y
+  `Gmail - Leos Firm` en el de Gmail. n8n no asigna credenciales a nodos HTTP Request y **las pierde
+  en cada actualización desde el MCP**. Es el último paso, siempre.
+- **Los cuatro caminos de salida** están mapeados contra lo que Next.js ya espera: `200 {meetingUrl}`,
+  `200 {alreadyConfirmed}` en los dos casos de duplicado, y `502` para todo fallo real — que
+  `requestFromN8n` convierte en `null` y el webhook en una fila `error`.
+
+---
+
 ## [2026-08-05] — WF5 publicado y probado contra la hoja real — v0.6.2
 
 ### Request original
