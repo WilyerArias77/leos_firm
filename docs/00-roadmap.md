@@ -97,17 +97,24 @@ captura de contacto, `POST /api/v1/leads`.
 
 > **Decisiones con costo que quedan del lado del usuario y la clienta:**
 > abrir la cuenta de Square con sus credenciales (FASE 6) y conectar en n8n la credencial de Google
-> de Claudia con acceso a su calendario (FASE 5). Supabase y el service account de Google Workspace
-> **ya no hacen falta** (ADR-010).
+> Calendar desde el **Google Console de `marco@leosfirm.com`** (FASE 5, ADR-012). Supabase y el
+> service account de Google Workspace **ya no hacen falta** (ADR-010).
+>
+> **Deuda arrastrada:** la hoja del CRM es propiedad de una cuenta personal del equipo de desarrollo
+> (`wilyerernestoarias@gmail.com`). Se migra a la firma **después de la FASE 5** — ADR-012 y
+> [`features/crm-sheets.md`](./features/crm-sheets.md) § Propiedad de la hoja.
 
 ### FASE 4 — Cobro universal + CRM en Google Sheets ✅
 **Entregable:** los ocho servicios con precio ($150, $250 y seis a $50 de consulta inicial abonable),
 eliminación de la rama del correo, `leadId` que atraviesa el embudo, `POST /api/v1/leads` escribiendo
-en la hoja de Claudia a través de n8n, workflow `Leos Firm - CRM de leads`.
+en la hoja del CRM a través de n8n, workflow `Leos Firm - CRM de leads` publicado.
 **Docs:** [`features/crm-sheets.md`](./features/crm-sheets.md) ·
 [`features/lead-diagnostic.md`](./features/lead-diagnostic.md)
 **Decisiones asociadas:** ADR-009 (todos los servicios se cobran) · ADR-010 (n8n como capa de
 integración; Supabase congelado)
+**Cierre verificado el 2026-08-05:** `POST https://leos-firm.vercel.app/api/v1/leads` →
+`delivery: "delivered"`. Etapas `formulario` y `agenda` probadas contra la hoja real, con upsert por
+`ID` confirmado.
 
 ### FASE 5 — Agendamiento: calendario propio ⬜ SIGUIENTE
 **Entregable:**
@@ -118,8 +125,11 @@ integración; Supabase congelado)
 - Workflows de n8n: disponibilidad, reservar slot y limpiar reservas vencidas
 - Aceptación de la política de cancelación con `accepted_at` e IP
 
-**Criterio de entrada:** credencial de Google Calendar de Claudia conectada en n8n y
-`GOOGLE_CALENDAR_ID` identificado.
+**Criterio de entrada:** credencial de Google Calendar conectada en n8n y `GOOGLE_CALENDAR_ID`
+identificado, **ambos en el Google Console del cliente (`marco@leosfirm.com`, ADR-012)** —
+**manual paso a paso en [`features/scheduling.md`](./features/scheduling.md)
+§ Manual de puesta en marcha**. Ambos son bloqueantes; las decisiones de negocio (horario,
+anticipación mínima, ventana máxima) tienen valores por defecto y no bloquean.
 **Criterio de salida:** un visitante puede elegir día y hora reales, el slot queda bloqueado en el
 calendario de Claudia y la fila del CRM avanza a `agenda`.
 **Doc:** [`features/scheduling.md`](./features/scheduling.md) — **ya escrito**

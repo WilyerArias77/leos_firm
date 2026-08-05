@@ -5,6 +5,8 @@
 > **Última actualización:** 2026-08-05
 > **Hoja del CRM:** `1A2XY75na61fAcSGqM0F6mje_N_RZEZd-ISjardORr3I` — **creada por la credencial de
 > n8n**, no por la clienta. El motivo está más abajo y no es negociable
+> **Dónde vive el archivo:** en el Drive de **`wilyerernestoarias@gmail.com`** (cuenta del equipo de
+> desarrollo) — ver § Propiedad de la hoja y ADR-012
 > **Archivos clave:** `src/services/crm.service.ts`, `src/lib/n8n/client.ts`,
 > `src/types/crm.types.ts`, `src/app/api/v1/leads/route.ts`
 > **Workflow n8n:** `Leos Firm - CRM de leads` (`NYy88hBunUSkrcZk`)
@@ -175,7 +177,55 @@ da 403, es exactamente esto y no hay nada que revisar en los permisos.
 **La alternativa si algún día hace falta usar una hoja externa:** una credencial de **Service
 Account** (`authentication: serviceAccount` en el nodo). Los service accounts sí tienen permiso
 completo de Sheets y acceden a cualquier archivo compartido con su correo. Cuesta configurar un
-proyecto en Google Cloud Console.
+proyecto en Google Cloud Console — y ese proyecto **ya va a existir**: es el mismo Google Console de
+`marco@leosfirm.com` donde se monta el calendario ([`scheduling.md`](./scheduling.md)).
+
+## Propiedad de la hoja — quién es el dueño del archivo
+
+**Decisión asociada: ADR-012.** La consecuencia directa de la sección anterior es que **la hoja del
+CRM no vive en el Drive de la firma**. Vive en el Drive de la cuenta que tiene conectada la
+credencial de Google Sheets de n8n:
+
+```
+Credencial de Sheets en n8n  ──está conectada a──▶  wilyerernestoarias@gmail.com
+                                                        │
+                                                   crea y es DUEÑA de
+                                                        ▼
+                                          hoja "Leads"  1A2XY75na…rr3I
+                                                        │
+                                                se comparte (Editor) con
+                                                        ▼
+                                                     Claudia
+```
+
+| | Hoja del CRM (Sheets) | Calendario (Calendar) |
+|---|---|---|
+| Cuenta dueña | `wilyerernestoarias@gmail.com` | `marco@leosfirm.com` |
+| De quién es esa cuenta | Equipo de desarrollo | Cliente (dominio de la firma) |
+| Por qué | Forzado por `drive.file` | Elección correcta desde el inicio |
+| ¿Definitivo? | **No** — deuda a migrar | Sí |
+
+**Qué implica en la práctica.**
+
+- **Compartir ≠ transferir.** Claudia entra a la hoja como Editora, pero el archivo **no es suyo**:
+  no cuenta para su cuota de Drive, no aparece en su "Mi unidad" y **no puede recuperarlo** si la
+  cuenta dueña desaparece. La papelera que manda es la del dueño.
+- **Hay PII de clientes de la firma en una cuenta personal.** Nombre, correo, teléfono y país de cada
+  persona que llena el diagnóstico (`../03-security.md` §PII). Es aceptable mientras se construye;
+  no lo es como estado final.
+- **Nadie más puede borrarla por accidente**, que es la única ventaja del arreglo.
+
+**Cómo se sale de aquí** (no antes de cerrar la FASE 5, y en un solo movimiento):
+
+1. Drive → clic derecho sobre la hoja → *Compartir* → **Transferir la propiedad** a una cuenta de
+   `leosfirm.com`. Ojo: entre una cuenta `@gmail.com` y un dominio de Workspace la transferencia
+   directa puede no estar permitida — si Google la bloquea, ir al paso 2.
+2. **Ruta recomendada:** crear un **Service Account** en el Google Console de `marco@leosfirm.com`
+   (el mismo que se usa para Calendar), compartir con su correo una hoja nueva que sea propiedad de
+   la firma, y cambiar los tres nodos del workflow a `authentication: serviceAccount`. Esto elimina
+   la trampa del `drive.file` de raíz y deja las dos integraciones de Google bajo el cliente.
+3. En cualquiera de los dos caminos: **verificar una escritura real** antes de dar la migración por
+   hecha. Un `PERMISSION_DENIED` aquí es silencioso y se paga en leads perdidos.
 
 ### ⚠️ La fila de encabezados tiene que existir ANTES de la primera escritura
 
@@ -231,3 +281,6 @@ y **distingue mayúsculas**.
 - [ ] Hacer respetar `CRM_STAGE_ORDER` en el workflow (hoy la protección está definida en el tipo
       pero no aplicada: un `agenda` que llegue después de un `pagado` degradaría la fila).
 - [ ] Vista de resumen para Claudia (tabla dinámica o segunda hoja con los del mes).
+- [ ] **Migrar la propiedad de la hoja a la firma** (§ Propiedad de la hoja · ADR-012). Hoy el
+      archivo con la PII de los clientes es de `wilyerernestoarias@gmail.com`. **Después de la
+      FASE 5**, no antes.

@@ -8,7 +8,9 @@ FASE 2.1) y se actualiza al terminar.
 | Doc | Feature | Estado |
 |-----|---------|--------|
 | [`public-site.md`](./public-site.md) | Sitio público: portada, catálogo, detalle, Claudia, FAQ, políticas | ✅ Completo |
-| [`lead-diagnostic.md`](./lead-diagnostic.md) | Diagnóstico interactivo en popup y captación de leads | ✅ Completo (entrega en FASE 6) |
+| [`lead-diagnostic.md`](./lead-diagnostic.md) | Diagnóstico interactivo en popup y captación de leads | ✅ Completo |
+| [`crm-sheets.md`](./crm-sheets.md) | CRM en Google Sheets vía n8n | ✅ **En producción** |
+| [`scheduling.md`](./scheduling.md) | Agendamiento con calendario propio sobre Google Calendar | 📐 Diseñado — FASE 5 |
 
 ## Ciclo de cada feature
 
@@ -33,7 +35,7 @@ FASE 2.1) y se actualiza al terminar.
 [Qué problema resuelve]
 
 ## Modelo de Datos
-[Tablas y campos — detalle en docs/DB_SCHEMA.md]
+[Dónde viven los datos — hoy: hoja de Google vía n8n]
 
 ## Flujo de Uso
 1. El usuario hace X
@@ -60,16 +62,15 @@ FASE 2.1) y se actualiza al terminar.
 
 ## Features planificadas (ver `docs/00-roadmap.md`)
 
-| Fase | Feature | Doc esperado |
-|------|---------|--------------|
-| 2 | Sitio público (home, servicios, sobre Claudia, FAQ) | ✅ `public-site.md` |
-| 3 | Diagnóstico interactivo + captación de leads | ✅ `lead-diagnostic.md` |
-| 4 | Front end de agendamiento y pago (intake §7, calendario, pago) | `booking-ui.md` |
-| 6 | Supabase + entrega real del lead (correo a Claudia) | `leads-backend.md` |
-| 7 | Checkout con Square + webhook | `payments.md` |
-| 8 | Google Calendar + Meet | `scheduling.md` |
-| 9 | Notificaciones por Gmail | `notifications.md` |
-| 10 | Agente IA en el intake | `ai-intake.md` |
-| 11 | CRM + panel admin + estados | `dashboard.md` |
-| 12 | Enlace de calendario para referidos | `referrals.md` |
-| 13 | Resumen IA post-cita + propuestas | `post-meeting.md` |
+> ⚠️ Esta tabla se rehízo el 2026-08-05 tras el replanteo del bloque B (ADR-009, ADR-010).
+> Varios docs que aparecían aquí ya no existirán: `booking-ui.md`, `leads-backend.md`,
+> `ai-intake.md` y `dashboard.md` se cancelaron con las fases que los pedían.
+
+| Fase | Feature | Doc |
+|------|---------|-----|
+| 5 | Agendamiento: calendario propio | ✅ `scheduling.md` (escrito) |
+| 6 | Checkout con Square + webhook | `payments.md` |
+| 7 | Correos de confirmación y recordatorio por n8n | `notifications.md` |
+| 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | `appointment-management.md` |
+| 10 | Enlace de calendario para referidos | `referrals.md` |
+| 11 | Resumen IA post-cita + propuestas | `post-meeting.md` |

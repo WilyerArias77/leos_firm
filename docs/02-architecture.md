@@ -304,7 +304,7 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `SQUARE_WEBHOOK_SIGNATURE_KEY` | Verificación HMAC del webhook | secreta | SÍ |
 | `GOOGLE_CLIENT_EMAIL` | Service account de Google | secreta | SÍ |
 | `GOOGLE_PRIVATE_KEY` | Clave privada del service account | secreta | SÍ |
-| `GOOGLE_CALENDAR_ID` | Calendario de Claudia | config | SÍ |
+| `GOOGLE_CALENDAR_ID` | Calendario de consultas, en el Google Console de `marco@leosfirm.com` (ADR-012) | config | SÍ |
 | `GOOGLE_IMPERSONATED_USER` | Usuario para delegación (Gmail/Meet) | config | SÍ |
 | `ANTHROPIC_API_KEY` | Agente IA | secreta | SÍ |
 | `ADMIN_NOTIFICATION_EMAIL` | Correo que recibe la copia de cada cita | config | SÍ |
@@ -530,3 +530,45 @@ Next.js ──POST webhook──▶ n8n ──┬──▶ Google Sheets   (CRM)
 - `getN8nEnv()` es el único getter de entorno que **no lanza** cuando falta una variable. Está
   justificado en el propio archivo: un 500 en el diagnóstico pierde el lead *y* la persona.
 - Los cron de recordatorios dejan de necesitar Vercel Pro: los ejecuta n8n (`04-deployment.md`).
+
+### ADR-012: Las dos integraciones de Google viven en cuentas de dueños distintos
+
+**Fecha:** 2026-08-05
+
+**Contexto.** ADR-010 dejó a n8n como único poseedor de las credenciales de Google, pero **no dijo de
+quién son las cuentas**. Al montarlo, las dos integraciones se resolvieron de manera distinta y por
+motivos distintos:
+
+- **Google Sheets (CRM).** El permiso `drive.file` obliga a que la hoja la **cree** la propia
+  credencial de n8n (`features/crm-sheets.md`). Esa credencial está conectada a
+  **`wilyerernestoarias@gmail.com`**, una cuenta personal del equipo de desarrollo. Por lo tanto la
+  hoja del CRM vive **en el Drive de esa cuenta**, no en el de la firma. No fue una preferencia: fue
+  la única forma de que la escritura funcionara.
+- **Google Calendar (agenda).** Se conecta desde el **Google Console del cliente**, con la cuenta
+  **`marco@leosfirm.com`** (dominio de la firma). Aquí no hay obstáculo técnico: la credencial de
+  Calendar pide permiso completo sobre calendarios, no el permiso por-archivo de `drive.file`.
+
+**Decisión.** Se **acepta la asimetría**, con la propiedad declarada explícitamente en la
+documentación y la migración de la hoja registrada como **deuda técnica con dueño**, no como
+detalle olvidado:
+
+| Integración | Cuenta dueña | Motivo | Estado |
+|-------------|--------------|--------|--------|
+| Google Sheets — hoja del CRM | `wilyerernestoarias@gmail.com` (desarrollo) | Impuesto por `drive.file` | ⚠️ **Provisional** — migrar a la firma |
+| Google Calendar — agenda | `marco@leosfirm.com` (Google Console del cliente) | Correcto desde el día uno | ✅ Definitivo |
+
+**Consecuencias.**
+- **PII de terceros bajo una cuenta personal.** Cada fila de la hoja contiene nombre, correo,
+  teléfono y país de un cliente de la firma (`03-security.md` §PII). Hoy esos datos son propiedad
+  material de una cuenta que no pertenece a Leos Firm LLC. Es el mayor riesgo abierto del proyecto y
+  **no se resuelve compartiendo la hoja**: compartir da acceso, no propiedad.
+- **Riesgo de continuidad.** Si esa cuenta personal se pierde, se cierra o el equipo de desarrollo
+  sale del proyecto, la firma se queda sin su CRM. Un `drive.file` no se transfiere solo.
+- **La ruta de salida está identificada.** Transferir la propiedad de la hoja desde Drive a una
+  cuenta de `leosfirm.com`, **o** rehacer la credencial de Sheets como **Service Account** dentro del
+  mismo Google Console de `marco@leosfirm.com` que ya se usará para Calendar. La segunda opción
+  unifica las dos integraciones bajo el cliente y elimina la trampa del `drive.file` para siempre.
+- **No se toca hasta cerrar la FASE 5.** Mover la hoja ahora obliga a reconfigurar los tres nodos del
+  workflow del CRM, que acaba de quedar verde. La migración se hace con el agendamiento ya
+  funcionando, en un solo movimiento y con una verificación de escritura real.
+- El calendario **no arrastra** ninguna de estas dudas: nace en la cuenta correcta.

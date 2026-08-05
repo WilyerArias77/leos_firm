@@ -1,6 +1,6 @@
 # Seguridad — Leos Firm LLC
 
-> **Última actualización:** 2026-08-03
+> **Última actualización:** 2026-08-05
 > **Lectura obligatoria** antes de tocar auth, credenciales, RLS, pagos o datos personales.
 
 Este proyecto maneja **datos fiscales y de identidad de personas y empresas**, y **cobros con
@@ -13,11 +13,12 @@ tarjeta**. El estándar de seguridad no es negociable.
 | Activo | Riesgo | Mitigación |
 |--------|--------|------------|
 | **Leads del diagnóstico** (nombre, correo, teléfono, país) | Fuga de PII · spam de formularios | RLS sin acceso anónimo · escritura solo vía `service_role` · rate limit por IP · logs sin PII |
+| **Hoja del CRM** (la misma PII, ya en producción) | Archivo bajo una cuenta ajena a la firma | ⚠️ **Mitigación pendiente** — ver §Propiedad de las cuentas de Google (ADR-012) |
 | Datos del intake (nombre, país, empresa, situación fiscal) | Fuga de PII | RLS deny-by-default + acceso solo vía servidor |
 | Documentos adjuntos (actas, IDs, EIN) | Descarga no autorizada | Supabase Storage bucket **privado** + signed URLs de corta vida |
 | Cobros con tarjeta | Fraude / exposición PCI | Square Web Payments SDK: la tarjeta **nunca** toca nuestro servidor ni nuestra DB |
 | Precios de servicios | Manipulación del monto | El precio se lee en el servidor desde `services`; el cliente solo manda `service_id` |
-| Calendario de Claudia | Escritura no autorizada | Service account con scope mínimo, solo el calendario configurado |
+| Calendario de consultas (`marco@leosfirm.com`) | Escritura no autorizada · exposición de la agenda privada | Credencial con scope mínimo, sobre un calendario **dedicado** y no el personal |
 | Enlace de cita del cliente | Enumeración de citas ajenas | `access_token` UUIDv4 aleatorio, no secuencial, revocable |
 | Endpoints de cron | Ejecución externa | Header `Authorization: Bearer ${CRON_SECRET}` obligatorio |
 | Webhook de Square | Confirmación falsa de pago | Verificación de firma HMAC en cada request |
@@ -125,6 +126,42 @@ webhooks de n8n y n8n habla con Google. Eso mueve la superficie de riesgo, no la
   línea obligatoria del checklist de despliegue** — nada más va a avisar.
 - Rotar el token: al cambiarlo hay que actualizarlo **en los dos lados a la vez** (variable de
   entorno y credencial de n8n). Mientras no coincidan, el CRM devuelve `failed` en silencio.
+
+---
+
+## Propiedad de las cuentas de Google (ADR-012)
+
+**Quién es dueño de qué.** Una credencial no solo da acceso: define **de quién son los datos**. Este
+inventario es de lectura obligatoria antes de crear cualquier integración nueva con Google.
+
+| Recurso | Cuenta dueña | De quién es | Contiene | Estado |
+|---------|--------------|-------------|----------|--------|
+| Hoja del CRM (`1A2XY75na…rr3I`) | `wilyerernestoarias@gmail.com` | Equipo de desarrollo | **PII de clientes de la firma** | ⚠️ Provisional |
+| Calendario de consultas | `marco@leosfirm.com` (Google Console del cliente) | Cliente | Citas, nombres en el título/descripción del evento | ✅ Correcto |
+| Credenciales de ambos | Instancia de n8n | Equipo de desarrollo | Tokens OAuth | Ver ADR-010 |
+
+**Riesgo abierto y declarado.** La hoja del CRM, que contiene nombre, correo, teléfono y país de cada
+persona que llena el diagnóstico, **es propiedad de una cuenta personal de Gmail**, no de Leos Firm
+LLC. No fue una elección: el permiso `drive.file` obliga a que la hoja la cree la propia credencial
+de n8n ([`features/crm-sheets.md`](./features/crm-sheets.md)).
+
+- **Compartir la hoja con Claudia no reduce este riesgo.** Compartir da acceso; el dueño sigue
+  pudiendo borrarla y la firma sigue sin poder recuperarla.
+- **Mitigación pendiente:** transferir la propiedad o rehacer la credencial como Service Account en
+  el Google Console de `marco@leosfirm.com`. Programada para **después de la FASE 5**.
+- **Regla que sale de esto:** toda integración nueva con Google nace en el Google Console del
+  cliente. Si una limitación técnica lo impide, se documenta el porqué **y** la ruta de salida en el
+  mismo momento — nunca "después".
+
+**El calendario no hereda el problema.** Nace en el dominio de la firma y la credencial de Calendar
+no tiene la limitación del `drive.file`. Reglas que igual aplican:
+
+- Usar un calendario **dedicado a las consultas**, no el personal de nadie: el sistema lee la
+  disponibilidad completa y crea y borra eventos en él (ADR-011).
+- La pantalla de consentimiento OAuth **no puede quedarse en modo *Testing***: el refresh token
+  caduca a los 7 días y el agendamiento se rompe sin aviso.
+- El título de un evento tentativo (`RESERVA SIN PAGAR — <nombre>`) contiene PII y es visible para
+  cualquiera con acceso al calendario. Compartirlo solo con quien opera la agenda.
 
 ---
 

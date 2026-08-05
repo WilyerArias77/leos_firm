@@ -6,6 +6,101 @@
 
 ---
 
+## [2026-08-05] — De quién son las cuentas de Google — v0.4.3
+
+### Request original
+> google sheet donde se esta guardando la informacion de los formularios esta en el drive de
+> wilyerernestoarias@gmail.com, el google calendar va a estar en el google console del cliente
+> marco@leosfirm.com, por favor documenta esto usando el metodo ainnovate y subelo a github
+
+### Tipo de cambio
+- **ADDED (docs)**: **ADR-012** — las dos integraciones de Google viven en cuentas de dueños
+  distintos. Queda escrito **quién es dueño de qué**, por qué, y cuál es la ruta de salida
+- **DOCUMENTED (riesgo)**: la hoja del CRM —con la PII de los clientes de la firma— es propiedad de
+  `wilyerernestoarias@gmail.com`, una cuenta personal del equipo de desarrollo. No fue una elección
+  de diseño: es la consecuencia del permiso `drive.file`. Pasa a ser **deuda con dueño y fecha**
+  (migrar después de la FASE 5), no un detalle implícito
+- **DOCUMENTED (decisión)**: el calendario y sus credenciales van en el **Google Console del cliente,
+  `marco@leosfirm.com`**. El manual de la FASE 5 se reescribe alrededor de esa cuenta
+- **ADDED (docs)**: procedimiento completo del cliente OAuth propio (habilitar la API, pantalla de
+  consentimiento, URI de redireccionamiento) y tabla de diagnóstico de los 5 fallos típicos
+
+### Archivos modificados
+- `docs/02-architecture.md` — ADR-012 completo; `GOOGLE_CALENDAR_ID` con su cuenta dueña
+- `docs/03-security.md` — nueva sección **«Propiedad de las cuentas de Google»** con el inventario de
+  dueños; dos filas nuevas en el modelo de amenazas; la regla de que toda integración nueva con
+  Google nace en el Console del cliente
+- `docs/features/crm-sheets.md` — sección **«Propiedad de la hoja»**: compartir ≠ transferir, y los
+  dos caminos de migración (transferencia en Drive o Service Account en el Console del cliente)
+- `docs/features/scheduling.md` — Bloques A y B reescritos sobre `marco@leosfirm.com`: caminos A1
+  (cliente OAuth propio) y A2 (app de n8n), calendario dedicado, tabla de diagnóstico
+- `docs/01-project-overview.md` — «Quién es quién» incorpora a Marco y nombra la cuenta de desarrollo;
+  tabla nueva **«Dónde vive cada cosa hoy»**
+- `docs/00-roadmap.md` — criterio de entrada de la FASE 5 con la cuenta correcta; la deuda de la hoja
+  queda visible en la cabecera del Bloque B
+- `docs/SKILLS.md` — advertencia: el MCP de Google Calendar **no** está conectado a la cuenta del
+  proyecto
+- `.env.example` — `GOOGLE_CALENDAR_ID` deja de sugerir `claudia@leosfirm.com` (valor de plantilla) y
+  pasa a un ID de calendario dedicado, con instrucciones de dónde sacarlo
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- Solo documentación: no se tocó código de aplicación, así que no cambia el resultado de
+  `npm run build`. Sin dependencias nuevas ni variables nuevas.
+
+### Notas
+- ⚠️ **La trampa del `drive.file` NO aplica a Google Calendar** — está verificado en la teoría del
+  permiso, no todavía con una llamada real. La verificación sigue siendo el primer paso de la FASE 5.
+- ⚠️ **La pantalla de consentimiento OAuth no puede quedarse en modo *Testing***: el refresh token
+  caduca a los 7 días y el agendamiento se caería sin aviso una semana después de funcionar.
+- Punto por confirmar con el cliente: si `leosfirm.com` es **Google Workspace** (consentimiento
+  *Interno*, sin caducidad) o una cuenta suelta (*Externo*, hay que publicar la app).
+- Sigue pendiente compartir la hoja del CRM con Claudia como Editora.
+
+---
+
+## [2026-08-05] — Cierre de la FASE 4 y manual de la FASE 5 — v0.4.2
+
+### Request original
+> ya hice la validacion y el weebhook de n8n y el archivo google sheet funcionan correctamente,
+> procedamos con la siguiente fase. dime que necesitas y como lo resuelvo punto por punto tipo
+> manual. antes de eso, respondeme a que te refieres cuando hablas de "claudia" · Puede documentar
+> todo y subirlo en GitHub
+
+### Tipo de cambio
+- **VERIFICADO**: producción entrega al CRM. `POST https://leos-firm.vercel.app/api/v1/leads` →
+  `delivery: "delivered"`. **La FASE 4 queda cerrada**
+- **ADDED (docs)**: sección **«Quién es quién»** en `01-project-overview.md` — quién es Claudia, qué
+  significa «la clienta», y por qué eso decide de quién deben ser las credenciales de Google
+- **ADDED (docs)**: **manual de puesta en marcha** de la FASE 5 en `scheduling.md`, paso a paso:
+  credencial de Calendar (dos caminos), `GOOGLE_CALENDAR_ID`, 5 decisiones de negocio con sus
+  valores por defecto, y un procedimiento de verificación antes de codear
+
+### Archivos modificados
+- `docs/01-project-overview.md` — «Quién es quién», visión actualizada a ADR-009, tabla de estado
+  reescrita a 12 fases, bloqueante de publicación marcado como resuelto
+- `docs/features/scheduling.md` — manual de puesta en marcha; se documenta que la trampa del
+  `drive.file` **no aplica** a Google Calendar, con la advertencia de verificarlo igual
+- `docs/features/README.md` — índice al día; se marcan como canceladas las features de las fases
+  eliminadas (`booking-ui`, `leads-backend`, `ai-intake`, `dashboard`)
+- `docs/00-roadmap.md` — FASE 4 con su verificación de cierre; criterio de entrada de la FASE 5
+  apuntando al manual
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Notas
+- Quedan filas de prueba en la hoja del CRM (`PRUEBA TECNICA - BORRAR`, `PRUEBA PRODUCCION - BORRAR`).
+- ⚠️ **Sigue pendiente compartir la hoja del CRM con Claudia** como Editora.
+- ⚠️ **Bloqueantes de la FASE 5:** credencial de Google Calendar en n8n y `GOOGLE_CALENDAR_ID` real.
+  El `.env` tiene un valor pero no está confirmado que no sea el de la plantilla.
+- Decisión pendiente y arrastrada: el acoplamiento de los 25 encabezados entre hoja, workflow y
+  código. Falla en silencio. La alternativa (mapeo automático con claves en inglés) sigue sobre la mesa.
+
+---
+
 ## [2026-08-05] — El CRM entrega de verdad — v0.4.1
 
 ### Request original

@@ -1,9 +1,40 @@
 # Leos Firm LLC — Plataforma Web de Captación y Agendamiento
 
-> **Última actualización:** 2026-08-03
-> **Versión:** 0.3.0
+> **Última actualización:** 2026-08-05
+> **Versión:** 0.4.3
 > **Método:** AInnovate v2.1 (Documentation-Driven Development)
-> **Orden de trabajo:** [`00-roadmap.md`](./00-roadmap.md) — 14 fases en 2 bloques (front end / back end)
+> **Orden de trabajo:** [`00-roadmap.md`](./00-roadmap.md) — 12 fases
+
+---
+
+## Quién es quién
+
+La documentación menciona nombres constantemente. Esto es a qué se refieren:
+
+| Nombre | Quién es | Qué implica para el proyecto |
+|--------|----------|------------------------------|
+| **Claudia Leos** | CEO y fundadora de Leos Firm LLC (`context.md` §1–2). Contadora Pública México-Americana | Es **quien opera** el sistema: atiende las consultas, su agenda es la que se bloquea, y el CRM lo abre ella |
+| **«la clienta»** | Sinónimo de Claudia en estos documentos | Cuando un doc dice "pedido de la clienta", es un requisito de negocio de ella, no una preferencia técnica |
+| **Marco** (`marco@leosfirm.com`) | Cuenta del lado del cliente que administra el Google Console de la firma | Es **el dueño de las cuentas de Google** del proyecto. La credencial de Calendar y el calendario de consultas viven ahí (ADR-012) |
+| **El equipo de desarrollo** (`wilyerernestoarias@gmail.com`) | Quien construye el sitio y administra n8n y Vercel | Es **quien construye**, no quien opera. Hoy su cuenta personal es dueña de la hoja del CRM — deuda declarada, no diseño |
+| **«el visitante» / «el cliente»** | Quien entra al sitio y contrata | Empresario hispano que necesita operar en EE. UU. |
+
+> **Consecuencia práctica:** cada vez que una integración necesita una cuenta de Google
+> (Sheets, Calendar, Gmail), la cuenta correcta es **la de la firma** — hoy, el Google Console de
+> `marco@leosfirm.com`. Usar otra funciona para desarrollar, pero deja los datos de sus clientes bajo
+> una credencial ajena.
+
+### Dónde vive cada cosa hoy
+
+| Pieza | Cuenta / plataforma | ¿Es el estado final? |
+|-------|--------------------|----------------------|
+| Hoja del CRM (Google Sheets) | Drive de `wilyerernestoarias@gmail.com` | ⚠️ No — migrar a la firma después de la FASE 5 |
+| Calendario de consultas (Google Calendar) | Google Console de `marco@leosfirm.com` | ✅ Sí |
+| Workflows y credenciales | Instancia de n8n del equipo de desarrollo | ✅ Sí (ADR-010) |
+| Sitio y variables de entorno | Vercel | ✅ Sí |
+
+El porqué de la asimetría —y por qué no se arregla hoy— está en **ADR-012**
+([`02-architecture.md`](./02-architecture.md)).
 
 ---
 
@@ -11,10 +42,12 @@
 
 Plataforma web para **Leos Firm LLC** (San Antonio, TX) que convierte el sitio de la firma en un
 ecosistema automatizado de captación, cobro y agendamiento. El visitante recibe un **diagnóstico
-gratuito** que identifica qué servicio necesita y deja sus datos ahí mismo; si el servicio tiene
-cobro automático paga con Square y el sistema agenda la cita en Google Calendar, crea la sala
-virtual, registra al cliente en el CRM y notifica por correo a cliente y administradora — sin
-intervención manual. Si el servicio es de precio variable, Claudia recibe un correo con el caso.
+gratuito** que identifica qué servicio necesita y deja sus datos ahí mismo; queda registrado en el
+CRM, elige día y hora, paga con Square y el sistema agenda la cita en Google Calendar, crea la sala
+virtual y notifica por correo — sin intervención manual.
+
+**Los ocho servicios se cobran** (ADR-009): dos con precio cerrado y seis con una consulta inicial
+de $50 que se abona al costo total. No hay rama manual ni servicio sin precio.
 
 Público objetivo: empresarios, inversionistas y familias internacionales (México, España, LatAm,
 Miami, California, Texas) que necesitan constituir, regularizar o administrar empresas en EE. UU.
@@ -118,26 +151,27 @@ cuerpo. Nada de gradientes llamativos ni animaciones excesivas.
 > Detalle completo, criterios de entrada/salida y mapeo con la numeración anterior:
 > [`00-roadmap.md`](./00-roadmap.md).
 
-| Fase | Bloque | Descripción | Estado |
-|------|--------|-------------|--------|
-| 1 | Front | Setup + documentación + design system (Método AInnovate) | [x] **Completo** |
-| 2 | Front | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
-| 3 | Front | **Diagnóstico interactivo + captación de leads (popup)** | [x] **Completo** |
-| 4 | Front | Front end de agendamiento y pago (`/agendar`, intake §7, calendario, pago — mock) | [ ] Siguiente |
-| 5 | Front | Cierre de front end: A11Y, SEO, 404/500, contenido pendiente de Claudia | [ ] Pendiente |
-| 6 | Back | Supabase (proyecto, migraciones, RLS, tipos) + entrega real del lead a Claudia | [ ] Pendiente |
-| 7 | Back | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
-| 8 | Back | Google Calendar: disponibilidad, cita, Google Meet | [ ] Pendiente |
-| 9 | Back | Correos (Gmail API): confirmación, copia admin, recordatorios | [ ] Pendiente |
-| 10 | Back | Agente IA en el intake (preguntas adaptativas + validación semántica) | [ ] Pendiente |
-| 11 | Back | CRM + panel admin + estados de cita (`pendiente_atencion` → `atendido`) | [ ] Pendiente |
-| 12 | Back | Enlace de calendario para referidos (30 min gratis / cupón) | [ ] Pendiente |
-| 13 | Back | Post-cita: resumen IA + envío de propuestas | [ ] Pendiente |
-| 14 | Back | Hardening, tests de flujos críticos + deploy | [ ] Pendiente |
+| Fase | Descripción | Estado |
+|------|-------------|--------|
+| 1 | Setup + documentación + design system (Método AInnovate) | [x] **Completo** |
+| 2 | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
+| 3 | Diagnóstico interactivo + captación de leads (popup) | [x] **Completo** |
+| 4 | **Cobro universal + CRM en Google Sheets** | [x] **Completo y en producción** |
+| 5 | **Agendamiento: calendario propio sobre Google Calendar** | [ ] **Siguiente** |
+| 6 | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
+| 7 | Correos por n8n: confirmación, copia admin, recordatorios | [ ] Pendiente |
+| 8 | Cierre de front end: A11Y, SEO, 404/500, contenido pendiente | [ ] Pendiente |
+| 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | [ ] Pendiente |
+| 10 | Enlace de calendario para referidos (30 min gratis / cupón) | [ ] Pendiente |
+| 11 | Post-cita: resumen IA + envío de propuestas | [ ] Pendiente |
+| 12 | Hardening, tests de flujos críticos + deploy | [ ] Pendiente |
 
-⚠️ **Bloqueante para publicar:** la FASE 3 ya captura leads, pero la entrega (guardar + avisar a
-Claudia) se implementa en la FASE 6. **No publicar el sitio antes de cerrar la FASE 6** o los
-contactos capturados se pierden.
+✅ **El bloqueante para publicar está resuelto** (2026-08-05). Los leads del diagnóstico llegan al
+CRM de verdad: verificado contra producción con `delivery: "delivered"`. El sitio ya no pierde
+contactos.
+
+⚠️ **Lo que todavía NO se puede hacer en el sitio:** agendar y pagar. El resultado del diagnóstico
+lo dice con todas sus letras y ofrece el teléfono de la firma. Eso se cierra en las fases 5 y 6.
 
 ---
 

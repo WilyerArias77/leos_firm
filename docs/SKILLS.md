@@ -30,7 +30,7 @@ IDE, sin escribir código de prueba desechable.
 | # | Servidor | Herramientas clave | Usar cuando |
 |---|----------|-------------------|-------------|
 | 1 | **n8n** ⭐ | `search_nodes`, `get_node_types`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, `execute_workflow`, `get_execution` | **Toda integración con Google** (Sheets, Calendar, Gmail) y los cron. Instancia: `https://ain8n.growingup.digital` |
-| 2 | **Google Calendar** | `list_calendars`, `list_events`, `create_event`, `update_event`, `delete_event` | Descubrir el `GOOGLE_CALENDAR_ID` real de Claudia e inspeccionar eventos antes de escribir el workflow de agendamiento |
+| 2 | **Google Calendar** | `list_calendars`, `list_events`, `create_event`, `update_event`, `delete_event` | Inspeccionar eventos antes de escribir el workflow de agendamiento. ⚠️ **El MCP está conectado a otra cuenta:** el `GOOGLE_CALENDAR_ID` que importa es el del Google Console de `marco@leosfirm.com` (ADR-012), y solo se descubre desde ahí |
 | 3 | **Gmail** | `create_draft`, `get_message`, `list_labels` | Prototipar plantillas de correo antes de automatizarlas en n8n |
 | 4 | **Google Drive** | `search_files`, `read_file_content`, `create_file` | Leer material aportado por la clienta (bio, fotos, documentos) |
 | 5 | **Canva** | `generate-design`, `export-design`, `read-design` | Piezas gráficas del sitio, si la clienta las necesita |
