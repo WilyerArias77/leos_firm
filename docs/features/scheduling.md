@@ -91,16 +91,19 @@ workflow programado lo borra.
 
 ## Los cuatro workflows de n8n
 
-Los cuatro **existen como borradores** (2026-08-05). **Ninguno está publicado y ninguno se ha
-ejecutado jamás contra un calendario real.** Los tres primeros son webhooks que llama Next.js; el
-cuarto es programado.
+Los cuatro existen y están probados contra el calendario real (2026-08-05). Los tres primeros son
+webhooks que llama Next.js; el cuarto es programado.
 
 | # | Workflow | ID en n8n | Estado |
 |---|----------|-----------|--------|
 | 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **PUBLICADO** y probado contra el calendario real |
 | 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **PUBLICADO** y probado con el contrato definitivo |
-| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | 🔨 Corregido y listo · **sin publicar** — lo dispara Square en la FASE 6 |
-| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | 🔨 Borrado **conectado** tras verificarlo en seco · falta credencial y publicar |
+| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | 🔨 Corregido y probado · **sin publicar** — lo dispara Square en la FASE 6 |
+| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ✅ **PUBLICADO** — corre cada 10 min y ya borró una reserva vencida real |
+
+**El limpiador quedó verificado en la mejor prueba posible** (ejecución 444): con dos reservas
+tentativas en el calendario, borró la de 52 minutos y **dejó intacta la de 8 minutos**, en la misma
+pasada y solo por antigüedad. Es la demostración de que no mata una reserva que se está pagando.
 
 **Production URLs** (van a `.env.local` y a Vercel):
 
@@ -457,6 +460,13 @@ pueden llevarse el mismo horario.
 
 El contrato de este puede moverse cuando se construya la FASE 6 — es el único de los cuatro que
 todavía no tiene un consumidor escrito.
+
+> ⚠️ **Se movió** (2026-08-05, [`payments.md`](./payments.md) § ADR-014). El webhook de Square no
+> conoce el nombre ni el correo del cliente, y meter esa PII en la metadata de Square no es opción.
+> El WF3 pasa a recibir `{ eventId, lead_id, payment_id, amount_usd, paid_at }` y saca el resto del
+> propio evento tentativo. Además tiene que mandar **`If-Match` con el ETag** en el PATCH: es lo que
+> hace idempotente la confirmación sin base de datos (ADR-013). **Los dos cambios van antes de
+> publicarlo.**
 
 ### Trampas de Google Calendar que resuelve Next.js
 

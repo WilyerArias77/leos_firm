@@ -6,6 +6,64 @@
 
 ---
 
+## [2026-08-05] — FASE 6 documentada antes de codear: `payments.md` — v0.5.3
+
+### Request original
+> ¿Cómo conecto "app.squareup.com" al desarrollo de la página web que estoy creando? … prepara el
+> doc `docs/features/payments.md` con ese hueco resuelto, para tenerlo listo cuando cierre la FASE 5.
+
+### Tipo de cambio
+- **ADDED**: `docs/features/payments.md` — diseño completo de la FASE 6 (Mandamiento III: el doc
+  existe **antes** que el código)
+- **DECIDED (ADR-013, propuesta)**: sin base de datos, **la idempotencia y el registro se separan**.
+  La exclusión mutua real es la transición `tentative → confirmed` del evento de Calendar con
+  `If-Match` sobre el ETag —Google devuelve `412` a la segunda ejecución, que es un
+  *compare-and-swap* de verdad—; el registro auditable de `event_id` es una **pestaña `Pagos`** en la
+  hoja del CRM. Se elige la hoja sobre el Data Table de n8n porque el archivo **ya lo creó la
+  credencial** (no reaparece la trampa del `drive.file`), porque Claudia lo ve donde ya trabaja, y
+  porque es el registro que la FASE 9 necesita para los reembolsos
+- **DECIDED (ADR-014, propuesta)**: el contexto de la cita (`lead_id`, `event_id`, `service_slug`)
+  viaja en la **`metadata` de la orden de Square**, más `reference_id = lead_id` en el pago. Nada de
+  PII ahí: nombre y correo salen del evento tentativo, que el WF3 ya lee
+- **CORRECTED**: la nota abierta de `API_DOCS.md` decía que un reintento del webhook era «un cobro
+  duplicado esperando a pasar». **No lo es** — `CreatePayment` lleva `idempotency_key` y el webhook
+  solo *informa* de un cobro ya hecho. Lo que duplicaría son los efectos de confirmar: un Meet nuevo
+  que invalida el ya enviado por correo, y un segundo correo de confirmación. Por eso la guardia va
+  sobre el evento y no solo en la puerta del endpoint
+- **FOUND**: **el limpiador puede borrar el slot mientras el cliente paga.** `SLOT_HOLD_MINUTES = 10`
+  cuenta desde antes de que se vea el formulario de tarjeta. Si expira, el webhook confirma un evento
+  que ya no existe: **cobro hecho, slot perdido**. Recomendación: subirlo a **30** en los dos sitios
+  donde está escrito, y tratar el `404` de Calendar como `error`, nunca como éxito
+- **FOUND**: `crm-sheets.md` atribuye `Enlace de la reunion` a la etapa `agenda`. Es imposible — el
+  Meet lo crea el WF3 **después** del pago. Pertenece a `pagado`
+
+### Archivos modificados
+- `docs/features/payments.md` — **nuevo**
+- `docs/00-roadmap.md` · `docs/API_DOCS.md` · `docs/features/README.md` ·
+  `docs/features/crm-sheets.md` · `docs/features/scheduling.md` — referencias cruzadas y la
+  corrección del contrato del WF3
+
+**Sin cambios en `src/`.** Es un cambio de documentación: la FASE 6 no ha empezado.
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010). La pestaña `Pagos` es una hoja de cálculo, y la crea a mano
+  quien mantiene el workflow — igual que las dos columnas de la FASE 5.
+
+### Validación
+- Sin código nuevo: no aplican `build` ni `lint`. Verificado contra el árbol real que
+  `src/lib/square/`, `src/app/api/v1/checkout/` y `src/app/api/v1/webhooks/square/` están **vacíos**,
+  que `square@^45` ya está instalado y exporta `SquareClient` / `WebhooksHelper`, y que `after()` de
+  `next/server` existe en Next 16 (`node_modules/next/dist/docs/…/functions/after.md`)
+
+### Notas
+- **ADR-013 y ADR-014 son propuestas** y viven de momento dentro de `payments.md`. Se copian a
+  `docs/02-architecture.md` al abrir la FASE 6, no antes: no se ejecutan todavía.
+- **El criterio de entrada de la FASE 6 depende de la clienta y tarda días**: cuenta de Square a
+  nombre de Leos Firm LLC, identidad verificada y banco vinculado. Conviene arrancar ese trámite en
+  paralelo a la FASE 5 — el código no, que depende del `eventId`.
+
+---
+
 ## [2026-08-05] — Las dos mitades conectadas: el mock se apaga — v0.5.2
 
 ### Request original
@@ -28,6 +86,11 @@
   —reservar, revalidar, descontar— queda cerrado sobre datos reales
 - **CHANGED (n8n)**: el WF4 tiene el **nodo de borrar conectado**, después de verificar el filtro en
   seco con las dos mitades de la condición de TTL (ejecuciones 437 y 438)
+- **PUBLISHED**: `Leos Firm - Limpiar reservas vencidas` (`384dd1f3`). **Los 3 workflows que corren
+  hoy están publicados**; el de confirmar espera a Square. En la ejecución 444, con dos reservas
+  tentativas en el calendario, borró la de 52 minutos y **dejó intacta la de 8** — en la misma pasada
+  y solo por antigüedad. La condición que protege una reserva que se está pagando queda demostrada,
+  no razonada
 
 ### Archivos modificados
 - `.env` — tres variables nuevas (**no se commitea**, está en `.gitignore`)
@@ -56,13 +119,9 @@
   y **funciona correctamente** — la conversión de día completo cubre de sobra la franja 9-17
   `America/Chicago`. Pero el contrato pide crudo y el doc lo llama "probablemente la más segura":
   menos nodos, menos que se rompa. **Queda como deuda, no como fallo.**
-- ⏳ **El WF4 tiene el borrado conectado pero sigue sin publicar**: la actualización le reseteó la
-  credencial a `api_google_calendar_aiinovate` en sus dos nodos de Calendar. Publicarlo así solo
-  generaría un `404` cada 10 minutos. Falta reasignar `Google Calendar - Leos Firm` y publicar.
-- ⚠️ **Dos reservas de prueba vivas en el calendario**: `jopd89gge2hud9jkddlr14s72k` (14-sep) y
-  `7gpr7fcrese3gcsv7u9h4l4c4c` (16-sep, creada por el endpoint real). Las dos caen dentro de la
-  ventana de 60 días del limpiador, así que **se borrarán solas** en cuanto el WF4 se publique — que
-  es la mejor forma de estrenarlo. La segunda dejó además una fila de prueba en el CRM.
+- ✅ **El WF4 quedó PUBLICADO** y corre cada 10 minutos. Se estrenó limpiando sus propias pruebas.
+- ⚠️ La reserva de prueba del endpoint real dejó una **fila de prueba en el CRM** que conviene quitar
+  a mano al revisar la hoja (`lead_id 4d7e2b16-9c31-4f0a-b8e2-5a1c9f3d7e64`).
 - `N8N_CONFIRM_WEBHOOK_URL` queda puesta pero **no responde**: el WF3 existe y está probado, pero no
   se publica hasta la FASE 6 porque lo dispara Square.
 
