@@ -1,7 +1,10 @@
 # Feature: CRM en Google Sheets
 
-> **Estado:** ✅ Implementado (etapa `formulario`) · ⏳ etapas `agenda` y `pagado` esperan sus fases
-> **Última actualización:** 2026-08-04
+> **Estado:** ✅ **Funcionando de punta a punta.** Etapas `formulario` y `agenda` probadas contra la
+> hoja real; `pagado` queda a la espera de Square
+> **Última actualización:** 2026-08-05
+> **Hoja del CRM:** `1A2XY75na61fAcSGqM0F6mje_N_RZEZd-ISjardORr3I` — **creada por la credencial de
+> n8n**, no por la clienta. El motivo está más abajo y no es negociable
 > **Archivos clave:** `src/services/crm.service.ts`, `src/lib/n8n/client.ts`,
 > `src/types/crm.types.ts`, `src/app/api/v1/leads/route.ts`
 > **Workflow n8n:** `Leos Firm - CRM de leads` (`NYy88hBunUSkrcZk`)
@@ -135,14 +138,54 @@ excepción es deliberada: está explicada en `src/lib/env.ts` y en `03-security.
 > desplegado responde `delivery: "failed"` mientras en local funciona, es esto. Y Vercel **no recoge
 > variables nuevas en un despliegue ya hecho**: hay que volver a desplegar después de añadirlas.
 
-### Pasos manuales en n8n (una sola vez)
+### Montaje desde cero (el orden importa)
 
-1. Crear la hoja **`Leads`** en el spreadsheet y pegar la fila de encabezados de la tabla de arriba.
-2. Crear la credencial **Header Auth** `Leos Firm - Token del sitio`:
+1. **Crear la hoja desde la propia credencial de n8n** — no usar una hoja existente. Ver la sección
+   de abajo sobre `drive.file`: es la trampa más cara de todo este montaje.
+2. Renombrar la pestaña a **`Leads`** y **pegar la fila de encabezados** de la tabla de arriba.
+   Antes de cualquier ejecución.
+3. Crear la credencial **Header Auth** `Leos Firm - Token del sitio`:
    nombre del header `x-leosfirm-token`, valor = el mismo `N8N_WEBHOOK_TOKEN`.
-3. Verificar que la credencial de Google Sheets de los tres nodos tenga **permiso de edición** sobre
-   el spreadsheet.
 4. **Publicar** el workflow y copiar la Production URL a `N8N_CRM_WEBHOOK_URL`.
+5. Compartir la hoja con Claudia como **Editora**.
+
+> **Un solo workflow puede escuchar en una ruta.** Si al publicar aparece *"There is a conflict with
+> one of the webhooks"*, hay otro workflow activo ocupando `leos-firm/crm`. Desactivarlo primero.
+
+### ⚠️ La hoja tiene que ser CREADA por la credencial de n8n
+
+Esto costó una noche entera de depuración y no es evidente en ninguna parte.
+
+La credencial de Google Sheets de n8n pide el permiso **`drive.file`**, que significa literalmente
+*"acceso solo a los archivos que esta aplicación creó"*. **No es un permiso sobre la cuenta: es un
+permiso sobre archivos concretos.**
+
+Consecuencia: **compartir una hoja preexistente con esa cuenta no sirve de nada.** Google responde
+`403 PERMISSION_DENIED` aunque en Drive el archivo se vea perfectamente compartido y con permiso de
+Editor. No hay forma de arreglarlo desde el lado de Drive.
+
+Por eso el CRM **no** vive en la hoja que la clienta creó, sino en una hoja
+**creada por la propia credencial** (`1A2XY75na61fAcSGqM0F6mje_N_RZEZd-ISjardORr3I`), que después se
+comparte con Claudia. El sentido de la compartición es el inverso del que uno esperaría.
+
+**Cómo verificarlo en 30 segundos** si vuelve a pasar con otra hoja: crear un workflow de un solo
+nodo que haga `spreadsheet: create` con esa credencial. Si crear funciona pero leer la hoja objetivo
+da 403, es exactamente esto y no hay nada que revisar en los permisos.
+
+**La alternativa si algún día hace falta usar una hoja externa:** una credencial de **Service
+Account** (`authentication: serviceAccount` en el nodo). Los service accounts sí tienen permiso
+completo de Sheets y acceden a cualquier archivo compartido con su correo. Cuesta configurar un
+proyecto en Google Cloud Console.
+
+### ⚠️ La fila de encabezados tiene que existir ANTES de la primera escritura
+
+No se puede dejar que n8n cree los encabezados solo. Con `mappingMode: defineBelow` sobre una hoja
+**vacía**, n8n no escribe los nombres de columna mapeados: escribe **las claves del sobre del
+webhook** — `headers`, `query`, `body` — y a partir de ahí todas las ejecuciones fallan con
+*"Column names were updated after the node's setup"*.
+
+Orden correcto: **1)** crear la hoja · **2)** pegar la fila de encabezados · **3)** recién entonces
+ejecutar el workflow.
 
 ### "The 'Column to Match On' parameter is required"
 
@@ -158,24 +201,14 @@ describe lo que esa etapa escribe.
 > Si el error reaparece tras editar la hoja, es que n8n perdió el esquema: abrir el nodo, refrescar
 > las columnas y volver a elegir **ID** en *Column to Match On*.
 
-### Cuando el nodo "no encuentra la hoja"
+### El documento se referencia por ID, no por URL
 
-Pasó en el montaje inicial y el mensaje de n8n no ayuda a distinguir la causa. El documento se
-referencia **por ID** (`1l5p48Pi…UKkzA`), no por URL: una URL hay que parsearla y se puede truncar
-al copiarla, un ID no. Si aun así el campo *Sheet* sale con el triángulo rojo:
+Una URL hay que parsearla y se puede truncar al copiarla; un ID no cambia nunca. Usar siempre
+`mode: 'id'`. `From list` guarda además un valor cacheado que se rompe si alguien renombra el
+archivo.
 
-| Comprobación | Diagnóstico | Arreglo |
-|--------------|-------------|---------|
-| Cambiar *Document* a `From list` y el archivo **no aparece** | La cuenta de Google de la credencial no ve el archivo | Compartir el spreadsheet como **Editor** con esa cuenta |
-| Aparece, pero *Sheet* sigue en rojo | La pestaña no se llama `Leads` | Renombrarla — el campo usa `By Name` y **distingue mayúsculas** |
-
-Al terminar, devolver *Document* a **`By ID`**: `From list` guarda un valor cacheado que se rompe si
-alguien renombra el archivo; el ID no cambia nunca.
-
-> **La causa de fondo casi siempre es de quién es la cuenta.** El spreadsheet es de Claudia y la
-> credencial de n8n puede ser de otra persona. Compartir el archivo desbloquea el CRM, pero el
-> calendario (FASE 5) **no** admite ese atajo: las citas tienen que crearse en la agenda de Claudia,
-> así que su cuenta acaba haciendo falta de todos modos.
+Si el campo *Sheet* sale con triángulo rojo, la pestaña no se llama `Leads`: el campo usa `By Name`
+y **distingue mayúsculas**.
 
 ## Restricciones
 
@@ -190,7 +223,10 @@ alguien renombra el archivo; el ID no cambia nunca.
 
 ## Pendiente
 
-- [ ] Etapa `agenda` — la escribe la pantalla de agendamiento ([`scheduling.md`](./scheduling.md)).
+- [ ] **Variables en Vercel** — `N8N_CRM_WEBHOOK_URL` y `N8N_WEBHOOK_TOKEN`. Sin ellas el sitio
+      desplegado guarda cero leads, en silencio. **Es lo único que separa esto de estar en producción.**
+- [ ] Etapa `agenda` — el workflow ya la maneja y está probada; falta la pantalla que la dispare
+      ([`scheduling.md`](./scheduling.md)).
 - [ ] Etapa `pagado` — la escribe el webhook de Square ([`payments.md`](./payments.md), sin crear).
 - [ ] Hacer respetar `CRM_STAGE_ORDER` en el workflow (hoy la protección está definida en el tipo
       pero no aplicada: un `agenda` que llegue después de un `pagado` degradaría la fila).

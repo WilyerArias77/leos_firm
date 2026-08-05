@@ -6,6 +6,51 @@
 
 ---
 
+## [2026-08-05] — El CRM entrega de verdad — v0.4.1
+
+### Request original
+> ayudame con lo que hace falta · aun sigue sin funcionar
+
+### Tipo de cambio
+- **FIXED (infraestructura)**: el CRM pasa de `delivery: "failed"` a **`delivered"`**. Cadena
+  completa verificada: sitio → webhook n8n → Google Sheets, con las etapas `formulario` y `agenda`
+- **CHANGED**: el CRM se muda a una hoja **creada por la propia credencial de n8n**
+  (`1A2XY75na…rr3I`). La hoja original de la clienta queda descartada
+- **DOCS**: se documentan las dos trampas que costaron la sesión entera
+
+### Qué estaba roto (tres causas encadenadas)
+1. **Ruta de webhook duplicada.** Un segundo workflow (`leos_firm`) estaba activo ocupando
+   `leos-firm/crm`, así que el nuestro no podía publicarse y el `403` que devolvía la ruta venía de
+   él. Se desactivó.
+2. **`drive.file`.** La credencial de Google Sheets de n8n solo puede tocar **archivos que ella misma
+   creó**. Compartir la hoja de la clienta con esa cuenta era inútil: Google respondía
+   `PERMISSION_DENIED` por mucho que Drive mostrara el archivo como compartido con permiso de Editor.
+   Se probó creando una hoja nueva con esa credencial — funcionó a la primera.
+3. **Encabezados creados por n8n.** Con `defineBelow` sobre una hoja vacía, n8n no escribe los
+   nombres de columna mapeados: escribe las claves del sobre del webhook (`headers`, `query`,
+   `body`). La fila de encabezados tiene que existir **antes** de la primera ejecución.
+
+### Archivos modificados
+- `docs/features/crm-sheets.md` — nueva hoja, orden de montaje, y las dos trampas con su
+  procedimiento de diagnóstico
+- Workflow n8n `Leos Firm - CRM de leads` (`NYy88hBunUSkrcZk`) — apunta a la hoja nueva, esquema de
+  25 columnas declarado, `authentication: oAuth2` explícito. **Publicado**
+
+### Validación
+- `POST /api/v1/leads` (local) → `delivery: "delivered"` ✅ · repetido con el mismo `leadId` ✅
+- Etapa `agenda` con el mismo `leadId` → escribe solo sus 6 columnas ✅
+
+### Notas
+- ⚠️ **Faltan `N8N_CRM_WEBHOOK_URL` y `N8N_WEBHOOK_TOKEN` en Vercel.** En producción el CRM sigue
+  sin recibir nada. Un `git push` no las lleva.
+- ⚠️ Hay que **compartir la hoja nueva con Claudia** como Editora.
+- Quedan filas de prueba en la hoja (`PRUEBA TECNICA - BORRAR`).
+- El diseño depende de que 25 encabezados coincidan letra por letra entre hoja, workflow y código.
+  Ya falló una vez y el modo de fallo es silencioso. Alternativa pendiente de decidir: mapeo
+  automático con claves en inglés.
+
+---
+
 ## [2026-08-04] — Cobro universal + CRM en Google Sheets — v0.4.0
 
 ### Request original
