@@ -1,8 +1,10 @@
 # Feature: Agendamiento — calendario propio sobre Google Calendar
 
-> **Estado:** 🔨 **Mitad de Next.js implementada** (2026-08-05) contra el contrato, con un mock
-> local en lugar de n8n. Los 4 workflows siguen en construcción — ver § Contrato exacto y § Qué
-> falta para que esto sea real
+> **Estado:** 🔨 **Las dos mitades existen** (2026-08-05). Next.js implementado contra el contrato,
+> con un mock local mientras no haya URLs. Los 4 workflows de n8n creados y tres **probados contra
+> el calendario real**, pero **ninguno publicado**.
+> ⚠️ **Las dos mitades todavía no se hablan:** los nombres de campo del WF2 y el WF3 no coinciden con
+> los que manda Next.js — ver § Contrato exacto y § Lo que falta para publicar
 > **Última actualización:** 2026-08-05
 > **Archivos clave:** `src/lib/utils/timezone.ts`, `src/services/availability.service.ts`,
 > `src/services/scheduling.service.ts`, `src/app/api/v1/{availability,appointments}/route.ts`,
@@ -90,30 +92,95 @@ workflow programado lo borra.
 
 ## Los cuatro workflows de n8n
 
-Ninguno está creado todavía. Los tres primeros son webhooks que llama Next.js; el cuarto es
-programado.
+Los cuatro **existen como borradores** (2026-08-05). **Ninguno está publicado y ninguno se ha
+ejecutado jamás contra un calendario real.** Los tres primeros son webhooks que llama Next.js; el
+cuarto es programado.
+
+| # | Workflow | ID en n8n | Estado |
+|---|----------|-----------|--------|
+| 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **Probado** contra el calendario real · sin publicar |
+| 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **Probado** — creó un evento tentativo real · sin publicar |
+| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | ✅ **Probado** — Meet creado y correo enviado · 1 bug abierto (ver abajo) |
+| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ⚠️ Filtro probado en seco · nodo de borrar **desconectado** |
+
+Los tres webhooks usan **la misma credencial Header Auth que el CRM** (`Leos Firm - Token del
+sitio`, header `x-leosfirm-token`), así que comparten el `N8N_WEBHOOK_TOKEN` que ya existe. No hay
+un secreto nuevo que repartir.
+
+### ⚠️ El nodo de Google Calendar no expone `status` — por eso hay HTTP Request
+
+Hallazgo del 2026-08-05, y condiciona el diseño de los workflows 2 y 3:
+
+**`n8n-nodes-base.googleCalendar` v1.3 no tiene el campo `status`.** Solo expone `showMeAs`, que es
+`transparency`. Y ADR-011 se sostiene entero sobre `status: 'tentative'`: es lo que distingue una
+reserva sin pagar de una cita real y lo que el limpiador usa para encontrarla. El mismo nodo expone
+`conferenceData` en `create` pero **no** en `update`, y el workflow 3 lo necesita justo en el update.
+
+La salida es llamar la API de Calendar con un nodo **HTTP Request** configurado con
+`authentication: 'predefinedCredentialType'` y `nodeCredentialType: 'googleCalendarOAuth2Api'`. La
+credencial sigue viviendo dentro de n8n — **ninguna clave de Google entra a Next.js**
+(Mandamiento VIII) — y el contrato con Next.js no cambia en nada.
+
+> Consecuencia operativa: n8n **no auto-asigna credenciales a los nodos HTTP Request**. En los
+> workflows 2 y 3 hay que elegir la credencial de Calendar a mano en cada nodo.
 
 ### 1. `Leos Firm - Disponibilidad`
 
 ```
-Webhook POST /leos-firm/disponibilidad
-  → Google Calendar · event: getAll (timeMin, timeMax del body, calendario de Claudia)
+Webhook POST /leos-firm/disponibilidad   (Header Auth)
+  → Google Calendar · event: getAll (timeMin, timeMax del body)
+  → Code: normaliza y garantiza un array
   → Respond: [{ start, end, status }]
+```
+
+```jsonc
+// entra
+{ "timeMin": "2026-08-10T00:00:00.000Z", "timeMax": "2026-08-17T00:00:00.000Z" }
+// sale
+[ { "start": "…", "end": "…", "status": "confirmed" | "tentative" } ]
 ```
 
 Devuelve los eventos crudos del rango, **incluidos los tentativos** — una reserva sin pagar ocupa
 igual. Next.js decide qué hacer con ellos.
 
+Tres detalles que no son opcionales:
+
+- **`recurringEventHandling: 'expand'`.** Sin esto, un bloqueo *recurrente* de Claudia devuelve el
+  evento maestro en lugar de sus ocurrencias, y la disponibilidad sale inflada **en silencio**.
+- **`alwaysOutputData: true` en el nodo de Calendar.** Con el calendario vacío, cero items cortan la
+  rama, el nodo *Respond* nunca dispara y el `fetch` de Next.js se queda colgado hasta el timeout.
+  Con esto siempre se responde `[]`.
+- **Eventos de día completo.** Google los devuelve como `start.date` (sin hora), no
+  `start.dateTime`. Se normalizan a medianoche UTC, que cubre de sobra el horario 9–17
+  `America/Chicago`. Se descartan los `cancelled` y los `transparency: transparent`.
+
 ### 2. `Leos Firm - Reservar slot`
 
 ```
-Webhook POST /leos-firm/reservar
-  → Google Calendar · event: create
+Webhook POST /leos-firm/reservar   (Header Auth)
+  → HTTP Request · POST /calendars/{id}/events
       summary: "RESERVA SIN PAGAR — {{ nombre }}"
       status: tentative · transparency: opaque
       description: lead_id, servicio, teléfono, correo
   → Respond: { eventId }
 ```
+
+```jsonc
+// entra
+{
+  "lead_id": "uuid", "full_name": "…", "email": "…", "phone": "…",
+  "service_name": "…", "service_slug": "…",
+  "start_utc": "2026-08-12T15:00:00.000Z", "end_utc": "2026-08-12T16:00:00.000Z",
+  "client_timezone": "America/Mexico_City"
+}
+// sale
+{ "eventId": "…" }
+```
+
+> 🔴 **El workflow todavía NO lee estos nombres.** Hoy espera `nombre`, `correo`, `telefono`,
+> `servicio`, `start`, `end` — las claves en español del boceto original. Con las URLs reales
+> puestas, `{{ $json.body.start }}` llega vacío y Google devuelve `400`. **Renombrar antes de
+> publicar.** El § Contrato exacto manda.
 
 `transparency: opaque` es lo que hace que el hueco desaparezca para el siguiente visitante.
 El `eventId` vuelve a Next.js y viaja hasta el webhook de Square.
@@ -121,27 +188,88 @@ El `eventId` vuelve a Next.js y viaja hasta el webhook de Square.
 ### 3. `Leos Firm - Confirmar cita`
 
 ```
-Webhook POST /leos-firm/confirmar
-  → Google Calendar · event: update (eventId)
+Webhook POST /leos-firm/confirmar   (Header Auth)
+  → HTTP Request · PATCH /calendars/{id}/events/{eventId}?conferenceDataVersion=1&sendUpdates=none
       summary: "Consulta — {{ nombre }} — {{ servicio }}"
       status: confirmed · conferenceData: crea el Meet
+  → HTTP Request · GET del mismo evento  (de ahí sale el enlace de verdad)
+  → Code: arma el correo con las dos horas
   → Gmail: confirmación al cliente + copia a Claudia
   → Respond: { meetingUrl }
 ```
 
+```jsonc
+// entra
+{
+  "eventId": "…", "lead_id": "uuid", "full_name": "…", "email": "…", "service_name": "…",
+  "start_utc": "…", "end_utc": "…", "client_timezone": "America/Mexico_City"
+}
+// sale
+{ "meetingUrl": "https://meet.google.com/…" }
+```
+
 Lo dispara el webhook de Square, nunca el navegador (ADR-002).
+
+Por qué son **dos** llamadas y no una: `conferenceDataVersion=1` es obligatorio —sin ese parámetro
+Google ignora el bloque `conferenceData` en silencio y el evento queda confirmado pero sin Meet— y
+además la creación del Meet es **asíncrona**: el PATCH puede volver con
+`createRequest.status: 'pending'` y todavía sin `hangoutLink`. Por eso se relee el evento.
+
+`sendUpdates=none` en las dos llamadas: si se deja en `all`, Google manda su propia invitación y el
+cliente recibe **dos correos distintos** por la misma cita.
+
+Probado el 2026-08-05 (ejecución 434). Google devolvió `conferenceData.createRequest.status:
+"success"` ya en el propio PATCH, así que la carrera del Meet asíncrono no se materializó — pero la
+relectura se mantiene, porque cuesta 300 ms y evita devolver un `meetingUrl` vacío el día que sí
+pase.
+
+> 🐛 **Bug abierto: la descripción del evento no se actualiza.** El PATCH cambia `summary` y `status`
+> pero **no toca `description`**, así que una cita **pagada y confirmada** sigue diciendo:
+>
+> ```
+> RESERVA SIN PAGAR. Pasa a confirmada sola cuando entra el pago de Square.
+> Si el pago no llega en 10 minutos, el limpiador la borra.
+> ```
+>
+> Claudia abre el evento en su calendario y lee eso. No rompe nada —el limpiador se guía por el
+> `summary`, no por la descripción— pero es exactamente el tipo de detalle que hace desconfiar del
+> sistema. **Arreglarlo antes de publicar:** añadir `description` al cuerpo del PATCH con los mismos
+> datos del lead y una línea de «Cita confirmada» en lugar de la advertencia.
+
+> ⚠️ **La prueba de los dos husos horarios salió degenerada.** Con `start` el 4 de enero y
+> `timezone_cliente: America/Mexico_City`, las dos horas dieron idénticas (`09:00`) — y es
+> **correcto**: Ciudad de México ya no aplica horario de verano y en enero Chicago está en CST, así
+> que ambas son UTC-6. El formateo en español funciona, pero **la conversión entre husos distintos
+> sigue sin verificarse**. Repetir con algo como `Europe/Madrid` o una fecha de julio.
+
+> El texto de los correos es un borrador funcional: el copy final se cierra en la FASE 7.
 
 ### 4. `Leos Firm - Limpiar reservas vencidas`
 
 ```
 Schedule Trigger (cada 10 min)
   → Google Calendar · event: getAll (próximos 60 días)
-  → Filter: status = tentative Y creado hace más de SLOT_HOLD_MINUTES
-  → Google Calendar · event: delete
+  → Code: status = tentative Y summary empieza con "RESERVA SIN PAGAR"
+          Y creado hace más de SLOT_HOLD_MINUTES
+  → Google Calendar · event: delete      ⚠️ DESCONECTADO hasta verificar el filtro
 ```
 
 Sin este workflow, cada checkout abandonado bloquea una hora de la agenda de Claudia para siempre.
 **Es parte del entregable, no un extra.**
+
+**El filtro tiene tres condiciones y las tres importan.** La del prefijo del título no es
+redundante: Claudia también crea eventos tentativos a mano desde su Google Calendar —un "quizá"
+cualquiera—. Sin ese prefijo, el limpiador le borraría sus propios eventos cada 10 minutos y nadie
+entendería por qué. Una cita ya pagada tampoco corre riesgo: el workflow 3 le cambia el título a
+`Consulta — …` y el estado a `confirmed`, así que falla dos de las tres condiciones.
+
+> ⚠️ **El nodo de borrar está desconectado a propósito.** Un borrado en el calendario de la clienta
+> no tiene deshacer. Antes de conectarlo: ejecutar el workflow a mano y mirar la salida del nodo
+> *Filtrar las reservas vencidas* — esa lista es exactamente lo que se va a borrar. Solo cuando se
+> vea correcta **con datos reales** se conecta el nodo y recién ahí se publica.
+
+> `SLOT_HOLD_MINUTES = 10` está escrito **dos veces**: en `src/constants/business.ts` y dentro del
+> nodo Code de este workflow. Es la única copia fuera del repo y hay que mantenerla a mano.
 
 ---
 
@@ -152,7 +280,9 @@ Sin este workflow, cada checkout abandonado bloquea una hora de la agenda de Cla
 > Acordado el **2026-08-05**. Las dos mitades se construyen en paralelo y solo se encuentran aquí:
 > cualquier diferencia entre lo que devuelve n8n y lo que espera Next.js es un fallo silencioso.
 >
-> **Estado:** contrato cerrado, **ninguna de las dos mitades implementada todavía**.
+> **Estado (2026-08-05):** contrato cerrado y **las dos mitades implementadas**. Next.js lo cumple;
+> los workflows de n8n **todavía no** — el WF2 y el WF3 leen las claves en español del boceto y hay
+> que renombrarlas a las de esta sección. **Esta sección es la autoridad**, no los bloques de arriba.
 
 ### Las tres llamadas y dónde va cada URL
 
@@ -354,6 +484,31 @@ que faltaban en Vercel y dejaron el CRM guardando cero leads en silencio.
 
 ---
 
+### Lo que falta para publicar
+
+- [x] Bloques A y B resueltos: credencial y `GOOGLE_CALENDAR_ID` reales
+- [x] Calendar ID real en los 5 nodos que lo llevan
+- [x] Credencial de Calendar elegida a mano en los nodos HTTP Request
+- [x] Prueba mínima: lectura, escritura y `status: tentative` verificados
+- [x] WF3 probado de punta a punta: Meet creado y correo enviado
+- [ ] 🐛 **Arreglar la descripción del evento en el WF3** (sigue diciendo «RESERVA SIN PAGAR» después
+      de pagar)
+- [ ] Repetir la prueba del WF3 con husos horarios **realmente distintos** — la primera salió
+      degenerada
+- [ ] **Borrar el evento de prueba** `fnrat2iln058co1enpgj5qg1ac` (4 de enero de 2027). El limpiador
+      **no** lo va a recoger: está fuera de su ventana de 60 días, que es justamente lo que se quería
+      al ponerlo tan lejos
+- [ ] Restaurar el **CC a `claudia@leosfirm.com`** en el nodo de Gmail — se quitó para poder probar
+      sin mandarle una confirmación falsa
+- [ ] Verificar el WF4 con una reserva de más de 10 minutos dentro de la ventana de 60 días, mirar la
+      lista del filtro, y **solo entonces** conectar el nodo de borrar
+- [ ] 🔴 **Renombrar los campos del WF2 y el WF3 al `snake_case` en inglés** del § Contrato exacto.
+      Hoy los workflows leen `nombre`, `correo`, `telefono`, `servicio`, `start`, `end`; Next.js manda
+      `full_name`, `email`, `phone`, `service_name`, `start_utc`, `end_utc`. **Solo coincide
+      `lead_id`.** Es lo primero, y bloquea la publicación
+- [ ] Publicar WF1 y WF2 y comprobar con `curl` real que el WF1 devuelve el array en la raíz del body
+- [ ] Pasar las Production URLs a `.env.local` **y a Vercel**
+
 ## Endpoints de Next.js
 
 | Método | Ruta | Qué hace |
@@ -459,6 +614,55 @@ desplegar; el mock deja de usarse solo.
 Lo que hay que tener resuelto **antes** de escribir la primera línea. Los bloques A y B son
 bloqueantes; el C se puede asumir con valores por defecto y ajustar después.
 
+### Estado de la puesta en marcha (2026-08-05)
+
+**✅ El criterio de entrada de la FASE 5 está cumplido y verificado con llamadas reales.**
+
+| Requisito | Estado | Detalle |
+|-----------|--------|---------|
+| `GOOGLE_CALENDAR_ID` real | ✅ | `c_4a1fcc0c…cbabfaf@group.calendar.google.com` — calendario **«Consultas Leos Firm»**, dedicado |
+| Credencial de Calendar | ✅ | `Google Calendar - Leos Firm`, cuenta `marco@leosfirm.com` |
+| Credencial de Gmail | ✅ | `Gmail - Leos Firm` — creada, **todavía sin probar** |
+| Credencial Header Auth compartida | ✅ | `Leos Firm - Token del sitio`, la misma del CRM |
+| Consentimiento OAuth | ✅ | `leosfirm.com` **es Google Workspace** → tipo *Interno*. El refresh token **no caduca**: el riesgo de los 7 días no aplica |
+
+Prueba real del 2026-08-05 (ejecuciones 431, 432 y 433 en n8n):
+
+```
+WF1 Disponibilidad → 200, [] sobre el calendario vacío   ← lectura OK
+WF2 Reservar slot  → creó el evento fnrat2iln058co1enpgj5qg1ac
+                     "status": "tentative"               ← ADR-011 CONFIRMADO
+                     organizer: "Consultas Leos Firm"
+                     creator:   marco@leosfirm.com
+WF4 Limpiador      → filtro devolvió [] con la reserva recién creada
+                     (21 segundos de antigüedad)         ← la condición de TTL funciona
+```
+
+**La trampa del `drive.file` efectivamente no aplica a Calendar.** Queda verificado con una llamada
+real, no por teoría: la credencial crea eventos en un calendario que ella no creó.
+
+> ⚠️ **La credencial se pierde en cada actualización desde el MCP.** Al crear o actualizar un
+> workflow por el SDK, n8n **ignora el nombre** que se le pide y asigna la primera credencial de ese
+> tipo que encuentra — en esta instancia, `api_google_calendar_aiinovate`, que es del equipo de
+> desarrollo y responde **404** sobre este calendario.
+>
+> Consecuencia operativa: **elegir la credencial a mano es siempre el último paso**, después de
+> cualquier cambio hecho desde el MCP. Y n8n **no auto-asigna nada** a los nodos HTTP Request: esos
+> nacen sin credencial y hay que elegirla sí o sí.
+>
+> Cómo leer un fallo: **404** = quedó la credencial `aiinovate` · **401/403** = el nodo quedó sin
+> credencial · **200 con `[]`** = funciona y el calendario está vacío.
+
+Cuando los webhooks estén publicados, Next.js necesitará sus URLs de producción en dos variables
+nuevas (nombres sugeridos, los fija quien construya la mitad de Next.js):
+`N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_APPOINTMENTS_WEBHOOK_URL`. El token es el
+`N8N_WEBHOOK_TOKEN` que ya existe. Y como siempre: **también hay que ponerlas en Vercel**, y volver
+a desplegar.
+
+> La zona horaria de la instancia de n8n es **`America/Sao_Paulo`**. No afecta a nada: todos los
+> cálculos de tiempo usan `DateTime.utc()` o `$now.toISO()`, que son instantes absolutos. Pero
+> conviene saberlo antes de leer un log y asustarse.
+
 ### Bloque A · Credencial de Google Calendar en n8n
 
 > **Cuenta definida (2026-08-05):** el calendario y sus credenciales van en el **Google Console del
@@ -526,9 +730,11 @@ Es el correo (`marco@leosfirm.com`) si es el calendario principal de esa cuenta,
 > alcance del sistema. Crear uno: *Otros calendarios* → **+** → *Crear calendario*, y darle a Claudia
 > permiso de **«Hacer cambios en los eventos»** para que vea y gestione las citas desde su cuenta.
 
-> ⚠️ **`GOOGLE_CALENDAR_ID` del `.env` no está confirmado.** El valor de `.env.example` es
-> `claudia@leosfirm.com`, que es de la plantilla y **no** de este montaje. Reemplazarlo por el ID
-> real de la cuenta de Marco antes de la primera prueba.
+> ⚠️ **`GOOGLE_CALENDAR_ID` sigue sin confirmar.** El `.env` local todavía tiene
+> `claudia@leosfirm.com`, que viene de la plantilla y **no** corresponde a este montaje.
+> Reemplazarlo por el ID real de la cuenta de Marco antes de la primera prueba — y acordarse de que
+> el valor va **además** dentro de los 5 nodos de n8n que hoy dicen
+> `REEMPLAZAR_CON_GOOGLE_CALENDAR_ID`, porque los workflows no leen el `.env`.
 
 ### Bloque C · Decisiones de negocio
 

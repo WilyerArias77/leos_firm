@@ -6,6 +6,183 @@
 
 ---
 
+## [2026-08-05] — Las dos mitades de la FASE 5 se encuentran (y no se hablan) — v0.5.0
+
+### Request original
+> claude entra al GitHub y haz el merge de ambas partes para hacer el commit general y ver
+> actualizado en vercel
+
+### Tipo de cambio
+- **MERGED**: la mitad de n8n (documentación de los 4 workflows) se integra con la mitad de Next.js
+  que ya estaba en `main` (`87f3fce`). Conflicto en `docs/features/scheduling.md` resuelto
+  **conservando ambas partes**: el § Contrato exacto de Next.js y el estado real de los workflows
+- **🔴 FOUND (bloqueante)**: **los nombres de campo no coinciden.** Next.js manda `full_name`,
+  `email`, `phone`, `service_name`, `service_slug`, `start_utc`, `end_utc`, `client_timezone`; los
+  workflows WF2 y WF3 leen `nombre`, `correo`, `telefono`, `servicio`, `start`, `end`. **Solo
+  coincide `lead_id`.** Con las URLs reales, `{{ $json.body.start }}` llega vacío y Google responde
+  `400`: ninguna reserva funcionaría
+- **DECIDED**: **gana la nomenclatura de Next.js** — `snake_case` en inglés, que es la que ya usa el
+  payload del CRM (`full_name`, `email`, `phone`). Las claves en español venían del pseudocódigo del
+  diseño y se apartaban de la convención del repo. Se adapta n8n, no el código
+- **DOCUMENTED (causa de raíz)**: el contrato en español se fijó y se documentó, pero **la rama nunca
+  se pusheó**. El compañero no tenía forma de verlo y dedujo —bien— los nombres a partir del payload
+  del CRM. La lección es de proceso, no de código: **un contrato que no está en `main` no existe**
+
+### Archivos modificados
+- `docs/features/scheduling.md` — merge de las dos mitades; el § Contrato exacto queda marcado como
+  **la autoridad**; los ejemplos JSON del WF2 y WF3 corregidos al `snake_case` inglés, con un aviso
+  de que los workflows todavía no los leen; cabecera de estado reescrita
+- `CHANGELOG.md` — esta entrada
+
+**Sin cambios en `src/`.**
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- Merge sin pérdida: las dos secciones en conflicto se conservaron enteras.
+- **La integración real sigue sin probarse**: los workflows no están publicados y las variables
+  `N8N_*_WEBHOOK_URL` no están en Vercel, así que el sitio desplegado usa el **mock** de
+  `src/lib/n8n/mock.ts`. Es el comportamiento correcto y deliberado.
+
+### Notas
+- ⚠️ **Nada cambia visiblemente en Vercel con este merge**: los workflows siguen sin publicar y las
+  variables sin poner, así que el calendario del sitio sigue mostrando datos del mock.
+- 🔴 **Lo primero de la próxima sesión**: renombrar los campos del WF2 y el WF3. Bloquea la
+  publicación.
+
+---
+
+## [2026-08-05] — FASE 5, mitad de n8n: los 4 workflows de agendamiento — v0.5.0-alpha
+
+### Request original
+> Vamos a implementar la mitad de n8n de la FASE 5 del roadmap: "Agendamiento — calendario propio".
+> Mi compañero está construyendo en paralelo, en otra rama, la mitad de Next.js (aritmética de
+> disponibilidad, endpoints, componentes) contra el contrato que ya está documentado. Mi trabajo es
+> SOLO n8n + Google Calendar. No debo tocar código de Next.js ni archivos de src/
+
+### Tipo de cambio
+- **ADDED (n8n)**: los **4 workflows** de la FASE 5, creados como **borradores sin publicar**:
+  `Leos Firm - Disponibilidad` (`hYS8Fk87wUfadriW`), `Leos Firm - Reservar slot`
+  (`5MnPI0yaiahvOybZ`), `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) y
+  `Leos Firm - Limpiar reservas vencidas` (`hLWyt2vHv3CrCVBt`)
+- **DOCUMENTED (hallazgo bloqueante)**: **el nodo `googleCalendar` v1.3 de n8n no expone `status`**.
+  Solo tiene `showMeAs` (que es `transparency`), y tampoco expone `conferenceData` en `update`. Como
+  ADR-011 se sostiene entero sobre `status: 'tentative'`, los workflows 2 y 3 usan **HTTP Request**
+  con `nodeCredentialType: googleCalendarOAuth2Api` contra la API de Calendar. La credencial sigue
+  dentro de n8n y **el contrato con Next.js no cambia**
+- **DOCUMENTED (contrato)**: se fijan los **nombres de campo de entrada** del WF2 y el WF3, que el
+  diseño nunca había definido — solo decía `{{ nombre }}`. `eventId` y `meetingUrl` quedan en
+  camelCase (como ya estaba escrito); el resto en snake_case, igual que el payload del CRM
+- **DOCUMENTED (riesgo)**: n8n **auto-asignó** a los nodos las credenciales
+  `api_google_calendar_aiinovate` y `api_gmail_aiinovate`, que son **del equipo de desarrollo, no de
+  la firma**. Publicar así repetiría con el calendario de la clienta el error que ADR-012 documenta
+  para la hoja del CRM. Queda marcado como bloqueante antes de publicar
+- **SAFETY**: en el limpiador, el nodo de borrado queda **desconectado a propósito** hasta verificar
+  el filtro con datos reales, y el filtro exige **tres** condiciones (`status`, prefijo del título y
+  antigüedad) para no borrar los eventos tentativos que Claudia cree a mano
+
+### Archivos modificados
+- `docs/features/scheduling.md` — estado por workflow con sus IDs, contratos JSON exactos de los 4,
+  sección nueva **«Estado de la puesta en marcha»** con el criterio de entrada verificado, el
+  hallazgo del nodo sin `status`, las tres trampas del WF1 y la lista de lo que falta para publicar
+- `CHANGELOG.md` — esta entrada
+
+**Sin cambios en `src/`**: el trabajo de Next.js va en otra rama y este request no lo toca.
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010). La retención del slot es un evento tentativo en Calendar.
+
+### Validación
+- Los 4 workflows pasan `validate_workflow` del SDK de n8n. El único aviso es el
+  `DISCONNECTED_NODE` del nodo de borrado, que es intencional.
+- **No se probó nada contra Google.** No hay credencial de la firma ni `GOOGLE_CALENDAR_ID` real, así
+  que ningún workflow se ha ejecutado jamás contra un calendario.
+- Solo se tocó documentación en el repo: `npm run build` no cambia de resultado. Sin dependencias ni
+  variables de entorno nuevas.
+
+### Notas
+- Los tres webhooks reusan la credencial Header Auth del CRM, así que **no hay secreto nuevo que
+  repartir**: es el mismo `N8N_WEBHOOK_TOKEN`.
+- Falta por verificar con un `curl` real: que el nodo *Respond to Webhook* devuelva un **array** en
+  la raíz del body (WF1) y no lo envuelva en un objeto.
+
+---
+
+## [2026-08-05] — FASE 5: criterio de entrada cumplido y ADR-011 verificado — v0.5.0-beta
+
+### Request original
+> dame los pasos para hacer el paso 1 tipo manual · [tras ejecutarlo] el Calendar ID es: c_4a1fcc0c…
+
+### Tipo de cambio
+- **VERIFIED (bloqueante resuelto)**: el **criterio de entrada de la FASE 5 está cumplido**.
+  Calendario dedicado **«Consultas Leos Firm»** (`c_4a1fcc0c…cbabfaf@group.calendar.google.com`) en
+  la cuenta `marco@leosfirm.com`, con credenciales `Google Calendar - Leos Firm` y `Gmail - Leos Firm`
+- **VERIFIED (ADR-011)**: **`status: "tentative"` funciona**. El WF2 creó un evento real
+  (`fnrat2iln058co1enpgj5qg1ac`) y Google devolvió `"status": "tentative"`, con
+  `organizer: "Consultas Leos Firm"` y `creator: marco@leosfirm.com`. Es la primera confirmación
+  empírica de que la retención del slot por evento tentativo es viable
+- **VERIFIED**: la **trampa del `drive.file` no aplica a Calendar** — comprobado con una llamada
+  real, no por teoría: la credencial escribe en un calendario que ella no creó
+- **VERIFIED**: `leosfirm.com` **es Google Workspace** → consentimiento *Interno* → el refresh token
+  **no caduca**. El riesgo de "se cae solo a los 7 días" queda cerrado
+- **VERIFIED**: las tres trampas del WF1. Con el calendario vacío, el nodo *Respond* **sí dispara** y
+  devuelve `[]` en vez de colgar la petición
+- **VERIFIED**: la condición de TTL del limpiador. Con una reserva de 21 segundos, el filtro devolvió
+  lista vacía: no mata una reserva que se está pagando
+- **CHANGED (n8n)**: el `GOOGLE_CALENDAR_ID` real reemplaza al marcador en los 5 nodos de los 4
+  workflows
+- **DOCUMENTED (trampa operativa nueva)**: **el MCP de n8n pierde la credencial en cada
+  actualización.** Ignora el nombre pedido en `newCredential()` y asigna la primera de ese tipo —
+  aquí `api_google_calendar_aiinovate`, del equipo de desarrollo, que responde **404**. Elegir la
+  credencial a mano pasa a ser **siempre el último paso**. Costó tres ejecuciones fallidas
+  descubrirlo
+- **DOCUMENTED**: `get_workflow_details` **oculta las credenciales**, así que no se pueden verificar
+  leyendo el workflow — solo ejecutándolo
+
+### Archivos modificados
+- `docs/features/scheduling.md` — § Estado de la puesta en marcha reescrita con los resultados
+  reales, tabla de estado por workflow, la trampa de la credencial y la checklist de lo que falta
+- `CHANGELOG.md` — esta entrada
+
+**Sin cambios en `src/`.**
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- Ejecuciones reales en n8n contra el calendario de la firma: **431** (WF1, verde), **432** (WF2,
+  creó el evento tentativo), **433** (WF4, filtro en seco devolvió vacío correctamente).
+- WF3 **sin probar**: manda un correo de verdad al cliente y con copia a Claudia. Requiere permiso.
+- Solo documentación en el repo: `npm run build` no cambia de resultado.
+
+### Notas
+- ⚠️ **Queda un evento de prueba en el calendario:** `fnrat2iln058co1enpgj5qg1ac`, el 4 de enero de
+  2027 — ahora titulado `Consulta — PRUEBA TECNICA (borrar) — …` y **confirmado con Meet**, porque se
+  reutilizó para probar el WF3. El limpiador **no** lo va a recoger (está fuera de su ventana de 60
+  días, y además ya no cumple el filtro). Hay que borrarlo a mano.
+- ⚠️ El **CC a `claudia@leosfirm.com`** se quitó del nodo de Gmail para poder probar sin mandarle una
+  confirmación falsa. **Hay que restaurarlo antes de publicar.**
+- 🐛 **Bug abierto en el WF3:** el PATCH no actualiza `description`, así que una cita pagada sigue
+  diciendo «RESERVA SIN PAGAR … el limpiador la borra». No rompe nada (el limpiador se guía por el
+  `summary`) pero Claudia lo lee. Arreglar antes de publicar.
+- ⚠️ La prueba de los **dos husos horarios salió degenerada**: con `America/Mexico_City` y una fecha
+  de enero, ambas horas dan `09:00` porque las dos zonas están en UTC-6. Es correcto, pero no prueba
+  la conversión. Repetir con husos realmente distintos.
+- ✅ **WF3 probado** (ejecución 434): `status: confirmed`, `summary` cambiado a `Consulta — …`, Meet
+  `https://meet.google.com/vup-vdha-oxd` creado con `createRequest.status: "success"` ya en el propio
+  PATCH, invitado añadido y correo enviado (`19fd27ce9c9ea5af`, `SENT`). De paso queda verificado que
+  al cambiar el título la cita **deja de cumplir el filtro del limpiador**, que hasta ahora solo
+  estaba razonado en el papel.
+- ⚠️ **Ningún workflow está publicado todavía.** Publicar pone un webhook en producción y requiere
+  autorización explícita.
+- El workflow `TEMP - Prueba credencial Calendar` (`VQuVBmjXBJIjViBi`) quedó sin usar y hay que
+  archivarlo: la prueba terminó haciéndose contra los workflows reales, que es mejor evidencia.
+- La zona horaria de la instancia de n8n es `America/Sao_Paulo`. No afecta a los cálculos, que usan
+  instantes absolutos, pero confunde al leer logs.
+
+---
+
 ## [2026-08-05] — De quién son las cuentas de Google — v0.4.3
 
 ### Request original
