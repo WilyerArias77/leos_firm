@@ -6,6 +6,156 @@
 
 ---
 
+## [2026-08-05] — FASE 6: el cobro con Square, de punta a punta del lado de Next.js — v0.6.0
+
+### Request original
+> Ya cargué las variables de Square en Vercel, por favor ayúdame con lo siguiente: 1. cambia el texto
+> de este botón y pon "Realizar pago". 2. crea la conexión con Square para recibir los pagos. 3. una
+> vez realizado y confirmado el pago procede a dejar un mensaje al usuario en la página diciendo que
+> la cita está confirmada y que recibirá un correo con la confirmación. 4. cambia el texto de la
+> segunda imagen y pon lo siguiente: "Para confirmar la cita es necesario realizar el pago, recuerda
+> que el espacio queda separado por poco". 5. ayúdame con el commit en GitHub.
+
+### Tipo de cambio
+- **ADDED**: `POST /api/v1/checkout` — crea la orden con la metadata de la cita (ADR-014) y cobra.
+  El monto sale del catálogo; **el esquema no tiene campo para un importe** (ADR-006). El
+  `idempotencyKey` se **deriva** de `leadId + eventId + priceCents`, no es un UUID por clic
+- **ADDED**: `POST /api/v1/webhooks/square` — la secuencia completa de `payments.md`: body crudo →
+  HMAC con `timingSafeEqual` → filtro por `status === "COMPLETED"` → reclamo del `payment_id` en
+  `Pagos` → `200` → `after()` de `next/server` para releer Square, confirmar vía WF3, avanzar el CRM y
+  cerrar la fila
+- **ADDED**: `GET /api/v1/orders/[id]/status` — poll de tres valores (`pending` · `paid` · `failed`) y
+  nada más
+- **ADDED**: `PaymentPanel` con el Web Payments SDK, dentro de `/agendar`. Los campos de tarjeta son
+  **iframes de Square**; la tarjeta no entra al bundle ni al servidor
+- **ADDED**: `payment.service.ts` (servidor), `checkout.service.ts` (navegador),
+  `webPayments.ts` (carga del SDK), `syncPaymentToCrm`, `payment.types.ts`, `square.types.ts`,
+  `checkout.schema.ts`, `square-webhook.schema.ts`, `CHECKOUT_RATE_LIMIT`, `ORDER_STATUS_RATE_LIMIT`,
+  `PAYMENT_POLL`
+- **CHANGED (pedido de la clienta)**: el botón de la pantalla de horario apartado pasa de
+  «Llamar y confirmar · (210) 630 7878» (un `tel:`) a **«Realizar pago»**, que ahora cobra de verdad
+- **CHANGED (pedido de la clienta)**: el aviso pasa de «El pago en línea todavía no está disponible en
+  el sitio…» a **«Para confirmar la cita es necesario realizar el pago, recuerda que el espacio queda
+  separado por poco»** — literal, tal como llegó
+- **ADDED (pedido de la clienta)**: pantalla de **cita confirmada** al acreditarse el pago, con el
+  aviso de que llega un correo con la confirmación y el enlace de la videollamada
+- **CHANGED**: `SLOT_HOLD_MINUTES` **10 → 30**. Es la decisión que quedaba pendiente y sin ella el
+  limpiador podía borrar el slot en medio del pago: cobro hecho, slot perdido
+- **DECIDED**: el poll lee el **estado de la orden**, no el del pago como decía el doc — una llamada a
+  Square por tick en vez de dos, y `COMPLETED` responde justo la pregunta que hace la pantalla
+- **DECIDED**: el entorno del SDK del navegador se deduce del **prefijo del Application ID**
+  (`sandbox-sq0idb-` vs `sq0idp-`) en lugar de una variable nueva. Dos valores que pueden
+  contradecirse son una forma de publicar un sitio en vivo apuntando a sandbox
+- **FIXED (antes de que existiera)**: el `200` de reconocimiento del webhook se construye por llamada
+  y no como constante de módulo. Un `Response` solo se puede leer una vez; compartir la instancia
+  habría fallado en cuanto llegaran dos notificaciones a la vez
+
+### Archivos modificados
+- `src/app/api/v1/checkout/route.ts` · `src/app/api/v1/webhooks/square/route.ts` ·
+  `src/app/api/v1/orders/[id]/status/route.ts` — **nuevos**
+- `src/services/payment.service.ts` · `src/services/checkout.service.ts` ·
+  `src/lib/square/webPayments.ts` · `src/lib/validation/checkout.schema.ts` ·
+  `src/lib/validation/square-webhook.schema.ts` · `src/types/payment.types.ts` ·
+  `src/types/square.types.ts` ·
+  `src/components/features/payments/PaymentPanel/{PaymentPanel.tsx,PaymentPanel.types.ts,index.ts}` —
+  **nuevos**
+- `src/components/features/scheduling/BookingFlow/BookingFlow.tsx` · `src/services/crm.service.ts` ·
+  `src/constants/business.ts` · `src/constants/routes.ts`
+- `docs/features/payments.md` · `docs/API_DOCS.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010). En la hoja del CRM: la pestaña **`Pagos`** sigue pendiente de
+  crearse a mano, con sus 11 encabezados.
+
+### Validación
+- `npm run build` ✅ (las tres rutas nuevas aparecen como dinámicas) · `npm run lint` ✅ ·
+  `npx tsc --noEmit` ✅
+- ❌ **Sin probar contra Square todavía.** La prueba de punta a punta necesita el sitio desplegado: en
+  local el HMAC se calcula sobre `http://localhost:3000` y nunca coincide con la URL registrada.
+
+### Notas
+- ⛔ **Nadie puede pagar todavía, y el `503` es a propósito.** Sin el WF5 `Leos Firm - Registrar
+  pago`, el webhook no puede saber si un pago ya se procesó, y seguir adelante arriesgaría reemplazar
+  un enlace de Meet ya enviado por correo (ADR-013). Responde `503`, Square reintenta durante 72 h y
+  **los pagos pendientes se confirman solos en cuanto WF5 se publique** — sin tocar una línea de
+  código. Lo mismo aplica al WF3, que sigue sin publicar a propósito.
+- ⛔ **El `30` de `SLOT_HOLD_MINUTES` vive también dentro del nodo Code del WF4**, que es la única
+  copia fuera del repo. Mientras el WF4 siga en 10, el limpiador borra slots que el código cree
+  retenidos durante 30 minutos.
+- **No se añadió ninguna dependencia** (Mandamiento I). El Web Payments SDK se carga como `<script>`
+  desde el CDN de Square porque los campos de tarjeta son iframes de su origen — es lo que mantiene la
+  tarjeta fuera del alcance de PCI, y empaquetar el SDK no cambiaría eso. Los tipos que hacían falta
+  están escritos a mano en `src/types/square.types.ts`.
+- **`verifyBuyer` (3-D Secure) se intenta y su fallo no es fatal.** La mayoría de las tarjetas
+  estadounidenses no se desafían; negarse a cobrar porque un paso opcional se rompió perdería pagos
+  reales. Cuando el token hacía falta de verdad, Square rechaza con
+  `CARD_DECLINED_VERIFICATION_REQUIRED`, que ya tiene su mensaje.
+- ⚠️ **El texto nº 4 quedó literal**, terminando en «…queda separado por poco». Si faltaba «tiempo»,
+  es un cambio de un segundo.
+
+---
+
+## [2026-08-05] — Square conectado y verificado: la base de la FASE 6 — v0.5.4
+
+### Request original
+> Ya tengo la cuenta de Square, pídeme lo que necesitas para hacer la conexión. … ¿Cómo obtengo esta
+> credencial? El resto ya está en `.env`.
+
+### Tipo de cambio
+- **VERIFIED (contra la API real, no por captura)**: `GET /v2/locations` → `200`, location
+  `LB2XHFGDVRJZJ` *Default Test Account*, `ACTIVE`, `USD`, `US`, y coincide con el `.env`. El
+  Application ID lleva el prefijo `sandbox-sq0idb-` que corresponde al entorno
+- **VERIFIED**: `GET /v2/webhooks/subscriptions` → `200`, suscripción `Leos Firm - pagos`, `enabled`,
+  apuntando a `https://leos-firm.vercel.app/api/v1/webhooks/square`, con `api_version 2026-07-15` —
+  **la misma que fija `square@45`**, así que no hay desfase entre lo que Square manda y lo que el SDK
+  espera
+- **ADDED**: `src/lib/square/client.ts` (SDK + conversión de los `bigint` de Square) y
+  `signature.ts` (HMAC con `node:crypto` y `timingSafeEqual`)
+- **ADDED**: `getSquareEnv()` en `src/lib/env.ts`
+- **ADDED**: `CrmPaymentRow`, los webhooks `confirm` y `payments`, y `N8N_PAYMENTS_WEBHOOK_URL`
+- **CHANGED**: `src/lib/n8n/mock.ts` **se niega a simular** `confirm` y `payments`. El mock existía
+  para horarios; una confirmación falsa marcaría como pagada una cita que nadie pagó
+- **CORRECTED (por inspeccionar la suscripción real)**: la clave de la pestaña `Pagos` pasa de
+  `event_id` a **`payment_id`**. Square manda **dos eventos por el mismo cobro** —`payment.created` y
+  `payment.updated`— y **cada uno trae su propio `event_id`**: la clave anterior los habría dejado
+  pasar a los dos, con dos confirmaciones y dos correos. El `event_id` se conserva como columna de
+  auditoría
+- **CORRECTED**: el webhook acepta `payment.created` **además de** `payment.updated`, y filtra por
+  `status === "COMPLETED"`. Un cobro con tarjeta que se completa de inmediato puede notificarse ya
+  como `COMPLETED` en el `created`; escuchar solo `updated` arriesgaba no confirmar nunca una cita
+  pagada
+
+### Archivos modificados
+- `src/lib/square/client.ts` · `src/lib/square/signature.ts` — **nuevos**
+- `src/lib/env.ts` · `src/lib/n8n/client.ts` · `src/lib/n8n/mock.ts` · `src/types/crm.types.ts` ·
+  `.env.example`
+- `docs/features/payments.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- `npm run build` ✅ · `npx eslint src --max-warnings=0` ✅ (0 avisos)
+- Credenciales probadas contra `connect.squareupsandbox.com` con dos llamadas reales
+
+### Notas
+- **`getSquareEnv()` existe porque `getServerEnv()` no servía.** Ese esquema exige las claves de
+  Supabase, Google y Anthropic —vacías, y las de Supabase vacías para siempre (ADR-010)—, así que
+  leerlo para cobrar habría lanzado por variables que el cobro no usa. Es exactamente la misma razón
+  por la que `getN8nEnv()` se separó en su momento, y el comentario de `env.ts` ya lo anticipaba.
+- **`SQUARE_WEBHOOK_SIGNATURE_KEY` es opcional en el esquema, a propósito.** Square solo la emite al
+  crear la suscripción, y eso exige una URL pública. Exigirla habría bloqueado el checkout por un
+  valor que solo usa el webhook; la ruta del webhook la exige explícitamente y se niega a correr sin
+  ella.
+- ⚠️ **En local la firma no puede validar, y está bien.** `NEXT_PUBLIC_SITE_URL` es
+  `http://localhost:3000` y el HMAC se calcula sobre `notificationUrl + rawBody`, así que no coincide
+  con la URL registrada. El webhook se prueba **sobre el sitio desplegado** — Square no alcanza una
+  máquina local de todos modos. En Vercel esa variable **tiene que ser el dominio real**.
+- ⏳ **Sigue sin respuesta la decisión de `SLOT_HOLD_MINUTES` (10 → 30).** No bloquea el código, pero
+  sí es el riesgo de cobrar sin poder entregar. Pendiente en `payments.md`.
+
+---
+
 ## [2026-08-05] — FASE 6 documentada antes de codear: `payments.md` — v0.5.3
 
 ### Request original

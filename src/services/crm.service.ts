@@ -5,7 +5,13 @@ import { postToN8n } from "@/lib/n8n/client";
 import { describeSteps, hasUsEntity } from "@/services/diagnostic.service";
 import { getServiceBySlug } from "@/services/service.service";
 import type { LeadPayload } from "@/lib/validation/lead.schema";
-import type { CrmAppointmentRow, CrmDelivery, CrmRow, CrmStage } from "@/types/crm.types";
+import type {
+  CrmAppointmentRow,
+  CrmDelivery,
+  CrmPaymentRow,
+  CrmRow,
+  CrmStage,
+} from "@/types/crm.types";
 import type { DiagnosticStep } from "@/types/diagnostic.types";
 
 /**
@@ -172,6 +178,42 @@ export async function syncAppointmentToCrm(appointment: {
     // write is not evidence. Mirrors `consent_at` / `consent_ip` above.
     policy_accepted_at: now,
     policy_accepted_ip: appointment.policyAcceptedIp,
+  };
+
+  const accepted = await postToN8n("crm", row);
+
+  return accepted ? "delivered" : "failed";
+}
+
+/**
+ * Advances the row to `pagado`: Square confirmed the money and the appointment
+ * is real (`docs/features/payments.md`).
+ *
+ * Called only from the Square webhook, never from the browser (ADR-002). It
+ * carries no contact fields on purpose — by now the row exists in `agenda`, and
+ * a payment cannot be the first thing we learn about a person (ADR-008).
+ *
+ * `meeting_url` belongs to this stage and not to `agenda`: the Meet link is
+ * created by WF3 after the payment clears, so there was nothing to write
+ * before. An empty string is sent when WF3 reported no link — the sheet shows a
+ * blank cell and the `Pagos` tab carries the reason.
+ */
+export async function syncPaymentToCrm(payment: {
+  leadId: string;
+  paymentId: string;
+  amountUsd: string;
+  paidAt: string;
+  meetingUrl?: string;
+}): Promise<CrmDelivery> {
+  const row: CrmPaymentRow = {
+    lead_id: payment.leadId,
+    stage: "pagado" satisfies CrmStage,
+    updated_at: new Date().toISOString(),
+
+    payment_id: payment.paymentId,
+    amount_usd: payment.amountUsd,
+    paid_at: payment.paidAt,
+    meeting_url: payment.meetingUrl ?? "",
   };
 
   const accepted = await postToN8n("crm", row);

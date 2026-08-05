@@ -64,8 +64,25 @@ export const CANCELLATION_POLICY = {
   referralFreeMinutes: 30,
 } as const;
 
-/** How long a slot stays held while the client fills in the intake form. */
-export const SLOT_HOLD_MINUTES = 10;
+/**
+ * How long a slot stays held while the client pays.
+ *
+ * **Raised from 10 to 30 on 2026-08-05, when payment went in**
+ * (`docs/features/payments.md` § El riesgo que hay que resolver antes de codear).
+ * The clock starts when the tentative event is created — before the visitor has
+ * even seen the card form. Ten minutes had to cover reading the cancellation
+ * policy, finding a card, typing it and passing 3-D Secure; if they ran out, the
+ * cleanup workflow deleted the slot while the charge was going through, and the
+ * webhook arrived to confirm an event that no longer existed: **money taken,
+ * slot gone.** The cost of 30 is more abandoned holds in the calendar, which is
+ * cheap by comparison.
+ *
+ * ⚠️ **This number exists TWICE.** The other copy is inside the Code node of
+ * `Leos Firm - Limpiar reservas vencidas` (WF4), which lives in n8n and not in
+ * this repo. Changing it here alone leaves the cleaner deleting slots at 10
+ * minutes and this file lying about it.
+ */
+export const SLOT_HOLD_MINUTES = 30;
 
 /**
  * Booking window (`docs/features/scheduling.md` § Bloque C, decisiones 2 y 3).
@@ -106,6 +123,44 @@ export const AVAILABILITY_RATE_LIMIT = {
 export const APPOINTMENT_RATE_LIMIT = {
   maxRequests: 5,
   windowMs: 10 * 60 * 1000,
+} as const;
+
+/**
+ * Rate limit for `POST /api/v1/checkout` (`docs/features/payments.md`).
+ *
+ * Looser than the booking limit and on purpose: a declined card is a normal
+ * event, and someone trying a second and a third card is a customer, not an
+ * attacker. Card testing is what Square's own risk rules are for; this limit
+ * only stops a script from using the endpoint as a free BIN scanner.
+ */
+export const CHECKOUT_RATE_LIMIT = {
+  maxRequests: 10,
+  windowMs: 10 * 60 * 1000,
+} as const;
+
+/**
+ * Rate limit for `GET /api/v1/orders/[id]/status`.
+ *
+ * The payment screen polls it while the webhook does its work, so this has to
+ * allow a burst per visitor. Each request is one `RetrievePayment` against
+ * Square, which is why it is bounded at all.
+ */
+export const ORDER_STATUS_RATE_LIMIT = {
+  maxRequests: 60,
+  windowMs: 10 * 60 * 1000,
+} as const;
+
+/**
+ * How the payment screen polls for the appointment's confirmation.
+ *
+ * The webhook is what confirms (ADR-002) and it runs out of band, so the screen
+ * asks Square whether the money cleared. It gives up after
+ * `maxAttempts × intervalMs` and says the confirmation will arrive by email —
+ * which is true regardless, and better than a spinner that never stops.
+ */
+export const PAYMENT_POLL = {
+  intervalMs: 2_500,
+  maxAttempts: 12,
 } as const;
 
 /**

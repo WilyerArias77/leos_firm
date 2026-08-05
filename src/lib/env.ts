@@ -60,11 +60,45 @@ const n8nSchema = z.object({
   N8N_AVAILABILITY_WEBHOOK_URL: z.string().url().optional(),
   N8N_BOOKING_WEBHOOK_URL: z.string().url().optional(),
   N8N_CONFIRM_WEBHOOK_URL: z.string().url().optional(),
+
+  /** Payment registry — `Leos Firm - Registrar pago` (FASE 6, ADR-013). */
+  N8N_PAYMENTS_WEBHOOK_URL: z.string().url().optional(),
+});
+
+/**
+ * Square (FASE 6) — validated apart from `serverSchema` for the same reason n8n
+ * is: that schema demands Supabase, Google and Anthropic keys that this project
+ * does not have and, for Supabase, never will (ADR-010). Reading it to take a
+ * payment would throw over variables the payment does not use.
+ *
+ * `SQUARE_WEBHOOK_SIGNATURE_KEY` is the one optional field here, and not out of
+ * laziness: Square only issues it when the webhook SUBSCRIPTION is created, and
+ * that needs a public URL, which needs the endpoint deployed. Requiring it would
+ * block checkout on a value that only the webhook uses. The webhook route
+ * demands it explicitly and refuses to run without it.
+ */
+const squareSchema = z.object({
+  SQUARE_ACCESS_TOKEN: z.string().min(1),
+  SQUARE_ENVIRONMENT: z.enum(["sandbox", "production"]),
+  SQUARE_WEBHOOK_SIGNATURE_KEY: z.string().min(1).optional(),
+
+  NEXT_PUBLIC_SQUARE_APPLICATION_ID: z.string().min(1),
+  NEXT_PUBLIC_SQUARE_LOCATION_ID: z.string().min(1),
+
+  /**
+   * Not decoration: the webhook's HMAC is computed over
+   * `notificationUrl + rawBody`, and `notificationUrl` is built from this. If it
+   * does not match the URL registered in Square character for character, every
+   * signature fails and the only symptom is a bare 401
+   * (`docs/features/payments.md`).
+   */
+  NEXT_PUBLIC_SITE_URL: z.string().url(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;
 export type ClientEnv = z.infer<typeof clientSchema>;
 export type N8nEnv = z.infer<typeof n8nSchema>;
+export type SquareEnv = z.infer<typeof squareSchema>;
 
 function formatIssues(issues: z.core.$ZodIssue[]): string {
   return issues.map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`).join("\n");
@@ -130,6 +164,40 @@ export function getN8nEnv(): N8nEnv | null {
     console.error(
       `[env] n8n sin configurar — el CRM no recibirá datos:\n${formatIssues(parsed.error.issues)}`,
     );
+    return null;
+  }
+
+  return parsed.data;
+}
+
+/**
+ * Square configuration, or `null` when it is missing or malformed.
+ *
+ * Does not throw, same as `getN8nEnv` — but for a different reason, and the
+ * difference matters at the call site:
+ *
+ * - In `/checkout`, a missing key means we cannot charge. The visitor gets a
+ *   controlled message and the firm's phone number, not a 500 that loses them.
+ * - In the webhook, `null` means we cannot VERIFY a payment that already
+ *   happened. That must answer 5xx so Square keeps retrying for 72 h — never
+ *   200, which would drop the notification on the floor.
+ *
+ * `NEXT_PUBLIC_*` values are listed one by one because Next.js inlines those
+ * identifiers at build time; reading them off a `process.env` spread works on
+ * the server today but breaks the moment this is imported from a bundle.
+ */
+export function getSquareEnv(): SquareEnv | null {
+  const parsed = squareSchema.safeParse({
+    SQUARE_ACCESS_TOKEN: process.env.SQUARE_ACCESS_TOKEN,
+    SQUARE_ENVIRONMENT: process.env.SQUARE_ENVIRONMENT,
+    SQUARE_WEBHOOK_SIGNATURE_KEY: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || undefined,
+    NEXT_PUBLIC_SQUARE_APPLICATION_ID: process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID,
+    NEXT_PUBLIC_SQUARE_LOCATION_ID: process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  });
+
+  if (!parsed.success) {
+    console.error(`[env] Square sin configurar:\n${formatIssues(parsed.error.issues)}`);
     return null;
   }
 

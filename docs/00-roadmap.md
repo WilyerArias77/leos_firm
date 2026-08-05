@@ -54,7 +54,7 @@ usuario.
 | 3 | **Diagnóstico interactivo + captación de leads** | A · Front | Popup, árbol de preguntas, `POST /leads` | ✅ **Completa** |
 | 4 | **Cobro universal + CRM en Google Sheets** | B · Back | Los 8 servicios con precio, `leads` → hoja vía n8n | ✅ **Completa** |
 | 5 | **Agendamiento: calendario propio** | B · Back | `/agendar`, disponibilidad real, reserva tentativa | 🔨 **En curso** — mitad Next.js lista |
-| 6 | Square: checkout + webhook | B · Back | Cobro real, confirmación de la cita, CRM `pagado` | ⬜ Pendiente |
+| 6 | Square: checkout + webhook | B · Back | Cobro real, confirmación de la cita, CRM `pagado` | 🔨 **En curso** — mitad Next.js lista |
 | 7 | Correos por n8n | B · Back | Confirmación, recordatorios 24 h / 1 h | ⬜ Pendiente |
 | 8 | Cierre de front end | A · Front | A11Y, SEO, 404/500, contenido pendiente | ⬜ Pendiente |
 | 9 | Gestión de la cita | B · Back | Ver, reprogramar y cancelar con token (política §8) | ⬜ Pendiente |
@@ -151,10 +151,27 @@ mock local, y pasar a producción es poner `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N
 requisito de esta fase y las crea quien mantiene el workflow, no el código:
 [`features/crm-sheets.md`](./features/crm-sheets.md) § *Dos columnas nuevas*.
 
-### FASE 6 — Square: checkout + webhook ⬜
+### FASE 6 — Square: checkout + webhook 🔨 EN CURSO
 Web Payments SDK, `POST /checkout`, webhook con firma HMAC e idempotencia. Al confirmarse el pago:
 el evento tentativo pasa a confirmado con enlace de Meet y el CRM avanza a `pagado`.
-**Doc esperado:** `features/payments.md`
+**Doc:** [`features/payments.md`](./features/payments.md) — **ya escrito** (2026-08-05)
+**Criterio de entrada:** cuenta de Square verificada y con banco vinculado (la clienta; tarda días,
+conviene arrancarlo en paralelo a la FASE 5).
+**Decisiones propuestas en el doc, pendientes de copiar a `02-architecture.md`:** ADR-013 (la
+idempotencia la da la transición del evento de Calendar; la hoja es el registro) · ADR-014 (el
+contexto de la cita viaja en la metadata de la orden de Square).
+
+**Se construye en dos mitades, igual que la FASE 5:**
+
+| Mitad | Quién | Estado |
+|-------|-------|--------|
+| WF5 `Registrar pago`, WF3 con `If-Match` publicado, pestaña `Pagos`, el `30` en el WF4 | Wilyer | ⬜ Pendiente |
+| `/checkout`, el webhook, el poll de estado y la pantalla de pago | Next.js | ✅ **Listo** (2026-08-05, sandbox) |
+
+⛔ **Criterio de salida NO alcanzado.** Con la mitad de Next.js sola, el webhook responde `503` a
+propósito: sin WF5 no se puede saber si un pago ya se procesó, y confirmar a ciegas arriesga
+reemplazar un enlace de Meet ya enviado (ADR-013). Los pagos quedan en la cola de reintentos de
+Square durante 72 h y **se confirman solos cuando WF5 se publique** — sin tocar código.
 
 ### FASE 7 — Correos por n8n ⬜
 Confirmación al cliente, copia a Claudia, recordatorios 24 h y 1 h antes. El scheduler es n8n, no

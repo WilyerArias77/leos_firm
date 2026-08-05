@@ -36,9 +36,9 @@
 | POST | `/api/v1/leads` | Registrar lead del diagnóstico → CRM | Pública + rate limit | ✅ Implementado |
 | GET | `/api/v1/availability` | Slots libres (ocupados de Calendar ∩ horario) | Pública + rate limit | ✅ Implementado (mock de n8n) |
 | POST | `/api/v1/appointments` | Reservar el slot (tentativo) + CRM `agenda` | Pública + rate limit | ✅ Implementado (mock de n8n) |
-| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 6 |
-| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 6 |
-| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 6 |
+| POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública + rate limit | ✅ Implementado |
+| POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ✅ Implementado (**responde `503` hasta que exista el WF5**) |
+| GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública + rate limit (id opaco) | ✅ Implementado |
 | GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 9 |
 | PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 9 |
 | DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 9 |
@@ -262,9 +262,9 @@ escribir una fila sería destruir algo real para castigar un fallo nuestro.
 
 ---
 
-### Checkout ⏳ FASE 6
+### Checkout ✅
 
-**`POST /api/v1/checkout`** — Pública
+**`POST /api/v1/checkout`** — Pública, rate limit por IP (10 / 10 min)
 
 ```json
 {
@@ -272,45 +272,94 @@ escribir una fila sería destruir algo real para castigar un fallo nuestro.
   "serviceSlug": "payroll",
   "eventId": "abc123def456",
   "sourceId": "cnon:card-nonce-ok",
-  "couponCode": "REFERIDO30"
+  "verificationToken": "verf:CAESABC…"
 }
 ```
 
 Reglas críticas:
-- El **monto NO se acepta del cliente**: se lee del catálogo por `serviceSlug` (ADR-006).
+- El **monto NO se acepta del cliente**: se lee del catálogo por `serviceSlug` (ADR-006). El esquema
+  **no tiene campo para un importe**, así que no hay nada que ignorar.
 - `sourceId` es el token del Web Payments SDK; la tarjeta nunca llega al servidor.
-- Se genera `idempotency_key` por intento.
-- La respuesta **no** confirma el pago: devuelve `orderId` en estado `pending`. La confirmación
-  llega por webhook (ADR-002).
+- `verificationToken` es el resultado de `verifyBuyer()` (3-D Secure). **Opcional**: no toda tarjeta
+  se desafía, y exigirlo bloquearía las que no.
+- `eventId` es **obligatorio**. El slot ya está apartado cuando esto corre; un checkout sin evento es
+  un error del cliente, no algo que compensar reservando aquí.
+- El `idempotency_key` se **deriva de `leadId + eventId + priceCents`**, no es un UUID por clic — con
+  un UUID nuevo cada vez, el doble clic dejaría de estar protegido.
+- La respuesta **no** confirma el pago: devuelve `pending`. La confirmación llega por webhook
+  (ADR-002).
 
 **Response 201**
 ```json
-{ "data": { "orderId": "uuid", "status": "pending" }, "message": "Pago en proceso" }
+{
+  "data": { "orderId": "…", "paymentId": "…", "status": "pending" },
+  "message": "Pago en proceso"
+}
 ```
 
-**Errores:** `400 VALIDATION_ERROR` · `402 PAYMENT_DECLINED` · `404 SERVICE_NOT_FOUND` ·
-`409 DUPLICATE_REQUEST` · `422 INVALID_COUPON` · `429 RATE_LIMITED`
+**Errores:** `400 VALIDATION_ERROR` · `402 PAYMENT_DECLINED` (mensaje en español según el código de
+Square) · `404 SERVICE_NOT_FOUND` · `429 RATE_LIMITED` · `502 UPSTREAM_ERROR` (Square no responde o
+falta una credencial — la respuesta ofrece el teléfono y **el slot sigue apartado**) ·
+`422 INVALID_COUPON` ⏳ FASE 10
 
 ---
 
-### Webhook de Square ⏳ FASE 6
+### Estado del pago ✅
+
+**`GET /api/v1/orders/[id]/status`** — Pública, rate limit por IP (60 / 10 min)
+
+Poll corto de la pantalla de «procesando». `[id]` es el `orderId` de Square.
+
+**Response 200**
+```json
+{ "data": { "status": "pending" } }
+```
+
+`status` es `pending` · `paid` · `failed` y **nada más**: ni importes, ni marca de tarjeta, ni
+identificadores internos. Conocer un `orderId` no puede volverse una forma de leer qué pagó alguien.
+
+- Lee el **estado de la orden** (`COMPLETED` → `paid`), no el del pago: una llamada a Square en vez de
+  dos por tick ([`features/payments.md`](./features/payments.md)).
+- **`paid` no significa "cita confirmada".** Significa que el dinero entró; la cita la confirma el
+  webhook, fuera de banda. La pantalla lo dice con esas palabras.
+- Un fallo nuestro responde **`pending`**, jamás `failed`.
+
+---
+
+### Webhook de Square ✅
 
 **`POST /api/v1/webhooks/square`** — Firma HMAC
 
-Secuencia obligatoria:
-1. Leer el body **crudo** (`await req.text()`) — parsearlo antes rompe la verificación.
-2. Verificar HMAC-SHA256 de `notificationUrl + rawBody` con `crypto.timingSafeEqual`.
-3. Descartar `event_id` ya procesados (anti-replay).
-4. Confirmar el evento tentativo en Calendar (vía n8n) y avanzar el CRM a `stage='pagado'`.
-5. Responder `200` **rápido**; el trabajo pesado va en background.
+Secuencia implementada, en este orden exacto:
+1. Leer el body **crudo** (`await request.text()`) — parsearlo antes rompe la verificación.
+2. Verificar HMAC-SHA256 de `notificationUrl + rawBody` con `crypto.timingSafeEqual`. Inválida →
+   `401` y **nada más**.
+3. Filtrar por **`status === "COMPLETED"`**, no por tipo de evento → si no, `200` sin trabajo.
+4. Reclamar el **`payment_id`** en la pestaña `Pagos` (WF5). Ya existía → `200` sin trabajo.
+5. Responder `200`.
+6. `after()` de `next/server`: releer el pago y la orden en Square, confirmar el evento vía WF3,
+   avanzar el CRM a `pagado` y cerrar la fila de `Pagos`.
 
-Responder siempre `200` ante evento duplicado o ya procesado. Un `401` solo cuando la firma es
-inválida — Square reintenta durante 72 h.
+El `200` va en el paso 5 y no al final porque Square corta a los ~10 s y el paso 6 son tres llamadas
+encadenadas. **Lo que cuesta:** después del `200` Square no reintenta, así que un fallo del paso 6
+deja la fila de `Pagos` en `recibido` — visible en la hoja que Claudia abre, que es exactamente el
+punto.
 
-> **Sin base de datos, la idempotencia necesita otro lugar.** Definir dónde vive el registro de
-> `event_id` procesados es parte del trabajo de la FASE 6: candidatos son la hoja de cálculo (una
-> pestaña `Pagos`) o el Data Table de n8n. **No dejarlo sin resolver:** un reintento de Square
-> confirmando dos veces la misma cita es un cobro duplicado esperando a pasar.
+Responder `200` ante evento duplicado, ya procesado o irrelevante. `401` solo cuando la firma es
+inválida. **`503`** cuando no podemos verificar (falta la signature key) o no podemos saber si el pago
+ya se procesó (WF5 no responde): en ambos casos Square reintenta durante 72 h, que es preferible a
+tirar la notificación o a confirmar dos veces.
+
+> ✅ **Resuelto en [`features/payments.md`](./features/payments.md) § ADR-013** (2026-08-05). En
+> corto: un reintento **no cobra dos veces** —de eso se encarga el `idempotency_key` de
+> `CreatePayment`— pero sí duplicaría el Meet y los correos. Así que la exclusión mutua real es la
+> transición `tentative → confirmed` del evento de Calendar con `If-Match` sobre el ETag (Google
+> responde `412` a la segunda), y el registro auditable de `event_id` es una pestaña `Pagos` en la
+> hoja del CRM.
+>
+> El otro hueco que el webhook tiene —**no sabe de qué cita habla**— lo resuelve **ADR-014**: el
+> `lead_id` y el `event_id` viajan en la `metadata` de la orden de Square, puesta por el servidor
+> en `/checkout`.
 
 ---
 

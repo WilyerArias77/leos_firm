@@ -20,6 +20,8 @@ export const API_ROUTES = {
   services: "/api/v1/services",
   leads: "/api/v1/leads",
   checkout: "/api/v1/checkout",
+  /** Poll of the payment's state. The id is Square's opaque order id. */
+  orderStatus: (orderId: string) => `/api/v1/orders/${encodeURIComponent(orderId)}/status`,
   squareWebhook: "/api/v1/webhooks/square",
   intake: "/api/v1/intake",
   availability: "/api/v1/availability",

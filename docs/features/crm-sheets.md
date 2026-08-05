@@ -313,7 +313,9 @@ y **distingue mayúsculas**.
       desplegado guarda cero leads, en silencio. **Es lo único que separa esto de estar en producción.**
 - [ ] Etapa `agenda` — el workflow ya la maneja y está probada; falta la pantalla que la dispare
       ([`scheduling.md`](./scheduling.md)).
-- [ ] Etapa `pagado` — la escribe el webhook de Square ([`payments.md`](./payments.md), sin crear).
+- [ ] Etapa `pagado` — la escribe el webhook de Square ([`payments.md`](./payments.md), ya escrito).
+      Añade además una **pestaña `Pagos`** a esta misma hoja (ADR-013) y corrige la atribución de
+      `Enlace de la reunion`: la escribe `pagado`, no `agenda` — el Meet no existe antes del pago.
 - [ ] Hacer respetar `CRM_STAGE_ORDER` en el workflow (hoy la protección está definida en el tipo
       pero no aplicada: un `agenda` que llegue después de un `pagado` degradaría la fila).
 - [ ] Vista de resumen para Claudia (tabla dinámica o segunda hoja con los del mes).

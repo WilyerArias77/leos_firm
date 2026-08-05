@@ -18,7 +18,7 @@ import { getN8nEnv } from "@/lib/env";
  */
 const REQUEST_TIMEOUT_MS = 8_000;
 
-export type N8nWebhook = "crm" | "availability" | "booking";
+export type N8nWebhook = "crm" | "availability" | "booking" | "confirm" | "payments";
 
 type N8nEnvValue = NonNullable<ReturnType<typeof getN8nEnv>>;
 
@@ -26,6 +26,8 @@ const WEBHOOK_URLS: Record<N8nWebhook, (env: N8nEnvValue) => string | undefined>
   crm: (env) => env.N8N_CRM_WEBHOOK_URL,
   availability: (env) => env.N8N_AVAILABILITY_WEBHOOK_URL,
   booking: (env) => env.N8N_BOOKING_WEBHOOK_URL,
+  confirm: (env) => env.N8N_CONFIRM_WEBHOOK_URL,
+  payments: (env) => env.N8N_PAYMENTS_WEBHOOK_URL,
 };
 
 /** Reads the configured URL for a webhook, or `undefined` when it is not set. */

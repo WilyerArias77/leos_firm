@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { CircleCheckBig, Phone, RotateCw } from "lucide-react";
+import { CircleCheckBig, Clock, Mail, Phone, RotateCw } from "lucide-react";
+import { PaymentPanel } from "@/components/features/payments/PaymentPanel";
 import { AvailabilityCalendar } from "@/components/features/scheduling/AvailabilityCalendar";
 import { BookingForm } from "@/components/features/scheduling/BookingForm";
 import { SlotPicker } from "@/components/features/scheduling/SlotPicker";
@@ -13,6 +14,8 @@ import { useAvailability } from "@/hooks/useAvailability";
 import { createAppointment } from "@/services/appointment.service";
 import { getStoredContact, getStoredLeadId } from "@/services/lead.service";
 import type { CalendarDay } from "@/lib/utils/timezone";
+import type { PaymentOutcome } from "@/components/features/payments/PaymentPanel";
+import type { Service } from "@/types/content.types";
 import type { StoredContact } from "@/services/lead.service";
 import type { AppointmentHold } from "@/types/scheduling.types";
 import type { BookingFlowProps } from "./BookingFlow.types";
@@ -64,6 +67,15 @@ export function BookingFlow({ service }: BookingFlowProps) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | undefined>();
   const [hold, setHold] = useState<AppointmentHold | null>(null);
 
+  // Kept from the submitted form rather than read back from storage: Square's
+  // 3-D Secure challenge needs a billing contact, and these are the values the
+  // visitor actually confirmed.
+  const [payer, setPayer] = useState<{ fullName: string; email: string } | null>(null);
+
+  // `null` until the payment resolves. Set by `PaymentPanel`, which is the only
+  // thing that knows whether Square took the money.
+  const [outcome, setOutcome] = useState<PaymentOutcome | null>(null);
+
   const availability = useAvailability({
     month: month ?? "1970-01-01",
     timeZone: clientTimezone ?? BUSINESS_TIMEZONE,
@@ -111,6 +123,7 @@ export function BookingFlow({ service }: BookingFlowProps) {
       return;
     }
 
+    setPayer({ fullName: values.fullName, email: values.email });
     setHold(response.hold);
   }
 
@@ -120,8 +133,20 @@ export function BookingFlow({ service }: BookingFlowProps) {
     );
   }
 
-  if (hold) {
-    return <HeldSlot hold={hold} serviceName={service.name} />;
+  if (hold && outcome) {
+    return <PaidAppointment hold={hold} serviceName={service.name} outcome={outcome} />;
+  }
+
+  if (hold && leadId && payer) {
+    return (
+      <HeldSlot
+        hold={hold}
+        service={service}
+        leadId={leadId}
+        payer={payer}
+        onOutcome={setOutcome}
+      />
+    );
   }
 
   return (
@@ -192,20 +217,32 @@ export function BookingFlow({ service }: BookingFlowProps) {
 }
 
 /**
- * The slot is held, the payment is not made.
+ * The slot is held, the payment is not made yet.
  *
- * Says so plainly instead of congratulating anyone: no appointment exists
- * until Square confirms (`context.md` §8), and the payment screen is FASE 6.
- * Claiming a confirmed booking here would be the site lying about what it did.
+ * It does not congratulate anyone: no appointment exists until Square confirms
+ * the payment (`context.md` §8), so this screen states what is still owed and
+ * puts the card form right underneath it.
  */
-function HeldSlot({ hold, serviceName }: { hold: AppointmentHold; serviceName: string }) {
+function HeldSlot({
+  hold,
+  service,
+  leadId,
+  payer,
+  onOutcome,
+}: {
+  hold: AppointmentHold;
+  service: Service;
+  leadId: string;
+  payer: { fullName: string; email: string };
+  onOutcome: (outcome: PaymentOutcome) => void;
+}) {
   const start = new Date(hold.startUtc);
   const showBothZones = hold.clientTimezone !== hold.businessTimezone;
 
   return (
     <div className="rounded-card border border-border bg-surface p-6">
       <p className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-accent uppercase">
-        <CircleCheckBig className="h-4 w-4" aria-hidden="true" />
+        <Clock className="h-4 w-4" aria-hidden="true" />
         Horario apartado
       </p>
 
@@ -221,13 +258,14 @@ function HeldSlot({ hold, serviceName }: { hold: AppointmentHold; serviceName: s
       ) : null}
 
       <p className="mt-4 text-sm leading-relaxed text-ink-muted">
-        Apartamos este horario para tu sesión de <strong className="text-ink">{serviceName}</strong>.
-        La cita queda confirmada cuando completes el pago.
+        Apartamos este horario para tu sesión de{" "}
+        <strong className="text-ink">{service.name}</strong>. La cita queda confirmada cuando
+        completes el pago.
       </p>
 
       <p className="mt-4 rounded-card bg-surface-muted p-4 text-xs leading-relaxed text-ink-muted">
-        El pago en línea todavía no está disponible en el sitio. Llámanos para completarlo y
-        confirmar tu cita — tenemos tu horario apartado por unos minutos.
+        Para confirmar la cita es necesario realizar el pago, recuerda que el espacio queda separado
+        por poco
       </p>
 
       {hold.crmDelivery === "failed" ? (
@@ -237,13 +275,84 @@ function HeldSlot({ hold, serviceName }: { hold: AppointmentHold; serviceName: s
         </p>
       ) : null}
 
-      <a
-        href={PHONE_HREF}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-card bg-accent px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-      >
-        <Phone className="h-4 w-4" aria-hidden="true" />
-        Llamar y confirmar · {COMPANY.phone}
-      </a>
+      <PaymentPanel
+        service={service}
+        leadId={leadId}
+        eventId={hold.eventId}
+        payer={payer}
+        onOutcome={onOutcome}
+      />
+    </div>
+  );
+}
+
+/**
+ * The money cleared. What this screen may and may not claim:
+ *
+ * - `confirmed` — Square says the payment went through, so the appointment is
+ *   confirmed and the confirmation email is on its way (the webhook and WF3 do
+ *   both, out of band — ADR-002).
+ * - `processing` — the charge was accepted but we stopped asking whether it
+ *   cleared. It does NOT say the appointment is confirmed, because we do not
+ *   know that yet. The email arrives either way, which is what it says instead.
+ *
+ * **The Meet link is not shown here.** It travels in the confirmation email,
+ * which is where the client will look for it the day of the appointment — and it
+ * saves this screen from having to read the calendar back.
+ */
+function PaidAppointment({
+  hold,
+  serviceName,
+  outcome,
+}: {
+  hold: AppointmentHold;
+  serviceName: string;
+  outcome: PaymentOutcome;
+}) {
+  const start = new Date(hold.startUtc);
+  const showBothZones = hold.clientTimezone !== hold.businessTimezone;
+  const confirmed = outcome === "confirmed";
+
+  return (
+    <div className="rounded-card border border-success/30 bg-success/5 p-6">
+      <p className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-success uppercase">
+        <CircleCheckBig className="h-4 w-4" aria-hidden="true" />
+        {confirmed ? "Cita confirmada" : "Pago recibido"}
+      </p>
+
+      <h2 className="mt-3 font-serif text-xl text-navy-900">
+        {confirmed
+          ? "Tu cita está confirmada"
+          : "Estamos confirmando tu cita"}
+      </h2>
+
+      <p className="mt-2 text-sm leading-relaxed text-ink">
+        <span className="first-letter:uppercase">
+          {formatDayInZone(start, hold.clientTimezone)}
+        </span>{" "}
+        a las {formatTimeInZone(start, hold.clientTimezone)} · {serviceName}
+      </p>
+
+      {showBothZones ? (
+        <p className="mt-1 text-sm text-ink-muted">
+          {formatTimeInZone(start, hold.businessTimezone)} en San Antonio
+        </p>
+      ) : null}
+
+      <p className="mt-4 flex items-start gap-2 rounded-card bg-surface p-4 text-sm leading-relaxed text-ink-muted">
+        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+        {confirmed
+          ? "Recibirás un correo con la confirmación de tu cita y el enlace de la videollamada. Revisa también la carpeta de correo no deseado."
+          : "Recibirás un correo con la confirmación de tu cita y el enlace de la videollamada en cuanto termine de procesarse. Revisa también la carpeta de correo no deseado."}
+      </p>
+
+      <p className="mt-4 text-xs leading-relaxed text-ink-muted">
+        ¿Alguna duda? Llámanos al{" "}
+        <a href={PHONE_HREF} className="inline-flex items-center gap-1 text-accent underline underline-offset-4">
+          <Phone className="h-3 w-3" aria-hidden="true" />
+          {COMPANY.phone}
+        </a>
+      </p>
     </div>
   );
 }

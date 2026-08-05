@@ -109,3 +109,29 @@ export type CrmAppointmentRow = {
   policy_accepted_at: string;
   policy_accepted_ip: string;
 };
+
+/**
+ * What the `pagado` stage writes — and ONLY that.
+ *
+ * Written by the Square webhook, never by the browser (ADR-002). By the time
+ * this runs the row already exists in `agenda`, so it carries no contact
+ * fields: the payment cannot be the first thing we learn about a person.
+ *
+ * The columns exist in the sheet already; until FASE 6 nobody filled them.
+ *
+ * ⚠️ `meeting_url` belongs HERE, not in `CrmAppointmentRow`. The Meet link is
+ * created by `Leos Firm - Confirmar cita` after the payment clears — there is
+ * no link to write while the slot is only held (`docs/features/payments.md`).
+ */
+export type CrmPaymentRow = {
+  lead_id: string;
+  stage: CrmStage;
+  updated_at: string;
+
+  /** Square's payment id. Kept for support and for FASE 9 refunds. */
+  payment_id: string;
+  /** Plain decimal string, as every value in the sheet (`"150.00"`). */
+  amount_usd: string;
+  paid_at: string;
+  meeting_url: string;
+};

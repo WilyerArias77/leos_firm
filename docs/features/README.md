@@ -11,6 +11,7 @@ FASE 2.1) y se actualiza al terminar.
 | [`lead-diagnostic.md`](./lead-diagnostic.md) | Diagnóstico interactivo en popup y captación de leads | ✅ Completo |
 | [`crm-sheets.md`](./crm-sheets.md) | CRM en Google Sheets vía n8n | ✅ **En producción** |
 | [`scheduling.md`](./scheduling.md) | Agendamiento con calendario propio sobre Google Calendar | 📐 Diseñado — FASE 5 |
+| [`payments.md`](./payments.md) | Checkout con Square, webhook y confirmación de la cita | 📐 Diseñado — FASE 6 |
 
 ## Ciclo de cada feature
 
@@ -69,7 +70,7 @@ FASE 2.1) y se actualiza al terminar.
 | Fase | Feature | Doc |
 |------|---------|-----|
 | 5 | Agendamiento: calendario propio | ✅ `scheduling.md` (escrito) |
-| 6 | Checkout con Square + webhook | `payments.md` |
+| 6 | Checkout con Square + webhook | ✅ `payments.md` (escrito) |
 | 7 | Correos de confirmación y recordatorio por n8n | `notifications.md` |
 | 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | `appointment-management.md` |
 | 10 | Enlace de calendario para referidos | `referrals.md` |

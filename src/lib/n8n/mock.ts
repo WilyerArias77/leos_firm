@@ -107,6 +107,15 @@ function mockBooking(payload: unknown): { eventId: string } {
 
 /** Returns what the corresponding workflow would, or `null` if it has none. */
 export function mockN8nResponse(webhook: string, payload: unknown): unknown {
+  // Money is never mocked. A fake confirmation would mark an appointment as
+  // paid without a payment, which is the one lie this codebase must not tell —
+  // not even while developing. These two answer `null`, which every caller
+  // already reads as "the workflow did not respond".
+  if (webhook === "confirm" || webhook === "payments") {
+    console.error(`[n8n] webhook "${webhook}" sin configurar — no se simula nada relacionado al pago`);
+    return null;
+  }
+
   console.warn(
     `[n8n] ⚠️ MOCK activo para "${webhook}" — falta su URL. Los horarios NO son reales.`,
   );
