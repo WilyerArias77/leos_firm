@@ -67,6 +67,58 @@ export const CANCELLATION_POLICY = {
 /** How long a slot stays held while the client fills in the intake form. */
 export const SLOT_HOLD_MINUTES = 10;
 
+/**
+ * Booking window (`docs/features/scheduling.md` § Bloque C, decisiones 2 y 3).
+ *
+ * Defaults agreed on 2026-08-05, pending the client's confirmation. They are
+ * here and not inside the availability maths so that changing them is one
+ * number in one file — the same reasoning as `INITIAL_CONSULTATION`.
+ */
+export const SCHEDULING = {
+  /**
+   * A visitor cannot book sooner than this. Matches the 24 h of the
+   * cancellation policy (`context.md` §8): booking inside a window we would
+   * not let them reschedule in would be selling something already frozen.
+   */
+  minNoticeHours: 24,
+  /** How far ahead the calendar goes. Beyond this, nothing is offered. */
+  maxDaysAhead: 60,
+  /**
+   * Widest range a single availability query may span. Bounds how much of
+   * Claudia's calendar one request makes n8n read — the webhook has 8 seconds.
+   */
+  maxRangeDays: 31,
+} as const;
+
+/**
+ * Rate limit for `GET /api/v1/availability`.
+ *
+ * Far looser than the lead limit because paging through months is normal
+ * browsing, not abuse. It exists to protect the n8n instance behind it, not
+ * to police visitors.
+ */
+export const AVAILABILITY_RATE_LIMIT = {
+  maxRequests: 60,
+  windowMs: 10 * 60 * 1000,
+} as const;
+
+/** Rate limit for `POST /api/v1/appointments` — as tight as the lead one. */
+export const APPOINTMENT_RATE_LIMIT = {
+  maxRequests: 5,
+  windowMs: 10 * 60 * 1000,
+} as const;
+
+/**
+ * Where the browser keeps the contact details captured by the diagnosis, so
+ * `/agendar` can prefill them instead of asking twice
+ * (`docs/features/scheduling.md`).
+ *
+ * `sessionStorage` for the same reason as `LEAD_STORAGE_KEY`: it must survive
+ * the walk from the popup to the booking screen and nothing more. It holds
+ * PII, so it dies with the tab — never `localStorage`.
+ */
+export const LEAD_CONTACT_STORAGE_KEY = "leosfirm:lead:contacto";
+
 /** Max size per intake attachment (`docs/DB_SCHEMA.md`). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 

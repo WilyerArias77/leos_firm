@@ -2,8 +2,8 @@
 
 **Base URL:** `/api/v1`
 **Autenticación:** ver tabla por endpoint (el sitio público **no** usa JWT de cliente — ADR-001)
-**Última actualización:** 2026-08-04
-**Estado global:** `/health` y `/leads` implementados. El resto se construye en las fases 5–10 de
+**Última actualización:** 2026-08-05
+**Estado global:** `/health`, `/leads`, `/availability` y `/appointments` implementados. El resto se construye en las fases 6–10 de
 [`00-roadmap.md`](./00-roadmap.md).
 
 > **La superficie de API se redujo con ADR-010.** Varios endpoints planeados desaparecieron porque
@@ -34,8 +34,8 @@
 |--------|------|-------------|------|--------|
 | GET | `/api/v1/health` | Estado del servidor | Pública | ✅ Implementado |
 | POST | `/api/v1/leads` | Registrar lead del diagnóstico → CRM | Pública + rate limit | ✅ Implementado |
-| GET | `/api/v1/availability` | Slots libres (ocupados de Calendar ∩ horario) | Pública | ⏳ FASE 5 |
-| POST | `/api/v1/appointments` | Reservar el slot (tentativo) + CRM `agenda` | Pública | ⏳ FASE 5 |
+| GET | `/api/v1/availability` | Slots libres (ocupados de Calendar ∩ horario) | Pública + rate limit | ✅ Implementado (mock de n8n) |
+| POST | `/api/v1/appointments` | Reservar el slot (tentativo) + CRM `agenda` | Pública + rate limit | ✅ Implementado (mock de n8n) |
 | POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública | ⏳ FASE 6 |
 | POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ⏳ FASE 6 |
 | GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública (id opaco) | ⏳ FASE 6 |
@@ -159,23 +159,106 @@ ver un error. La UI usa `delivery` para decidir si muestra el teléfono de la fi
 
 ---
 
-### Disponibilidad y citas ⏳ FASE 5
+### Disponibilidad y citas ✅ (contra mock de n8n)
 
 Diseño completo en [`features/scheduling.md`](./features/scheduling.md).
 
-**`GET /api/v1/availability?from=2026-08-10&to=2026-08-31&tz=America/Mexico_City`** — Pública
+> ⚠️ **Implementados y funcionando, pero los datos todavía no son reales.** Sin
+> `N8N_AVAILABILITY_WEBHOOK_URL` / `N8N_BOOKING_WEBHOOK_URL` y fuera de producción, ambos responden
+> con un **mock local**. En producción sin esas variables responden `502` — nunca horarios
+> inventados.
 
-Pide a n8n los eventos de Claudia en el rango, los cruza con `BUSINESS_HOURS` y devuelve los slots
-libres en UTC **y** en el huso del cliente. Los eventos **tentativos también ocupan** (ADR-011).
-Si no hay nada libre → `200` con `slots: []` y `nextAvailableFrom`.
+**`GET /api/v1/availability?from=2026-08-10&to=2026-08-31&tz=America/Mexico_City&servicio=payroll`**
+— Pública · rate limit 60 peticiones / 10 min por IP · `Cache-Control: no-store`
 
-**`POST /api/v1/appointments`** — Pública
+Pide a n8n los ocupados del rango, los cruza con `BUSINESS_HOURS` y devuelve los slots libres en
+UTC, agrupados por **el día del huso del visitante**. Los eventos **tentativos también ocupan**
+(ADR-011); los cancelados y los marcados «Libre», no.
 
-Revalida el slot, crea el evento **tentativo** en el calendario de Claudia vía n8n y avanza la fila
-del CRM a `stage='agenda'`. Devuelve el `eventId` que viajará hasta el webhook de Square.
-Aquí se registran `policyAccepted`, `policy_accepted_at` y la IP (`context.md` §8.9).
+| Parámetro | Obligatorio | Notas |
+|-----------|-------------|-------|
+| `from`, `to` | sí | `YYYY-MM-DD`. Rango recortado a 31 días si se pide más |
+| `tz` | no | Huso IANA del visitante. Sin él, todo se calcula y muestra en Central |
+| `servicio` | no | Slug del catálogo; fija la duración del slot. Sin él, 60 min |
 
-**Errores:** `409 SLOT_TAKEN` (con slots alternativos) · `400 VALIDATION_ERROR`
+**Response 200**
+```json
+{
+  "data": {
+    "clientTimezone": "America/Mexico_City",
+    "businessTimezone": "America/Chicago",
+    "days": [
+      { "day": "2026-08-10", "slots": [] },
+      { "day": "2026-08-11", "slots": [
+        { "startUtc": "2026-08-11T14:00:00.000Z", "endUtc": "2026-08-11T15:00:00.000Z" }
+      ]}
+    ],
+    "nextAvailableFrom": "2026-08-11"
+  },
+  "message": "Disponibilidad consultada"
+}
+```
+
+**Todos** los días del rango vienen, incluidos los llenos con `slots: []` — la rejilla del
+calendario necesita pintarlos como "sin cupo", y que faltara la clave sería indistinguible de un día
+fuera de rango. `nextAvailableFrom` es el primer día con hueco, o `null` si el rango entero está
+lleno.
+
+**Errores:** `400 VALIDATION_ERROR` · `429 RATE_LIMITED` · **`502 UPSTREAM_ERROR`** (n8n no
+respondió — el mensaje invita a llamar por teléfono)
+
+---
+
+**`POST /api/v1/appointments`** — Pública · rate limit 5 peticiones / 10 min por IP
+
+Revalida el slot contra ocupados **frescos**, crea el evento **tentativo** vía n8n (ADR-011) y
+avanza la fila del CRM a `stage='agenda'`.
+
+**Request**
+```json
+{
+  "leadId": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
+  "serviceSlug": "payroll",
+  "startUtc": "2026-08-11T15:00:00.000Z",
+  "clientTimezone": "America/Mexico_City",
+  "fullName": "Ana Rivera",
+  "email": "ana@ejemplo.com",
+  "phone": "+52 55 1234 5678",
+  "policyAccepted": true
+}
+```
+
+Reglas:
+- `startUtc` **debe venir en UTC** (`...Z`). Aceptar un offset dejaría que el navegador decida qué
+  significa "las 9:00".
+- La duración y el nombre del servicio los resuelve el servidor leyendo el catálogo por el slug
+  (ADR-006). El cliente no manda ni duración ni monto.
+- **`policyAccepted` es lo único que viaja de la aceptación.** `policy_accepted_at` y la IP los
+  estampa el servidor: una evidencia que el cliente puede escribir no es una evidencia
+  (`context.md` §8.9).
+
+**Response 201**
+```json
+{
+  "data": {
+    "eventId": "abc123def456",
+    "startUtc": "2026-08-11T15:00:00.000Z",
+    "endUtc": "2026-08-11T16:00:00.000Z",
+    "clientTimezone": "America/Mexico_City",
+    "businessTimezone": "America/Chicago",
+    "crmDelivery": "delivered"
+  },
+  "message": "Horario apartado"
+}
+```
+
+`crmDelivery` sigue el mismo criterio que `/leads`: **un fallo del CRM no cambia el código de
+estado**. A esas alturas el slot ya está apartado de verdad, y tirar la reserva por no haber podido
+escribir una fila sería destruir algo real para castigar un fallo nuestro.
+
+**Errores:** `400 VALIDATION_ERROR` (con `details` por campo) · `404 SERVICE_NOT_FOUND` ·
+**`409 SLOT_TAKEN`** (con `data.alternatives`: los slots que sí quedan ese día) · `429 RATE_LIMITED` ·
+`502 UPSTREAM_ERROR`
 
 ---
 

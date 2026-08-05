@@ -47,6 +47,19 @@ const clientSchema = z.object({
 const n8nSchema = z.object({
   N8N_CRM_WEBHOOK_URL: z.string().url(),
   N8N_WEBHOOK_TOKEN: z.string().min(16),
+
+  /**
+   * Scheduling webhooks (FASE 5). **Optional on purpose.**
+   *
+   * They are being built by someone else, in parallel, so requiring them would
+   * take down the CRM — the one integration that IS live — until they exist.
+   * When one is missing, `requestFromN8n` falls back to a local mock outside
+   * production and refuses to answer inside it (`features/scheduling.md`
+   * § Mientras no existan las URLs).
+   */
+  N8N_AVAILABILITY_WEBHOOK_URL: z.string().url().optional(),
+  N8N_BOOKING_WEBHOOK_URL: z.string().url().optional(),
+  N8N_CONFIRM_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

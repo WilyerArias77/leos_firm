@@ -1,6 +1,6 @@
 # Roadmap por Fases — Leos Firm LLC
 
-> **Última actualización:** 2026-08-04
+> **Última actualización:** 2026-08-05
 > **Este archivo es la ÚNICA fuente de verdad del orden de trabajo.**
 > Si otro documento contradice esta tabla, gana esta tabla y el otro documento se corrige.
 
@@ -53,7 +53,7 @@ usuario.
 | 2 | Sitio público | A · Front | 6 páginas, 17 rutas | ✅ **Completa** |
 | 3 | **Diagnóstico interactivo + captación de leads** | A · Front | Popup, árbol de preguntas, `POST /leads` | ✅ **Completa** |
 | 4 | **Cobro universal + CRM en Google Sheets** | B · Back | Los 8 servicios con precio, `leads` → hoja vía n8n | ✅ **Completa** |
-| 5 | **Agendamiento: calendario propio** | B · Back | `/agendar`, disponibilidad real, reserva tentativa | ⬜ **Siguiente** |
+| 5 | **Agendamiento: calendario propio** | B · Back | `/agendar`, disponibilidad real, reserva tentativa | 🔨 **En curso** — mitad Next.js lista |
 | 6 | Square: checkout + webhook | B · Back | Cobro real, confirmación de la cita, CRM `pagado` | ⬜ Pendiente |
 | 7 | Correos por n8n | B · Back | Confirmación, recordatorios 24 h / 1 h | ⬜ Pendiente |
 | 8 | Cierre de front end | A · Front | A11Y, SEO, 404/500, contenido pendiente | ⬜ Pendiente |
@@ -116,7 +116,7 @@ integración; Supabase congelado)
 `delivery: "delivered"`. Etapas `formulario` y `agenda` probadas contra la hoja real, con upsert por
 `ID` confirmado.
 
-### FASE 5 — Agendamiento: calendario propio ⬜ SIGUIENTE
+### FASE 5 — Agendamiento: calendario propio 🔨 EN CURSO
 **Entregable:**
 - `/agendar` — resumen de lo que se contrata, leído del catálogo
 - Calendario propio dentro del sitio: días con cupo y horas libres, en el huso del visitante
@@ -141,7 +141,7 @@ cerrado y documentado campo por campo en
 | Mitad | Quién | Estado |
 |-------|-------|--------|
 | Los 4 workflows de n8n + credencial de Calendar | Wilyer | 🔨 En curso |
-| `/agendar`, los 2 endpoints y la aritmética de husos | Next.js | ⬜ Sin empezar |
+| `/agendar`, los 2 endpoints y la aritmética de husos | Next.js | ✅ **Listo** (2026-08-05, contra el mock) |
 
 La mitad de Next.js **no espera** a que existan los webhooks: se construye contra el contrato con un
 mock local, y pasar a producción es poner `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL`

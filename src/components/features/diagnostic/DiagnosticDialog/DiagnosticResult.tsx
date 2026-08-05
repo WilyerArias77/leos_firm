@@ -1,9 +1,10 @@
-import { Check, CircleCheckBig, Info, Phone } from "lucide-react";
+import { ArrowRight, Check, CircleCheckBig, Info, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { COMPANY } from "@/constants/business";
 import { DIAGNOSTIC_COPY, DIAGNOSTIC_RESULT_COPY } from "@/constants/content/diagnostic";
 import { PRICING_COPY } from "@/constants/content/services";
+import { ROUTES } from "@/constants/routes";
 import { formatPrice } from "@/lib/utils/formatCurrency";
 import type { DiagnosticResultProps } from "./DiagnosticDialog.types";
 
@@ -15,9 +16,9 @@ const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
  * The two-branch version (checkout vs. email to Claudia) died with ADR-009 —
  * every service is priced, so every visitor gets the same path.
  *
- * The screen still refuses to claim something that does not work yet: the
- * scheduling button says "próximamente" until that screen ships, and if the CRM
- * did not take the lead, the visitor is told and given the phone number.
+ * The scheduling button is live since FASE 5 and carries the deduced service
+ * to `/agendar`. If the CRM did not take the lead, the visitor is told and
+ * given the phone number — that fallback is permanent.
  */
 export function DiagnosticResult({ titleId, service, delivery, onClose }: DiagnosticResultProps) {
   const pricing = PRICING_COPY[service.pricingModel];
@@ -70,12 +71,19 @@ export function DiagnosticResult({ titleId, service, delivery, onClose }: Diagno
           {DIAGNOSTIC_RESULT_COPY.nextStepBody}
         </p>
 
-        <Button type="button" disabled className="mt-3 w-full">
-          {DIAGNOSTIC_RESULT_COPY.schedulingPendingLabel}
-        </Button>
+        {/* The single next step since ADR-009. It carries the deduced service
+            so `/agendar` reads its price and duration from the catalog — the
+            slug travels, never the amount (ADR-006). */}
+        <ButtonLink
+          href={`${ROUTES.booking}?servicio=${service.slug}`}
+          className="mt-3 w-full"
+        >
+          {DIAGNOSTIC_RESULT_COPY.scheduleLabel}
+          <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+        </ButtonLink>
 
         <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-          {DIAGNOSTIC_RESULT_COPY.schedulingPending}
+          {DIAGNOSTIC_RESULT_COPY.scheduleNote}
         </p>
       </div>
 

@@ -69,3 +69,43 @@ export type CrmRow = {
   consent_at: string;
   consent_ip: string;
 };
+
+/**
+ * What the `agenda` stage writes — and ONLY that.
+ *
+ * Each stage touches its own columns and leaves the rest alone, so booking
+ * cannot erase the diagnosis answers and the browser does not have to remember
+ * the full row (`docs/features/crm-sheets.md`).
+ *
+ * ⏳ `policy_accepted_at` and `policy_accepted_ip` have **no column in the
+ * sheet yet**. They are sent anyway: n8n drops unmapped keys, so booking keeps
+ * working and the only thing missing is the evidence. Creating the two columns
+ * and refreshing the workflow schema (25 → 27) is a hand-off documented in
+ * `crm-sheets.md` § Dos columnas nuevas.
+ */
+export type CrmAppointmentRow = {
+  lead_id: string;
+  stage: CrmStage;
+  updated_at: string;
+
+  /**
+   * Repeated from the `formulario` stage on purpose.
+   *
+   * A visitor who lands on `/agendar` without having done the diagnosis has no
+   * row yet, and writing only the appointment columns would leave Claudia with
+   * a booking under a bare UUID. For everyone else these overwrite themselves
+   * with identical values, which costs nothing.
+   */
+  full_name: string;
+  email: string;
+  phone: string;
+
+  /** UTC instant of the appointment. The sheet shows it as text. */
+  appointment_at: string;
+  /** The visitor's zone, so Claudia knows what time THEY think it is. */
+  appointment_timezone: string;
+
+  /** Evidence of the cancellation policy acceptance (`context.md` §8.9). */
+  policy_accepted_at: string;
+  policy_accepted_ip: string;
+};

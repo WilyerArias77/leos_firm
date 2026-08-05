@@ -1,4 +1,4 @@
-import { LEAD_STORAGE_KEY } from "@/constants/business";
+import { LEAD_CONTACT_STORAGE_KEY, LEAD_STORAGE_KEY } from "@/constants/business";
 import { API_ROUTES } from "@/constants/routes";
 import { leadSchema, toFieldErrors } from "@/lib/validation/lead.schema";
 import type { LeadPayload } from "@/lib/validation/lead.schema";
@@ -33,6 +33,56 @@ export function getStoredLeadId(): string | null {
   if (typeof window === "undefined") return null;
 
   return window.sessionStorage.getItem(LEAD_STORAGE_KEY);
+}
+
+/** What the booking screen needs to name the appointment. */
+export type StoredContact = {
+  fullName: string;
+  email: string;
+  phone: string;
+};
+
+/**
+ * Remembers the contact details for the booking screen
+ * (`docs/features/scheduling.md`).
+ *
+ * The CRM already has them, but Next.js never reads the sheet back — it only
+ * writes to it. Without this, `/agendar` would have to ask the same person for
+ * the same four fields thirty seconds after they typed them, at the step right
+ * before payment, which is where people quit.
+ *
+ * `sessionStorage` and not `localStorage`, on purpose: this is PII, so it must
+ * die with the tab (`docs/03-security.md` §PII).
+ */
+function storeContact(contact: StoredContact): void {
+  try {
+    window.sessionStorage.setItem(LEAD_CONTACT_STORAGE_KEY, JSON.stringify(contact));
+  } catch {
+    // Private browsing or a full quota. Not worth failing the submission over:
+    // the booking screen just asks for the details again.
+  }
+}
+
+export function getStoredContact(): StoredContact | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(LEAD_CONTACT_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const { fullName, email, phone } = parsed as Record<string, unknown>;
+
+    if (typeof fullName !== "string" || typeof email !== "string" || typeof phone !== "string") {
+      return null;
+    }
+
+    return { fullName, email, phone };
+  } catch {
+    return null;
+  }
 }
 
 export async function submitLead(draft: LeadDraft): Promise<LeadSubmission> {
@@ -70,6 +120,11 @@ export async function submitLead(draft: LeadDraft): Promise<LeadSubmission> {
     // The id is kept even when the CRM write failed: the next steps still need
     // to name this row, and a retry from the scheduling screen can complete it.
     window.sessionStorage.setItem(LEAD_STORAGE_KEY, leadId);
+    storeContact({
+      fullName: parsed.data.fullName,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+    });
 
     return { ok: true, leadId, delivery: body.data?.delivery ?? "failed" };
   } catch {

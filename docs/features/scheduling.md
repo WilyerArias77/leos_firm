@@ -1,8 +1,12 @@
 # Feature: Agendamiento — calendario propio sobre Google Calendar
 
-> **Estado:** 📐 Diseñado · **contrato Next.js ↔ n8n cerrado el 2026-08-05** · ninguna de las dos
-> mitades implementada. Se construyen **en paralelo** contra el contrato — ver § Contrato exacto
+> **Estado:** 🔨 **Mitad de Next.js implementada** (2026-08-05) contra el contrato, con un mock
+> local en lugar de n8n. Los 4 workflows siguen en construcción — ver § Contrato exacto y § Qué
+> falta para que esto sea real
 > **Última actualización:** 2026-08-05
+> **Archivos clave:** `src/lib/utils/timezone.ts`, `src/services/availability.service.ts`,
+> `src/services/scheduling.service.ts`, `src/app/api/v1/{availability,appointments}/route.ts`,
+> `src/components/features/scheduling/`, `src/app/(public)/agendar/page.tsx`
 > **Cuenta de Google:** el calendario y las credenciales viven en el **Google Console del cliente,
 > cuenta `marco@leosfirm.com`** — ver § Bloque A y ADR-012
 > **Decisiones asociadas:** ADR-003 (Calendar es la verdad de la disponibilidad),
@@ -369,17 +373,74 @@ Sin cambios respecto a `02-architecture.md`, y son la parte del diseño donde es
 - Todo pasa por `src/lib/utils/timezone.ts`. Nunca `new Date(string)` a mano.
 - El horario de verano no se calcula: lo resuelve `@date-fns/tz` con la base de datos IANA.
 
-## Componentes previstos
+## Cómo quedó construido
+
+```
+NAVEGADOR                          SERVIDOR                        n8n
+─────────                          ────────                        ───
+BookingFlow ── useAvailability ──▶ GET  /api/v1/availability ──▶ (mock por ahora)
+  ├─ TimezoneNotice                     └─ fetchBusyBlocks
+  ├─ AvailabilityCalendar               └─ buildAvailability   ← toda la aritmética
+  ├─ SlotPicker                              (función PURA)
+  └─ BookingForm ─────────────────▶ POST /api/v1/appointments ──▶ (mock por ahora)
+                                         └─ isSlotBookable    ← revalida
+                                         └─ holdSlot
+                                         └─ syncAppointmentToCrm (n8n real)
+```
+
+| Archivo | Qué hace |
+|---------|----------|
+| `src/lib/utils/timezone.ts` | Única puerta a las fechas. `TZDate` para calcular, `Intl` para presentar |
+| `src/services/availability.service.ts` | **Pura**: ocupados ∩ `BUSINESS_HOURS`. Sin red, sin reloj propio |
+| `src/services/scheduling.service.ts` | Lo que sí toca n8n: pedir ocupados, apartar el slot |
+| `src/services/appointment.service.ts` | El lado del navegador: habla con **nuestra** API, nunca con n8n |
+| `src/hooks/useAvailability.ts` | Estado del mes en pantalla; cancela peticiones viejas |
+| `src/lib/validation/appointment.schema.ts` | El mismo Zod en cliente y servidor |
+| `src/lib/n8n/mock.ts` | ⚠️ Temporal. Se borra cuando existan los webhooks |
 
 ```
 src/components/features/scheduling/
+├── BookingFlow/             # Orquesta mes → día → hora → confirmar
 ├── AvailabilityCalendar/    # Rejilla del mes; marca los días con cupo
 ├── SlotPicker/              # Horas del día elegido, en el huso del visitante
+├── BookingForm/             # Confirma contacto y registra la aceptación de la política
 └── TimezoneNotice/          # "Ves los horarios en <tu huso>. Claudia atiende en San Antonio."
 ```
 
-`useAvailability.ts` (hook) trae los slots; `appointment.service.ts` hace las llamadas. Los
-componentes no hablan con la red (Mandamiento II).
+`BookingForm` no estaba en el diseño original: hace falta porque la aceptación de la política es
+entregable de esta fase y tiene que ocurrir en algún sitio. Ningún componente habla con la red
+(Mandamiento II).
+
+### Decisiones que tomó la implementación
+
+- **`toUtcIso()` existe por una trampa real.** `TZDate` **sobrescribe** `toISOString()` y devuelve
+  `2026-08-12T09:00:00.000-05:00` en vez de `...T14:00:00.000Z`. Nombran el mismo instante, pero
+  todo lo que sale de la app está documentado como UTC. Nunca llamar `.toISOString()` sobre un
+  `TZDate`.
+- **Los días se agrupan por el huso del VISITANTE**, no por el de la firma. Un hueco de las 10:00 en
+  San Antonio ya es el día siguiente en Tokio, y tiene que aparecer en el cuadrito que esa persona
+  miraría. Por eso `tz` es parámetro del endpoint.
+- **`isSlotBookable` está construido ENCIMA de `buildAvailability`.** Una segunda implementación de
+  la misma regla se desincroniza el día que cambie el horario de oficina; así, lo que se ofrece y lo
+  que se acepta son literalmente el mismo cálculo.
+- **`null` ≠ `[]` al pedir ocupados.** `[]` es "la agenda está libre"; `null` es "no pudimos
+  preguntar". Convertir el segundo en el primero mostraría una agenda abierta construida sobre
+  ninguna información. Por eso un fallo de n8n devuelve `502` y el teléfono.
+- **Quien llega a `/agendar` sin diagnóstico** recibe un `leadId` nuevo, y la etapa `agenda` escribe
+  también nombre, correo y teléfono — si no, Claudia vería una cita bajo un UUID pelado.
+
+## Qué falta para que esto sea real
+
+| # | Pendiente | De quién depende |
+|---|-----------|------------------|
+| 1 | Los 4 workflows de n8n + credencial de Calendar | Equipo de n8n · § Manual de puesta en marcha |
+| 2 | `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL` en `.env.local` y en Vercel | — |
+| 3 | Las 2 columnas nuevas de la hoja del CRM | Equipo de n8n · [`crm-sheets.md`](./crm-sheets.md) |
+| 4 | Pago con Square: hoy la pantalla final ofrece el teléfono | FASE 6 |
+| 5 | Confirmar `bufferMinutes` con la clienta | § Bloque C, decisión 6 |
+
+**Nada de eso exige tocar el código de Next.js.** El punto 2 es poner dos variables y volver a
+desplegar; el mock deja de usarse solo.
 
 ## Restricciones
 

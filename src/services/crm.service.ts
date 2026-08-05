@@ -5,7 +5,7 @@ import { postToN8n } from "@/lib/n8n/client";
 import { describeSteps, hasUsEntity } from "@/services/diagnostic.service";
 import { getServiceBySlug } from "@/services/service.service";
 import type { LeadPayload } from "@/lib/validation/lead.schema";
-import type { CrmDelivery, CrmRow, CrmStage } from "@/types/crm.types";
+import type { CrmAppointmentRow, CrmDelivery, CrmRow, CrmStage } from "@/types/crm.types";
 import type { DiagnosticStep } from "@/types/diagnostic.types";
 
 /**
@@ -128,6 +128,52 @@ export async function buildLeadRow(lead: LeadPayload, ip: string): Promise<CrmRo
  */
 export async function syncLeadToCrm(lead: LeadPayload, ip: string): Promise<CrmDelivery> {
   const row = await buildLeadRow(lead, ip);
+  const accepted = await postToN8n("crm", row);
+
+  return accepted ? "delivered" : "failed";
+}
+
+/**
+ * Advances the row to `agenda`: the visitor picked a time and the slot is held,
+ * payment still pending (`docs/features/crm-sheets.md`).
+ *
+ * Writes only its own columns, so the diagnosis answers survive untouched. The
+ * meeting link is deliberately absent — there is no Meet until Square confirms
+ * the payment, and writing an empty one would look like a lost value.
+ *
+ * Same failure contract as the lead: returns `"failed"` instead of throwing.
+ * The slot IS held at this point, so a CRM outage must not undo a real
+ * booking — the visitor keeps their appointment and we log the missing row.
+ */
+export async function syncAppointmentToCrm(appointment: {
+  leadId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  startUtc: string;
+  clientTimezone: string;
+  policyAcceptedIp: string;
+}): Promise<CrmDelivery> {
+  const now = new Date().toISOString();
+
+  const row: CrmAppointmentRow = {
+    lead_id: appointment.leadId,
+    stage: "agenda" satisfies CrmStage,
+    updated_at: now,
+
+    full_name: appointment.fullName,
+    email: appointment.email,
+    phone: appointment.phone,
+
+    appointment_at: appointment.startUtc,
+    appointment_timezone: appointment.clientTimezone,
+
+    // Stamped here, never accepted from the browser: evidence the client can
+    // write is not evidence. Mirrors `consent_at` / `consent_ip` above.
+    policy_accepted_at: now,
+    policy_accepted_ip: appointment.policyAcceptedIp,
+  };
+
   const accepted = await postToN8n("crm", row);
 
   return accepted ? "delivered" : "failed";

@@ -101,6 +101,81 @@
 
 ---
 
+## [2026-08-05] — Agendamiento: la mitad de Next.js (FASE 5) — v0.5.0
+
+### Request original
+> Vamos a implementar la mitad de Next.js de la FASE 5 […] construimos contra ese contrato con un
+> mock del lado del cliente n8n, de forma que cambiar al webhook real después sea solo una variable
+> de entorno, sin tocar lógica. · no toques n8n mi compañero se encarga de eso ·
+> comienza de inmediato a desarrollar
+
+### Tipo de cambio
+- **ADDED**: `/agendar` — calendario propio dentro del sitio, en el huso del visitante
+- **ADDED**: `GET /api/v1/availability` y `POST /api/v1/appointments`
+- **ADDED**: `src/lib/utils/timezone.ts` — la única puerta a las fechas
+- **ADDED**: `availability.service.ts` (**pura**), `scheduling.service.ts`, `appointment.service.ts`,
+  `useAvailability.ts`, 5 componentes de `features/scheduling/`
+- **ADDED**: `src/lib/n8n/mock.ts` — **temporal**, se borra cuando existan los webhooks
+- **CHANGED**: `requestFromN8n<T>()` junto a `postToN8n` — el CRM solo necesita saber si n8n aceptó;
+  el agendamiento necesita la **respuesta**
+- **CHANGED**: el botón "Agendar y pagar (próximamente)" del diagnóstico ahora lleva a `/agendar`
+- **CHANGED**: la etapa `agenda` del CRM escribe también nombre, correo y teléfono
+
+### Lo que se verificó de verdad
+- **27 comprobaciones** de la aritmética de disponibilidad, con un script desechable: horario de
+  verano a ambos lados del cambio del 1-nov, eventos de día completo, cancelados, marcados «Libre»,
+  corrimiento de día entre husos (Tokio), anticipación de 24 h, ventana de 60 días y revalidación
+  del servidor (sábados, horas inventadas, fechas basura). **Las 27 en verde.**
+- Los dos endpoints, contra el mock: disponibilidad por rango, reserva válida (`201` + `eventId`),
+  `409 SLOT_TAKEN` con 7 alternativas, y `400` cuando no se acepta la política.
+- `/agendar`, `/agendar?servicio=payroll` y un slug inexistente → `200` los tres; el inválido cae al
+  selector de servicios en vez de romper.
+- `npm run lint` ✅ · `npm run build` ✅ (19 rutas)
+
+### Dos trampas encontradas al construir
+1. **`TZDate` sobrescribe `toISOString()`** y devuelve `2026-08-12T09:00:00.000-05:00` en lugar de
+   `2026-08-12T14:00:00.000Z`. Nombran el mismo instante, pero todo lo que sale de la app está
+   documentado como UTC: n8n y Google habrían recibido algo distinto del contrato. De ahí
+   `toUtcIso()`, y la regla de **nunca** llamar `.toISOString()` sobre un `TZDate`.
+2. **El linter de React prohíbe `setState` dentro de un efecto** y **leer refs en render**. El hook
+   pasó a **derivar** `loading` (comparar lo pedido con lo recibido) y `BookingFlow` a
+   `useSyncExternalStore` + inicializadores perezosos. Sale mejor que la versión original: un render
+   menos por cada cambio de mes.
+
+### Archivos creados
+`src/lib/utils/timezone.ts` · `src/types/scheduling.types.ts` ·
+`src/lib/validation/appointment.schema.ts` · `src/lib/n8n/mock.ts` ·
+`src/services/{availability,scheduling,appointment}.service.ts` · `src/hooks/useAvailability.ts` ·
+`src/app/api/v1/{availability,appointments}/route.ts` · `src/app/(public)/agendar/page.tsx` ·
+`src/components/features/scheduling/{BookingFlow,AvailabilityCalendar,SlotPicker,BookingForm,TimezoneNotice}/`
+
+### Archivos modificados
+- `src/constants/business.ts` — `SCHEDULING`, los dos rate limits, `LEAD_CONTACT_STORAGE_KEY`
+- `src/lib/env.ts` — 3 variables de n8n, **opcionales** para no tumbar el CRM
+- `src/lib/n8n/client.ts` — `requestFromN8n` + salida al mock
+- `src/services/crm.service.ts` · `src/types/crm.types.ts` — etapa `agenda`
+- `src/services/lead.service.ts` — guarda el contacto en `sessionStorage`
+- `src/constants/content/diagnostic.ts` · `.../DiagnosticResult.tsx` — CTA destrabado
+- Docs: `features/scheduling.md`, `API_DOCS.md`, `00-roadmap.md`
+
+### Cambios en base de datos
+- Ninguno. Supabase sigue congelado (ADR-010).
+
+### Notas
+- ⚠️ **Los horarios que se ven hoy son del mock.** Faltan `N8N_AVAILABILITY_WEBHOOK_URL` y
+  `N8N_BOOKING_WEBHOOK_URL`. En producción sin ellas, `/agendar` responde `502` con el teléfono —
+  **el mock no puede activarse en un sitio publicado**.
+- ⚠️ **`N8N_WEBHOOK_TOKEN` está VACÍA en el `.env.local` de esta máquina**, así que el CRM devuelve
+  `delivery: "failed"` en local. No es de este cambio: viene de la FASE 4 y afecta también a
+  `/leads`. En Vercel hay que verificarla aparte.
+- ⚠️ **Sin las 2 columnas nuevas de la hoja**, la evidencia de aceptación de la política se pierde en
+  silencio. El agendamiento funciona igual.
+- ⚠️ **`bufferMinutes` sigue sin decidir** (§ Bloque C, decisión 6). Hoy no se aplica.
+- La pantalla final **no dice que la cita esté confirmada**: dice que el horario está apartado y
+  ofrece el teléfono. Ninguna cita existe sin pago (`context.md` §8), y el pago es la FASE 6.
+
+---
+
 ## [2026-08-05] — Contrato Next.js ↔ n8n del agendamiento — v0.4.2
 
 ### Request original
