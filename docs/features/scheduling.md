@@ -112,6 +112,23 @@ cuarto es programado.
 > **Poner las dos o ninguna.** Con solo la de disponibilidad, el visitante ve el calendario, elige
 > hora y la reserva le falla al final. Peor que no ofrecerla.
 
+**Conectado y verificado en local el 2026-08-05.** Con las variables puestas, el mock se apaga solo y
+`GET /api/v1/availability` del 14 de septiembre devuelve el día **sin la franja de las 15:00Z** — que
+es justo donde está la reserva tentativa de prueba. El 15 de septiembre sí la tiene. Es la
+demostración de que la cadena completa funciona sobre datos reales, no sobre el mock.
+
+> 🔴 **Falta Vercel.** En producción las tres variables no están, así que el sitio desplegado sigue
+> devolviendo `502` en `/agendar` — que es el comportamiento correcto y deliberado: nunca horarios
+> inventados. Hay que ponerlas en el panel **y volver a desplegar**.
+
+> ⚠️ **Deuda del WF1: transforma cuando el contrato pide crudo.** Su nodo Code descarta los
+> `cancelled` y los `transparency: transparent`, y convierte los eventos de día completo
+> (`start.date`) a medianoche UTC. Next.js ya hace las tres cosas, así que hoy es trabajo duplicado
+> que **funciona bien** — la conversión cubre de sobra la franja 9-17 `America/Chicago`. Pero el
+> § Contrato exacto prefiere la *forma B*, los objetos crudos de Google: menos nodos, menos que se
+> rompa. Simplificarlo exige actualizar el workflow (lo que resetea su credencial) y volver a
+> publicarlo, así que **queda anotado como deuda, no como fallo**.
+
 Los tres webhooks usan **la misma credencial Header Auth que el CRM** (`Leos Firm - Token del
 sitio`, header `x-leosfirm-token`), así que comparten el `N8N_WEBHOOK_TOKEN` que ya existe. No hay
 un secreto nuevo que repartir.

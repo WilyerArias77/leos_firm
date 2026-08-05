@@ -6,6 +6,57 @@
 
 ---
 
+## [2026-08-05] — Las dos mitades conectadas: el mock se apaga — v0.5.2
+
+### Request original
+> Tu tarea es CONECTAR las dos mitades. No rehagas nada de Next.js: ya está hecho, probado y
+> compilando.
+
+### Tipo de cambio
+- **CONNECTED**: las tres variables de agendamiento en `.env` local. El mock de
+  `src/lib/n8n/mock.ts` **se apaga solo**; no se tocó una línea de código
+- **VERIFIED (punta a punta, contra datos reales)**: `GET /api/v1/availability` para el
+  2026-09-14 devuelve el día **sin la franja de las 15:00Z**, que es exactamente donde está la
+  reserva tentativa de prueba creada por el WF2. El 15 de septiembre sí la tiene. La cadena
+  navegador → Next.js → n8n → Google Calendar → hueco descontado **funciona**
+- **VERIFIED**: `/agendar?servicio=consultoria-fiscal-extranjeros` responde `200` y el log del
+  servidor **no** muestra `[n8n] ⚠️ MOCK activo`
+- **VERIFIED**: los 4 workflows cumplen 5 de los 6 puntos del contrato (ver § Notas para el sexto)
+
+### Archivos modificados
+- `.env` — tres variables nuevas (**no se commitea**, está en `.gitignore`)
+- `CHANGELOG.md` · `docs/features/scheduling.md` — estado de la conexión y la desviación del WF1
+
+**Sin cambios en `src/`.** Conectar era poner variables, exactamente como estaba previsto.
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅ (sin avisos)
+- `/agendar` → `200` · `/api/v1/availability` → slots reales del calendario de la firma
+
+### Notas
+- 🔴 **Vercel sigue pendiente y no lo puedo hacer yo:** el conector de Vercel **no está autenticado**
+  en esta sesión. Las tres variables hay que ponerlas a mano en el panel de Vercel y **volver a
+  desplegar** — Vercel no recoge variables nuevas en un despliegue ya hecho.
+- ⏳ **Las dos columnas del CRM siguen sin crear.** El paso 1 (añadirlas a la hoja) es manual: no
+  tengo acceso de escritura a ese documento. Los pasos 2 y 3 (refrescar el esquema a 27 columnas y
+  mapear los dos campos en el nodo `agenda`) los hago yo en cuanto existan. Mientras tanto,
+  `policy_accepted_at` y `policy_accepted_ip` **se pierden en silencio**.
+- ⚠️ **Punto 5 del contrato incumplido: el WF1 sí transforma.** Su nodo Code descarta los
+  `cancelled` y los `transparency: transparent`, y convierte los eventos de día completo
+  (`start.date`) a medianoche UTC. Next.js ya hace las tres cosas, así que hoy es trabajo duplicado
+  y **funciona correctamente** — la conversión de día completo cubre de sobra la franja 9-17
+  `America/Chicago`. Pero el contrato pide crudo y el doc lo llama "probablemente la más segura":
+  menos nodos, menos que se rompa. **Queda como deuda, no como fallo.**
+- ⏳ El WF4 sigue con el nodo de borrar **desconectado**. Ahora que Reservar slot está publicado, cada
+  checkout abandonado deja basura real en la agenda.
+- `N8N_CONFIRM_WEBHOOK_URL` queda puesta pero **no responde**: el WF3 existe y está probado, pero no
+  se publica hasta la FASE 6 porque lo dispara Square.
+
+---
+
 ## [2026-08-05] — Contrato alineado y los dos webhooks publicados — v0.5.1
 
 ### Request original
