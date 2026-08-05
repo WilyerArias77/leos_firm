@@ -119,8 +119,13 @@ automática, y el visitante tiene un camino claro.
 
 | Variable | Qué es |
 |----------|--------|
-| `N8N_CRM_WEBHOOK_URL` | URL **de producción** del webhook (`https://ain8n.growingup.digital/webhook/leos-firm/crm`) |
+| `N8N_CRM_WEBHOOK_URL` | URL **de producción** del webhook: `<host-webhook>/webhook/leos-firm/crm` |
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido; viaja en el header `x-leosfirm-token` |
+
+> ⚠️ **El host del webhook NO es el del editor de n8n.** Esta instancia sirve los webhooks desde un
+> subdominio distinto al de la interfaz. Copiar la URL del panel del nodo Webhook (pestaña
+> *Production URL*) en lugar de construirla a mano — y **nunca** usar la *Test URL*, que solo
+> responde mientras alguien tiene el editor abierto escuchando.
 
 `getN8nEnv()` es el **único** getter de entorno que no lanza cuando falta una variable, y la
 excepción es deliberada: está explicada en `src/lib/env.ts` y en `03-security.md`.
