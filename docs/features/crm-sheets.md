@@ -287,6 +287,18 @@ describe lo que esa etapa escribe.
 > Si el error reaparece tras editar la hoja, es que n8n perdió el esquema: abrir el nodo, refrescar
 > las columnas y volver a elegir **ID** en *Column to Match On*.
 
+### ⚠️ Guardar un workflow NO lo pone en producción
+
+Esta instancia separa **versión guardada** de **versión activa**. Un `update_workflow` deja un
+borrador nuevo (`versionId`) y **`activeVersionId` sigue apuntando a la anterior**: el webhook que
+corre de verdad no cambia. Hay que **publicar** explícitamente.
+
+Es una trampa silenciosa: la actualización responde `success`, el workflow sigue `active: true`, y
+todo parece hecho — mientras la corrección no existe para nadie. **Verificar siempre comparando
+`versionId` con `activeVersionId`**, no el `active`.
+
+Pasó exactamente así al corregir el `Enlace de la reunion` el 2026-08-05.
+
 ### El documento se referencia por ID, no por URL
 
 Una URL hay que parsearla y se puede truncar al copiarla; un ID no cambia nunca. Usar siempre
@@ -313,9 +325,14 @@ y **distingue mayúsculas**.
       desplegado guarda cero leads, en silencio. **Es lo único que separa esto de estar en producción.**
 - [ ] Etapa `agenda` — el workflow ya la maneja y está probada; falta la pantalla que la dispare
       ([`scheduling.md`](./scheduling.md)).
-- [ ] Etapa `pagado` — la escribe el webhook de Square ([`payments.md`](./payments.md), ya escrito).
-      Añade además una **pestaña `Pagos`** a esta misma hoja (ADR-013) y corrige la atribución de
-      `Enlace de la reunion`: la escribe `pagado`, no `agenda` — el Meet no existe antes del pago.
+- [x] **`Enlace de la reunion` corregido en el WF1 y publicado (2026-08-05).** La escribe `pagado`,
+      no `agenda` — el Meet no existe antes del pago. Hasta ese día **el enlace no llegaba nunca a la
+      hoja**: el nodo de pago no mapeaba la columna y el de agenda la mapeaba contra un campo
+      inexistente. En la misma pasada, el nodo de `agenda` empezó a escribir **`Nombre`, `Correo` y
+      `Telefono`**, que `CrmAppointmentRow` manda desde siempre y el workflow descartaba: quien
+      agenda sin haber hecho el diagnóstico ya no aparece como un UUID pelado.
+- [ ] Etapa `pagado` — la escribe el webhook de Square ([`payments.md`](./payments.md)). Falta añadir
+      la **pestaña `Pagos`** a esta misma hoja (ADR-013).
 - [ ] Hacer respetar `CRM_STAGE_ORDER` en el workflow (hoy la protección está definida en el tipo
       pero no aplicada: un `agenda` que llegue después de un `pagado` degradaría la fila).
 - [ ] Vista de resumen para Claudia (tabla dinámica o segunda hoja con los del mes).

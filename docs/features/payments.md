@@ -600,13 +600,12 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
 - [ ] ⛔ **Publicar el WF5** — creado pero inactivo. Mientras siga así, el webhook responde `503` y
       **ningún pago se confirma** (§ *Qué pasa hoy si alguien paga*)
 - [ ] ⛔ **WF3: contrato nuevo + `If-Match`, y publicarlo** (hoy no lo está a propósito)
-- [ ] ⛔ **WF1 `CRM de leads`: mover `Enlace de la reunion` de la etapa `agenda` a `pagado`.** No es
-      solo la corrección documental que ya estaba anotada: **es un dato que hoy se pierde.** El nodo
-      *Guardar pago confirmado* no mapea esa columna, así que el `meeting_url` que manda
-      `syncPaymentToCrm` no se escribe nunca, y el nodo *Guardar cita elegida* sí la mapea contra un
-      campo que `CrmAppointmentRow` **no tiene** — escribe vacío. Resultado: el enlace de la
-      videollamada no llega jamás a la hoja. **El WF1 está activo**, así que tocarlo es un cambio en
-      producción
+- [x] **WF1 `CRM de leads`: `Enlace de la reunion` movido de `agenda` a `pagado`** y publicado
+      (2026-08-05). No era solo la corrección documental anotada: **era un dato que se perdía.**
+      *Guardar pago confirmado* no mapeaba esa columna, así que el `meeting_url` de
+      `syncPaymentToCrm` se descartaba; y *Guardar cita elegida* sí la mapeaba, contra un campo que
+      `CrmAppointmentRow` no tiene — escribía vacío. El enlace de la videollamada no llegaba nunca a
+      la hoja
 - [ ] ⛔ **Poner `30` dentro del nodo Code del WF4**, o el limpiador borra slots a los 10 minutos
       mientras el código promete 30
 - [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox

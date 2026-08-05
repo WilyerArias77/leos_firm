@@ -24,11 +24,20 @@
   búsqueda —vacío en el caso normal—, así que `$json.body.payment_id` habría escrito una fila en blanco
 - **DECIDED**: el nodo de cierre **no mapea `Recibido el`**, para no machacar la hora del reclamo con
   la del cierre — es el único dato que dice cuánto tardó en confirmarse
-- **FOUND (defecto en producción, sin corregir todavía)**: el WF1 `CRM de leads` **pierde el enlace de
-  la videollamada**. Su nodo *Guardar pago confirmado* no mapea `Enlace de la reunion`, así que el
-  `meeting_url` que manda `syncPaymentToCrm` no se escribe nunca; y *Guardar cita elegida* sí la
-  mapea, contra un campo que `CrmAppointmentRow` no tiene, escribiendo vacío. Estaba anotado como
-  corrección documental en `crm-sheets.md`; es un dato que se pierde
+- **FIXED (defecto en producción)**: el WF1 `CRM de leads` **perdía el enlace de la videollamada**.
+  Su nodo *Guardar pago confirmado* no mapeaba `Enlace de la reunion`, así que el `meeting_url` que
+  manda `syncPaymentToCrm` no se escribía nunca; y *Guardar cita elegida* sí la mapeaba, contra un
+  campo que `CrmAppointmentRow` no tiene, escribiendo vacío. Estaba anotado como corrección
+  documental en `crm-sheets.md`; era un dato que se perdía. Corregido y **publicado**
+- **FIXED (encontrado al reconstruir el WF1)**: el nodo de `agenda` **descartaba `Nombre`, `Correo` y
+  `Telefono`**, que `CrmAppointmentRow` manda desde siempre y a propósito. Para quien hizo el
+  diagnóstico son los mismos valores reescritos; para quien agenda en frío era la diferencia entre
+  una fila con nombre y una fila con un UUID pelado. **Es un cambio más de lo anunciado al pedir
+  autorización** — se deja hecho porque es estrictamente aditivo y el contrato del tipo ya lo pedía
+- **LEARNED**: **guardar un workflow no lo pone en producción.** Esta instancia separa `versionId` de
+  `activeVersionId`: un `update_workflow` deja un borrador y el webhook que corre sigue siendo el
+  anterior. La llamada responde `success`, el workflow sigue `active: true` y todo parece hecho
+  mientras la corrección no existe para nadie. Documentado en `crm-sheets.md`
 
 ### Archivos modificados
 - `docs/features/payments.md` · `CHANGELOG.md`
