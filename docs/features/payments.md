@@ -374,6 +374,21 @@ Webhook POST /leos-firm/pago   (Header Auth, el mismo x-leosfirm-token, response
 **Las credenciales quedaron asignadas solas** al crearlo: `Leos Firm - Token del sitio` (Header Auth)
 y `api_sheet_aiinovate` (Google Sheets). No hay que reconectarlas a mano.
 
+**Publicado y probado contra la hoja real el 2026-08-05**, los tres caminos, con
+`payment_id = PRUEBA-BORRAR-001`:
+
+| Prueba | Resultado |
+|---|---|
+| Primer aviso de un pago nuevo | Escribe la fila, responde `{ duplicate: false }` |
+| **El mismo pago otra vez** (lo que Square hace SIEMPRE) | Encuentra la fila, responde `{ duplicate: true }`, **no escribe una segunda** |
+| Cierre con `status: confirmado` | Actualiza **la misma** fila con lead, servicio, evento y Meet |
+| El cierre **no** pisa `Recibido el` | Verificado con un centinela: se le mandó `9999-99-99-NO-DEBE-ESCRIBIRSE` en `received_at` y no llegó a la hoja |
+
+> **El primer intento falló, y por eso se prueba.** La pestaña se había creado con los encabezados
+> escritos a mano: se habían caído los seis paréntesis (`Pago` en vez de `Pago (Square)`) y una
+> mayúscula (`Id del lead`). n8n respondió *"Column names were updated after the node's setup"* y
+> **no escribió nada**. Sin esta prueba, ese error habría aparecido con el primer pago real.
+
 **Ninguna variable de entorno nueva más allá de `N8N_PAYMENTS_WEBHOOK_URL`**, ya declarada. El token
 es el que ya existe.
 
@@ -594,11 +609,14 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
 ### Lo que falta, y sin esto NO hay cobro funcionando
 
 - [x] **WF5 `Leos Firm - Registrar pago` creado** (`PkwmwCia2wqQzXwG`), con credenciales asignadas
-- [ ] ⛔ **Crear la pestaña `Pagos`** con sus 11 encabezados, **antes** de publicar el WF5 y antes de
-      su primera ejecución. Si el WF5 corre contra una pestaña que no existe, el nodo lanza y **nadie
-      responde el webhook** — el mismo `503`, por otro motivo
-- [ ] ⛔ **Publicar el WF5** — creado pero inactivo. Mientras siga así, el webhook responde `503` y
-      **ningún pago se confirma** (§ *Qué pasa hoy si alguien paga*)
+- [x] **Pestaña `Pagos` creada** con sus 11 encabezados (2026-08-05)
+- [x] **WF5 publicado y probado de verdad** (2026-08-05): los tres caminos, contra la hoja real
+- [ ] ⛔ **`N8N_PAYMENTS_WEBHOOK_URL` en Vercel** (y en `.env` local) =
+      `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/pago`. **Es el bloqueante nº 1 ahora.**
+      Sin ella `requestFromN8n("payments")` devuelve `null` sin llamar a nadie, y el webhook de Square
+      responde `503` igual que si el WF5 no existiera. Es la misma lección que ya costó tener el CRM
+      guardando cero leads en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**
+- [ ] Borrar la fila de prueba `PRUEBA-BORRAR-001` de la pestaña `Pagos` (fila 2)
 - [ ] ⛔ **WF3: contrato nuevo + `If-Match`, y publicarlo** (hoy no lo está a propósito)
 - [x] **WF1 `CRM de leads`: `Enlace de la reunion` movido de `agenda` a `pagado`** y publicado
       (2026-08-05). No era solo la corrección documental anotada: **era un dato que se perdía.**

@@ -6,6 +6,51 @@
 
 ---
 
+## [2026-08-05] — WF5 publicado y probado contra la hoja real — v0.6.2
+
+### Request original
+> dame los 11 encabezados para la pestaña "Pagos" … ya cree la pestaña pagos con sus encabezados …
+> ya hice las correcciones
+
+### Tipo de cambio
+- **PUBLISHED**: `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) — activo
+- **VERIFIED (contra la hoja real, no en seco)**: los tres caminos del WF5 con
+  `payment_id = PRUEBA-BORRAR-001`:
+  1. primer aviso → escribe la fila, responde `{ duplicate: false }`
+  2. **el mismo pago otra vez** —lo que Square hace siempre— → responde `{ duplicate: true }` y **no
+     escribe una segunda fila**. Es el anti-replay de ADR-013 funcionando de verdad
+  3. cierre con `status: confirmado` → actualiza **la misma** fila con lead, servicio, evento y Meet
+- **VERIFIED**: el cierre **no pisa `Recibido el`**. Probado con un centinela: se mandó
+  `9999-99-99-NO-DEBE-ESCRIBIRSE` en `received_at` y no llegó a la hoja
+- **FOUND por la prueba**: la pestaña se había creado con los encabezados escritos a mano y se habían
+  caído los **seis paréntesis** (`Pago` en vez de `Pago (Square)`, `Evento` en vez de
+  `Evento (Calendar)`…) y una mayúscula (`Id del lead`). n8n respondió *"Column names were updated
+  after the node's setup"* y **no escribió nada**. Corregido pegando la fila de encabezados
+
+### Archivos modificados
+- `docs/features/payments.md` · `CHANGELOG.md`
+- Fuera del repo: pestaña `Pagos` en la hoja del CRM · workflow `PkwmwCia2wqQzXwG` publicado
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010). En la hoja: pestaña `Pagos` creada con sus 11 encabezados.
+
+### Validación
+- Tres ejecuciones reales del WF5 (`482` fallida, `483`, `484`, `485` correctas), verificadas nodo por
+  nodo con `get_execution`
+
+### Notas
+- ⛔ **Sigue sin poder cobrar nadie, y ahora por otro motivo:** falta
+  `N8N_PAYMENTS_WEBHOOK_URL` en Vercel =
+  `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/pago`. Sin ella,
+  `requestFromN8n("payments")` devuelve `null` **sin llamar a nadie** y el webhook de Square responde
+  `503` igual que si el WF5 no existiera. Misma lección que ya costó tener el CRM guardando cero leads
+  en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**.
+- **La prueba se hizo antes de publicar, a propósito.** El primer intento falló por los encabezados;
+  de haberlo publicado primero, ese error habría aparecido con el primer pago real de un cliente.
+- 🧹 Queda por borrar la fila de prueba `PRUEBA-BORRAR-001` (fila 2 de `Pagos`).
+
+---
+
 ## [2026-08-05] — WF5 `Registrar pago` creado, y un dato que se perdía en silencio — v0.6.1
 
 ### Request original
