@@ -6,6 +6,49 @@
 
 ---
 
+## [2026-08-05] — Contrato alineado y los dos webhooks publicados — v0.5.1
+
+### Request original
+> autorizado · [tras reasignar credenciales] hecho
+
+### Tipo de cambio
+- **FIXED (bloqueante)**: el **WF2 y el WF3 renombrados al `snake_case` en inglés** del § Contrato
+  exacto. Las dos mitades ya se hablan
+- **ADDED**: el WF2 guarda `client_timezone` en la descripción del evento — antes se perdía, y a
+  Claudia le sirve saber en qué huso vive quien la va a llamar
+- **FIXED (🐛)**: el PATCH del WF3 ahora **reescribe la descripción** a «CITA CONFIRMADA. Pago
+  recibido.» con la política de tolerancia y reprogramación. Antes una cita pagada seguía diciendo
+  «RESERVA SIN PAGAR … el limpiador la borra»
+- **RESTORED**: el CC a `claudia@leosfirm.com` en el nodo de Gmail
+- **PUBLISHED**: `Leos Firm - Disponibilidad` (`b4cdb752`) y `Leos Firm - Reservar slot`
+  (`ff5d064b`). **Los dos webhooks están vivos en producción**
+- **VERIFIED (ciclo completo de ADR-011)**: se reserva un slot y **el hueco desaparece de la
+  disponibilidad**. Es la demostración de punta a punta del diseño, contra el calendario real
+
+### Archivos modificados
+- `docs/features/scheduling.md` — estado por workflow, **Production URLs**, checklist actualizada
+- `CHANGELOG.md` — esta entrada
+
+**Sin cambios en `src/`.**
+
+### Cambios en base de datos
+- Ninguno (Supabase congelado, ADR-010).
+
+### Validación
+- Ejecución **435**: el WF2 creó `jopd89gge2hud9jkddlr14s72k` leyendo `full_name`, `service_name`,
+  `start_utc` y `client_timezone` correctamente.
+- Ejecución **436**: el WF1 devolvió ese bloque como ocupado, con `status: "tentative"`.
+
+### Notas
+- ⚠️ **Queda un evento de prueba**: `jopd89gge2hud9jkddlr14s72k`, 14 de septiembre de 2026. A
+  diferencia del anterior, este **sí** cae dentro de la ventana de 60 días del limpiador — sirve para
+  verificarlo antes de conectarle el borrado.
+- ⚠️ **El sitio desplegado sigue sin usar esto** hasta que `N8N_AVAILABILITY_WEBHOOK_URL` y
+  `N8N_BOOKING_WEBHOOK_URL` estén en Vercel **y se vuelva a desplegar**.
+- El WF3 queda sin publicar a propósito: lo dispara el webhook de Square en la FASE 6.
+
+---
+
 ## [2026-08-05] — Las dos mitades de la FASE 5 se encuentran (y no se hablan) — v0.5.0
 
 ### Request original

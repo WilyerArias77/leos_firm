@@ -1,10 +1,9 @@
 # Feature: Agendamiento — calendario propio sobre Google Calendar
 
-> **Estado:** 🔨 **Las dos mitades existen** (2026-08-05). Next.js implementado contra el contrato,
-> con un mock local mientras no haya URLs. Los 4 workflows de n8n creados y tres **probados contra
-> el calendario real**, pero **ninguno publicado**.
-> ⚠️ **Las dos mitades todavía no se hablan:** los nombres de campo del WF2 y el WF3 no coinciden con
-> los que manda Next.js — ver § Contrato exacto y § Lo que falta para publicar
+> **Estado:** ✅ **Las dos mitades se hablan** (2026-08-05). Next.js implementado; `Disponibilidad` y
+> `Reservar slot` **publicados** y probados con el contrato definitivo. El ciclo de ADR-011 está
+> verificado de punta a punta: se reserva y el hueco desaparece de la disponibilidad.
+> **Falta para producción:** poner las dos URLs en Vercel, y cerrar el limpiador (§ Lo que falta)
 > **Última actualización:** 2026-08-05
 > **Archivos clave:** `src/lib/utils/timezone.ts`, `src/services/availability.service.ts`,
 > `src/services/scheduling.service.ts`, `src/app/api/v1/{availability,appointments}/route.ts`,
@@ -98,10 +97,20 @@ cuarto es programado.
 
 | # | Workflow | ID en n8n | Estado |
 |---|----------|-----------|--------|
-| 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **Probado** contra el calendario real · sin publicar |
-| 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **Probado** — creó un evento tentativo real · sin publicar |
-| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | ✅ **Probado** — Meet creado y correo enviado · 1 bug abierto (ver abajo) |
+| 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **PUBLICADO** y probado contra el calendario real |
+| 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **PUBLICADO** y probado con el contrato definitivo |
+| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | 🔨 Corregido y listo · **sin publicar** — lo dispara Square en la FASE 6 |
 | 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ⚠️ Filtro probado en seco · nodo de borrar **desconectado** |
+
+**Production URLs** (van a `.env.local` y a Vercel):
+
+| Variable | URL |
+|----------|-----|
+| `N8N_AVAILABILITY_WEBHOOK_URL` | `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/disponibilidad` |
+| `N8N_BOOKING_WEBHOOK_URL` | `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/reservar` |
+
+> **Poner las dos o ninguna.** Con solo la de disponibilidad, el visitante ve el calendario, elige
+> hora y la reserva le falla al final. Peor que no ofrecerla.
 
 Los tres webhooks usan **la misma credencial Header Auth que el CRM** (`Leos Firm - Token del
 sitio`, header `x-leosfirm-token`), así que comparten el `N8N_WEBHOOK_TOKEN` que ya existe. No hay
@@ -502,12 +511,20 @@ que faltaban en Vercel y dejaron el CRM guardando cero leads en silencio.
       sin mandarle una confirmación falsa
 - [ ] Verificar el WF4 con una reserva de más de 10 minutos dentro de la ventana de 60 días, mirar la
       lista del filtro, y **solo entonces** conectar el nodo de borrar
-- [ ] 🔴 **Renombrar los campos del WF2 y el WF3 al `snake_case` en inglés** del § Contrato exacto.
-      Hoy los workflows leen `nombre`, `correo`, `telefono`, `servicio`, `start`, `end`; Next.js manda
-      `full_name`, `email`, `phone`, `service_name`, `start_utc`, `end_utc`. **Solo coincide
-      `lead_id`.** Es lo primero, y bloquea la publicación
-- [ ] Publicar WF1 y WF2 y comprobar con `curl` real que el WF1 devuelve el array en la raíz del body
-- [ ] Pasar las Production URLs a `.env.local` **y a Vercel**
+- [x] Campos del WF2 y el WF3 renombrados al `snake_case` en inglés del § Contrato exacto
+- [x] 🐛 Descripción del evento corregida en el WF3 y **CC a Claudia restaurado**
+- [x] **WF1 y WF2 publicados** y probados con el contrato definitivo
+- [x] **Ciclo ADR-011 verificado de punta a punta**: reservar → el hueco desaparece de la
+      disponibilidad
+- [ ] **Borrar el evento de prueba** `jopd89gge2hud9jkddlr14s72k` (14 de septiembre de 2026). Este
+      **sí** está dentro de la ventana del limpiador — sirve para la verificación de abajo
+- [ ] Verificar el WF4: esperar a que la reserva de prueba pase de 10 minutos, ejecutarlo a mano,
+      comprobar que el filtro la lista, y **solo entonces** conectar el nodo de borrar y publicar
+- [ ] Repetir la prueba del WF3 con husos horarios **realmente distintos** — la primera salió
+      degenerada
+- [ ] Comprobar con `curl` real que el WF1 devuelve el array en la raíz del body (Next.js acepta las
+      dos formas, así que no es bloqueante)
+- [ ] Pasar las Production URLs a `.env.local` **y a Vercel**, y **volver a desplegar**
 
 ## Endpoints de Next.js
 
