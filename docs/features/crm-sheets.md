@@ -130,15 +130,38 @@ automática, y el visitante tiene un camino claro.
 `getN8nEnv()` es el **único** getter de entorno que no lanza cuando falta una variable, y la
 excepción es deliberada: está explicada en `src/lib/env.ts` y en `03-security.md`.
 
+> ⚠️ **Estas dos variables hay que ponerlas TAMBIÉN en Vercel.** Un `git push` no las lleva —
+> `.env` y `.env.local` están en `.gitignore`, que es justamente lo que queremos. Si el sitio
+> desplegado responde `delivery: "failed"` mientras en local funciona, es esto. Y Vercel **no recoge
+> variables nuevas en un despliegue ya hecho**: hay que volver a desplegar después de añadirlas.
+
 ### Pasos manuales en n8n (una sola vez)
 
 1. Crear la hoja **`Leads`** en el spreadsheet y pegar la fila de encabezados de la tabla de arriba.
 2. Crear la credencial **Header Auth** `Leos Firm - Token del sitio`:
    nombre del header `x-leosfirm-token`, valor = el mismo `N8N_WEBHOOK_TOKEN`.
 3. Verificar que la credencial de Google Sheets de los tres nodos tenga **permiso de edición** sobre
-   el spreadsheet. n8n asignó automáticamente `api_sheet_aiinovate`; si el CRM debe quedar bajo la
-   cuenta de Claudia, conectar su credencial y cambiarla en los tres nodos.
+   el spreadsheet.
 4. **Publicar** el workflow y copiar la Production URL a `N8N_CRM_WEBHOOK_URL`.
+
+### Cuando el nodo "no encuentra la hoja"
+
+Pasó en el montaje inicial y el mensaje de n8n no ayuda a distinguir la causa. El documento se
+referencia **por ID** (`1l5p48Pi…UKkzA`), no por URL: una URL hay que parsearla y se puede truncar
+al copiarla, un ID no. Si aun así el campo *Sheet* sale con el triángulo rojo:
+
+| Comprobación | Diagnóstico | Arreglo |
+|--------------|-------------|---------|
+| Cambiar *Document* a `From list` y el archivo **no aparece** | La cuenta de Google de la credencial no ve el archivo | Compartir el spreadsheet como **Editor** con esa cuenta |
+| Aparece, pero *Sheet* sigue en rojo | La pestaña no se llama `Leads` | Renombrarla — el campo usa `By Name` y **distingue mayúsculas** |
+
+Al terminar, devolver *Document* a **`By ID`**: `From list` guarda un valor cacheado que se rompe si
+alguien renombra el archivo; el ID no cambia nunca.
+
+> **La causa de fondo casi siempre es de quién es la cuenta.** El spreadsheet es de Claudia y la
+> credencial de n8n puede ser de otra persona. Compartir el archivo desbloquea el CRM, pero el
+> calendario (FASE 5) **no** admite ese atajo: las citas tienen que crearse en la agenda de Claudia,
+> así que su cuenta acaba haciendo falta de todos modos.
 
 ## Restricciones
 
