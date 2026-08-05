@@ -83,8 +83,10 @@ workflow programado lo borra.
 - Claudia ve las reservas sin pagar en su calendario y distingue una cita real de una a medias de un
   vistazo.
 - No hace falta base de datos para el bloqueo. Un problema menos y una integración menos.
-- **Costo:** un abandono deja basura en el calendario hasta que el limpiador pasa. Por eso el
-  limpiador corre cada 10 minutos y el TTL es corto (`SLOT_HOLD_MINUTES`, hoy 10).
+- **Costo:** un abandono deja basura en el calendario hasta que el limpiador pasa. El limpiador
+  corre cada 30 minutos y el TTL es `SLOT_HOLD_MINUTES`, **hoy 30** — subido de 10 al entrar los
+  pagos (§ *El limpiador y el TTL*). Son dos números distintos aunque hoy coincidan: la frecuencia
+  del cron y la retención. Un slot abandonado se borra entre los 30 y los 60 minutos.
 - **Carrera pendiente de resolver:** dos personas pueden crear el evento tentativo casi a la vez.
   Google Calendar no impide solapes. La mitigación es revalidar la disponibilidad justo antes de
   crear el evento y aceptar la ventana de riesgo de unos segundos, que a este volumen es teórica.
@@ -98,8 +100,8 @@ webhooks que llama Next.js; el cuarto es programado.
 |---|----------|-----------|--------|
 | 1 | `Leos Firm - Disponibilidad` | `hYS8Fk87wUfadriW` | ✅ **PUBLICADO** y probado contra el calendario real |
 | 2 | `Leos Firm - Reservar slot` | `5MnPI0yaiahvOybZ` | ✅ **PUBLICADO** y probado con el contrato definitivo |
-| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | 🔨 Corregido y probado · **sin publicar** — lo dispara Square en la FASE 6 |
-| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ✅ **PUBLICADO** — corre cada 10 min y ya borró una reserva vencida real |
+| 3 | `Leos Firm - Confirmar cita` | `5Tx6yxAmPBMghDBS` | ✅ **PUBLICADO** — reescrito con `If-Match` y probado de punta a punta en la FASE 6 ([`payments.md`](./payments.md)) |
+| 4 | `Leos Firm - Limpiar reservas vencidas` | `hLWyt2vHv3CrCVBt` | ✅ **PUBLICADO** — corre cada 30 min, TTL 30 min, y ya borró una reserva vencida real |
 
 **El limpiador quedó verificado en la mejor prueba posible** (ejecución 444): con dos reservas
 tentativas en el calendario, borró la de 52 minutos y **dejó intacta la de 8 minutos**, en la misma
@@ -285,11 +287,11 @@ pase.
 ### 4. `Leos Firm - Limpiar reservas vencidas`
 
 ```
-Schedule Trigger (cada 10 min)
+Schedule Trigger (cada 30 min · el nodo se sigue llamando «Cada 10 minutos»)
   → Google Calendar · event: getAll (próximos 60 días)
   → Code: status = tentative Y summary empieza con "RESERVA SIN PAGAR"
-          Y creado hace más de SLOT_HOLD_MINUTES
-  → Google Calendar · event: delete      ⚠️ DESCONECTADO hasta verificar el filtro
+          Y creado hace más de SLOT_HOLD_MINUTES (30)
+  → Google Calendar · event: delete      ✅ conectado tras verificar el filtro en seco
 ```
 
 Sin este workflow, cada checkout abandonado bloquea una hora de la agenda de Claudia para siempre.
@@ -297,17 +299,48 @@ Sin este workflow, cada checkout abandonado bloquea una hora de la agenda de Cla
 
 **El filtro tiene tres condiciones y las tres importan.** La del prefijo del título no es
 redundante: Claudia también crea eventos tentativos a mano desde su Google Calendar —un "quizá"
-cualquiera—. Sin ese prefijo, el limpiador le borraría sus propios eventos cada 10 minutos y nadie
+cualquiera—. Sin ese prefijo, el limpiador le borraría sus propios eventos cada media hora y nadie
 entendería por qué. Una cita ya pagada tampoco corre riesgo: el workflow 3 le cambia el título a
 `Consulta — …` y el estado a `confirmed`, así que falla dos de las tres condiciones.
 
-> ⚠️ **El nodo de borrar está desconectado a propósito.** Un borrado en el calendario de la clienta
-> no tiene deshacer. Antes de conectarlo: ejecutar el workflow a mano y mirar la salida del nodo
-> *Filtrar las reservas vencidas* — esa lista es exactamente lo que se va a borrar. Solo cuando se
-> vea correcta **con datos reales** se conecta el nodo y recién ahí se publica.
+> ⚠️ **El nodo de borrar se conectó recién después de verificar el filtro en seco.** Un borrado en el
+> calendario de la clienta no tiene deshacer. Si alguna vez hay que volver a tocar el filtro:
+> desconectar el nodo, ejecutar el workflow a mano y mirar la salida de *Filtrar las reservas
+> vencidas* — esa lista es exactamente lo que se va a borrar. Solo cuando se vea correcta **con datos
+> reales** se reconecta.
 
-> `SLOT_HOLD_MINUTES = 10` está escrito **dos veces**: en `src/constants/business.ts` y dentro del
-> nodo Code de este workflow. Es la única copia fuera del repo y hay que mantenerla a mano.
+### El limpiador y el TTL
+
+`SLOT_HOLD_MINUTES` está escrito **dos veces**: en `src/constants/business.ts` y dentro del nodo Code
+de este workflow. Es la única copia fuera del repo y hay que mantenerla a mano.
+
+**Decidido en 30 el 2026-08-05**, subido de 10 al entrar los pagos. El reloj arranca cuando se crea el
+evento tentativo, es decir **antes** de que el visitante vea siquiera el formulario de tarjeta: diez
+minutos tenían que alcanzar para leer la política de cancelación, buscar la tarjeta, teclearla y
+pasar un eventual 3-D Secure. Si no alcanzaban, el limpiador borraba el slot mientras el cobro iba en
+camino y el webhook llegaba a confirmar un evento inexistente — **cobro hecho, slot perdido**
+([`payments.md`](./payments.md) § El riesgo del limpiador). El costo de 30 es más basura en el
+calendario ante un abandono, que es barato en comparación.
+
+> **No confundir los dos números**, aunque hoy valgan lo mismo. El trigger es la **frecuencia** con
+> la que el limpiador se despierta; `SLOT_HOLD_MINUTES` es la **retención**. Los dos están en 30, así
+> que un slot abandonado desaparece entre los 30 y los 60 minutos. Subir la retención no obligaba a
+> tocar el trigger — se subieron los dos, y con cadencia 10 el barrido habría sido más fino (30 a 40
+> minutos) al costo de 6 lecturas de Calendar por hora en vez de 2.
+
+> 🏷️ **El nodo del trigger se sigue llamando «Cada 10 minutos» y ya no corre cada 10.** El nombre y
+> la `description` del workflow quedaron desfasados el 2026-08-05. No afecta a nada —n8n no lee el
+> nombre— pero es de lo que hace desconfiar de un sistema cuando alguien lo abre dentro de seis
+> meses. Renombrarlo a «Cada 30 minutos» cuando se vuelva a tocar el WF4.
+
+> Subir el TTL es un cambio **estrictamente conservador**: con un umbral más alto el filtro devuelve
+> un subconjunto de lo que devolvía antes, nunca más eventos. Por eso este cambio no exigió repetir
+> el ensayo en seco. Bajarlo sí lo exigiría.
+
+> ⚠️ **El MCP de n8n resetea la credencial de Google Calendar** (`Google Calendar - Leos Firm` → 
+> `api_google_calendar_aiinovate`) en **los dos** nodos de Calendar cada vez que actualiza este
+> workflow. Por eso los cambios de una sola línea aquí se hacen **a mano en la UI**: el arreglo por
+> MCP cuesta más trabajo manual del que ahorra, y uno de esos dos nodos borra eventos reales.
 
 ---
 
@@ -329,7 +362,7 @@ entendería por qué. Una cita ya pagada tampoco corre riesgo: el workflow 3 le 
 | 1 | `Leos Firm - Disponibilidad` | `/leos-firm/disponibilidad` | `N8N_AVAILABILITY_WEBHOOK_URL` | `GET /api/v1/availability` |
 | 2 | `Leos Firm - Reservar slot` | `/leos-firm/reservar` | `N8N_BOOKING_WEBHOOK_URL` | `POST /api/v1/appointments` |
 | 3 | `Leos Firm - Confirmar cita` | `/leos-firm/confirmar` | `N8N_CONFIRM_WEBHOOK_URL` | Webhook de Square (**FASE 6**) |
-| 4 | `Leos Firm - Limpiar reservas` | — (Schedule Trigger) | — | Nadie: corre solo cada 10 min |
+| 4 | `Leos Firm - Limpiar reservas` | — (Schedule Trigger) | — | Nadie: corre solo cada 30 min |
 
 Las URLs se copian del panel del nodo Webhook, pestaña **Production URL** — nunca la *Test URL*, que
 solo responde mientras alguien tiene el editor abierto. Misma trampa que ya costó una sesión con el
@@ -434,7 +467,7 @@ renombrar nada. Si vuelve cualquiera de las dos, la reserva se da por hecha.
 
 **Sin `eventId` no hay reserva.** Si la respuesta no trae ninguno de los dos campos, Next.js trata la
 llamada como fallida y le dice al visitante que llame por teléfono, aunque el evento se haya creado
-en Calendar. Preferimos un hueco fantasma que el limpiador borra en 10 minutos, antes que decirle a
+en Calendar. Preferimos un hueco fantasma que el limpiador borra en 30 minutos, antes que decirle a
 alguien que tiene cita cuando no podemos demostrarlo.
 
 **Qué tiene que quedar en el evento:**
@@ -536,31 +569,39 @@ que faltaban en Vercel y dejaron el CRM guardando cero leads en silencio.
 - [x] Credencial de Calendar elegida a mano en los nodos HTTP Request
 - [x] Prueba mínima: lectura, escritura y `status: tentative` verificados
 - [x] WF3 probado de punta a punta: Meet creado y correo enviado
-- [ ] 🐛 **Arreglar la descripción del evento en el WF3** (sigue diciendo «RESERVA SIN PAGAR» después
-      de pagar)
-- [ ] Repetir la prueba del WF3 con husos horarios **realmente distintos** — la primera salió
-      degenerada
-- [ ] **Borrar el evento de prueba** `fnrat2iln058co1enpgj5qg1ac` (4 de enero de 2027). El limpiador
-      **no** lo va a recoger: está fuera de su ventana de 60 días, que es justamente lo que se quería
-      al ponerlo tan lejos
-- [ ] Restaurar el **CC a `claudia@leosfirm.com`** en el nodo de Gmail — se quitó para poder probar
-      sin mandarle una confirmación falsa
-- [ ] Verificar el WF4 con una reserva de más de 10 minutos dentro de la ventana de 60 días, mirar la
-      lista del filtro, y **solo entonces** conectar el nodo de borrar
 - [x] Campos del WF2 y el WF3 renombrados al `snake_case` en inglés del § Contrato exacto
 - [x] 🐛 Descripción del evento corregida en el WF3 y **CC a Claudia restaurado**
 - [x] **WF1 y WF2 publicados** y probados con el contrato definitivo
 - [x] **Ciclo ADR-011 verificado de punta a punta**: reservar → el hueco desaparece de la
       disponibilidad
-- [ ] **Borrar el evento de prueba** `jopd89gge2hud9jkddlr14s72k` (14 de septiembre de 2026). Este
-      **sí** está dentro de la ventana del limpiador — sirve para la verificación de abajo
-- [ ] Verificar el WF4: esperar a que la reserva de prueba pase de 10 minutos, ejecutarlo a mano,
-      comprobar que el filtro la lista, y **solo entonces** conectar el nodo de borrar y publicar
-- [ ] Repetir la prueba del WF3 con husos horarios **realmente distintos** — la primera salió
-      degenerada
+- [x] **WF4 verificado y el nodo de borrar conectado** — ejecuciones 437 (no borró una reserva de
+      4 min), 438 (listó la de 11 min) y 444 (borró la de 52 min y dejó la de 8). Publicado
+- [x] **Prueba de husos repetida con `Europe/Madrid`**: 21:00 cliente · 14:00 San Antonio del mismo
+      instante — la aritmética quedó verificada de verdad
+- [x] **Production URLs en `.env.local` y en Vercel** — la prueba de pago de punta a punta las
+      recorrió todas
+
+**Abierto:**
+
+- [x] ✅ **`SLOT_HOLD_MINUTES = 30` en el nodo Code del WF4 y publicado** (2026-08-05, versión activa
+      `60eb490d-d599-427f-8c09-653c5494cac6`). Editado a mano en la UI para no perder la credencial de
+      Calendar. Con esto **cierra el riesgo de cobrar sin poder entregar**: el limpiador ya no toca un
+      slot antes de los 30 minutos. De paso la frecuencia del cron pasó de 10 a 30 min
+- [ ] 🏷️ Renombrar el nodo del trigger del WF4: se llama «Cada 10 minutos» y corre cada 30. También
+      la `description` del workflow. Cosmético, para la próxima vez que se toque
+- [ ] 💤 **DEUDA ACEPTADA (2026-08-05): el `30` en la descripción que escribe el WF2** (nodo
+      `Crear evento TENTATIVO`). Cada evento tentativo dice *«Si el pago no llega en 10 minutos, el
+      limpiador la borra»* y el plazo real ya es 30; Claudia lo lee al abrir el evento. **No puede
+      causar ningún comportamiento incorrecto** —el limpiador filtra por `summary` y `status`, nunca
+      por la descripción— y el WF2 sostiene todo el agendamiento y pierde la credencial de Calendar
+      con facilidad. Se corrige cuando haya que abrir el WF2 por un motivo real
+- [ ] **Borrar el evento de prueba** `fnrat2iln058co1enpgj5qg1ac` (4 de enero de 2027). El limpiador
+      **no** lo va a recoger: está fuera de su ventana de 60 días, que es justamente lo que se quería
+      al ponerlo tan lejos
+- [ ] Comprobar si sigue vivo el evento de prueba `jopd89gge2hud9jkddlr14s72k` (14 de septiembre de
+      2026) — el limpiador debería haberlo borrado en la ejecución 444
 - [ ] Comprobar con `curl` real que el WF1 devuelve el array en la raíz del body (Next.js acepta las
       dos formas, así que no es bloqueante)
-- [ ] Pasar las Production URLs a `.env.local` **y a Vercel**, y **volver a desplegar**
 
 ## Endpoints de Next.js
 

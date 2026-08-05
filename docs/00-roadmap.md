@@ -165,13 +165,25 @@ contexto de la cita viaja en la metadata de la orden de Square).
 
 | Mitad | Quién | Estado |
 |-------|-------|--------|
-| WF5 `Registrar pago`, WF3 con `If-Match` publicado, pestaña `Pagos`, el `30` en el WF4 | Wilyer | ⬜ Pendiente |
+| WF5 `Registrar pago`, WF3 con `If-Match` publicado, pestaña `Pagos`, el `30` en el WF4 | Wilyer | ✅ **Listo** (2026-08-05) |
 | `/checkout`, el webhook, el poll de estado y la pantalla de pago | Next.js | ✅ **Listo** (2026-08-05, sandbox) |
 
-⛔ **Criterio de salida NO alcanzado.** Con la mitad de Next.js sola, el webhook responde `503` a
-propósito: sin WF5 no se puede saber si un pago ya se procesó, y confirmar a ciegas arriesga
-reemplazar un enlace de Meet ya enviado (ADR-013). Los pagos quedan en la cola de reintentos de
-Square durante 72 h y **se confirman solos cuando WF5 se publique** — sin tocar código.
+**Estado al 2026-08-05.** La cadena completa está cerrada y probada de punta a punta:
+checkout → Square → webhook → WF5 → WF3 → WF1. Pestaña `Pagos` con sus 11 encabezados, WF5
+publicado y probado por sus tres caminos, WF3 publicado con `If-Match` (ejecuciones 492 y 493), WF1
+corregido, y `N8N_PAYMENTS_WEBHOOK_URL` en Vercel.
+
+✅ **Criterio de salida alcanzado en sandbox.** El último riesgo abierto se cerró el mismo día: el
+`SLOT_HOLD_MINUTES` del nodo Code del WF4 pasó a **30** y quedó publicado, así que el limpiador ya no
+borra un slot que el código cree retenido. Ya no se puede cobrar sin poder entregar
+([`features/payments.md`](./features/payments.md) § El riesgo del limpiador).
+
+**Falta para producción**, nada de ello bloqueante del diseño:
+
+- Prueba de punta a punta **sobre el sitio desplegado** con la tarjeta de sandbox `4111 1111 1111 1111`
+- **Cuenta de producción de Square** verificada y con banco vinculado — la clienta
+- Confirmar que el **"De:"** del correo es la cuenta de la firma y no `api_gmail_aiinovate`
+- Copiar **ADR-013** y **ADR-014** a [`02-architecture.md`](./02-architecture.md)
 
 ### FASE 7 — Correos por n8n ⬜
 Confirmación al cliente, copia a Claudia, recordatorios 24 h y 1 h antes. El scheduler es n8n, no

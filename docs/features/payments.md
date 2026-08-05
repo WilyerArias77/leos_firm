@@ -442,7 +442,7 @@ es el que ya existe.
 
 ---
 
-## El riesgo del limpiador borrando el slot mientras se paga — RESUELTO A MEDIAS
+## El riesgo del limpiador borrando el slot mientras se paga — ✅ CERRADO
 
 El reloj de la retención arranca cuando se crea el evento tentativo — es decir, **antes** de que el
 visitante vea siquiera el formulario de tarjeta. Ese tiempo tiene que alcanzar para leer la política
@@ -460,11 +460,45 @@ Si no alcanza, el WF4 borra el evento y el webhook llega a confirmar un evento q
    `error` con el detalle y un `console.error` que empieza por `COBRADO SIN CONFIRMAR`. Hay que
    devolver el dinero o reagendar a mano, y alguien tiene que enterarse el mismo día.
 
-> ⛔ **Falta la otra mitad, y es la que de verdad cierra el riesgo.** El `30` también vive **dentro
-> del nodo Code del WF4** (`Leos Firm - Limpiar reservas vencidas`), que es la única copia fuera del
-> repo ([`scheduling.md`](./scheduling.md)). **Mientras el WF4 siga en 10, el limpiador borra slots
-> que el código cree retenidos durante 30 minutos** — el fallo que este apartado intenta evitar,
-> exactamente igual que antes.
+3. ✅ **`SLOT_HOLD_MINUTES = 30` dentro del nodo Code del WF4 y publicado** (2026-08-05, versión
+   activa `60eb490d-d599-427f-8c09-653c5494cac6`). Era la mitad que de verdad cerraba el riesgo: el
+   `30` vive en dos sitios y hasta ese momento solo estaba en el repo, así que **el limpiador seguía
+   borrando a los 10 minutos slots que el código creía retenidos 30**. De paso la frecuencia del cron
+   subió de 10 a 30 min, así que un slot abandonado se libera entre los 30 y los 60 minutos.
+
+**Cómo se aplicó** (2026-08-05): **a mano en la UI de n8n**, no por MCP. El WF4 pierde la credencial
+`Google Calendar - Leos Firm` en sus dos nodos de Calendar cada vez que el MCP lo actualiza, y uno de
+esos nodos borra eventos del calendario real de la clienta; el arreglo por MCP cuesta más trabajo
+manual del que ahorra. La publicación sí se hizo por MCP: `publish_workflow` solo activa el borrador,
+no reescribe nodos, así que **no toca credenciales**.
+
+| Dónde | Qué | Estado |
+|-------|-----|--------|
+| WF4 · nodo `Filtrar las reservas vencidas` | `const SLOT_HOLD_MINUTES = 30;` | ✅ |
+| WF4 · sticky azul y sticky roja | decían `10`; pasan a `30` | ✅ |
+| WF2 · nodo `Crear evento TENTATIVO` | la descripción dice *«si el pago no llega en 10 minutos»* | ⬜ **deuda aceptada** |
+
+**Sobre esa tercera fila:** se decidió el 2026-08-05 **no tocarla por ahora**. El WF2 es el que sostiene
+todo el agendamiento, su nodo HTTP Request pierde la credencial de Calendar con facilidad, y lo que
+está en juego es una línea de texto que nadie lee salvo Claudia al abrir un evento tentativo. El
+limpiador filtra por `summary` y `status`, nunca por la descripción, así que **el desfase no puede
+provocar ningún comportamiento incorrecto**. Se corrige la próxima vez que haya que abrir el WF2 por
+un motivo real.
+
+**Dos lecciones que costaron tres intentos y merecen quedar escritas:**
+
+1. **El TTL y la frecuencia del cron son números distintos**, y el primer intento cambió el trigger
+   en vez del nodo Code. Publicar eso habría sido *peor* que no hacer nada: cron cada 30 min con TTL
+   todavía en 10 borra entre los 10 y los 40 minutos — sigue matando reservas a los 10 y encima deja
+   la basura más tiempo.
+2. **Editar no es publicar.** Los dos primeros intentos quedaron en borrador con `versionId` ≠
+   `activeVersionId`: el editor mostraba el `30` y producción ejecutaba el `10`. Es la misma trampa
+   que ya costó una corrección fantasma en el WF1 ([`crm-sheets.md`](./crm-sheets.md)). **La
+   verificación que sirve es comparar los dos ids**, no mirar la pantalla.
+
+**No hacía falta repetir el ensayo en seco** que precedió a conectar el nodo de borrar: subir el
+umbral es estrictamente conservador —el filtro devuelve un subconjunto de lo que devolvía— así que no
+puede provocar un borrado de más. Bajarlo sí lo exigiría.
 
 ---
 
@@ -659,16 +693,17 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
 - [x] **WF5 `Leos Firm - Registrar pago` creado** (`PkwmwCia2wqQzXwG`), con credenciales asignadas
 - [x] **Pestaña `Pagos` creada** con sus 11 encabezados (2026-08-05)
 - [x] **WF5 publicado y probado de verdad** (2026-08-05): los tres caminos, contra la hoja real
-- [ ] ⛔ **`N8N_PAYMENTS_WEBHOOK_URL` en Vercel** (y en `.env` local) =
-      `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/pago`. **Es el bloqueante nº 1 ahora.**
-      Sin ella `requestFromN8n("payments")` devuelve `null` sin llamar a nadie, y el webhook de Square
-      responde `503` igual que si el WF5 no existiera. Es la misma lección que ya costó tener el CRM
-      guardando cero leads en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**
+- [x] **`N8N_PAYMENTS_WEBHOOK_URL` en Vercel y en `.env` local** (2026-08-05) =
+      `https://aiwebhookn8n.growingup.digital/webhook/leos-firm/pago`. Sin ella
+      `requestFromN8n("payments")` devolvía `null` sin llamar a nadie y el webhook de Square respondía
+      `503` igual que si el WF5 no existiera. Misma lección que ya costó tener el CRM guardando cero
+      leads en silencio: **Vercel no recoge variables nuevas en un despliegue ya hecho**
 - [ ] Borrar la fila de prueba `PRUEBA-BORRAR-001` de la pestaña `Pagos` (fila 2)
 - [x] **WF3: contrato nuevo + `If-Match` + 404 explícito + bug de la descripción** (2026-08-05)
 - [x] **Credenciales del WF3 puestas a mano y probado de punta a punta** (2026-08-05)
-- [ ] ⛔ **Publicar el WF3** — probado y funcionando, pero sigue inactivo. **Es lo último que separa
-      un cobro de una cita confirmada**
+- [x] **WF3 publicado** (2026-08-05) — versión activa `263ced76-536f-414f-b564-e9d15cf6e981`,
+      exactamente la que validaron las ejecuciones 492 y 493. Con esto la cadena
+      checkout → Square → webhook → WF5 → WF3 → WF1 queda cerrada
 - [ ] Confirmar en el correo de prueba que el **"De:"** es la cuenta de la firma y no
       `api_gmail_aiinovate`. Es lo único que la prueba no pudo determinar
 - [ ] 🧹 Borrar el evento de prueba del calendario: **`1c7lj6lmd2rfq128vftsid6jeg`**, «Consulta —
@@ -680,8 +715,16 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
       `syncPaymentToCrm` se descartaba; y *Guardar cita elegida* sí la mapeaba, contra un campo que
       `CrmAppointmentRow` no tiene — escribía vacío. El enlace de la videollamada no llegaba nunca a
       la hoja
-- [ ] ⛔ **Poner `30` dentro del nodo Code del WF4**, o el limpiador borra slots a los 10 minutos
-      mientras el código promete 30
+- [x] ✅ **`30` dentro del nodo Code del WF4, publicado** (2026-08-05, versión activa
+      `60eb490d-d599-427f-8c09-653c5494cac6`). Editado a mano en la UI para no perder la credencial de
+      Calendar; publicado por MCP, que no reescribe nodos. **Con esto cierra el riesgo de cobrar sin
+      poder entregar.** La frecuencia del cron subió también a 30 min
+- [ ] 🏷️ Renombrar el nodo `Cada 10 minutos` del WF4 —corre cada 30— y su `description`. Cosmético
+- [ ] **Poner `30` en la descripción que escribe el WF2** (nodo `Crear evento TENTATIVO`): cada
+      evento tentativo dice hoy *«Si el pago no llega en 10 minutos, el limpiador la borra»*, y
+      Claudia lo lee en su calendario. No rompe nada —el limpiador se guía por el `summary`— pero es
+      exactamente el defecto que ya se corrigió en el WF3. También a mano: ese nodo HTTP Request
+      pierde la credencial con cada update por MCP
 - [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox
       (`4111 1111 1111 1111`) — en local la firma no puede validar y es correcto
 - [ ] **Cuenta de producción de Square** verificada y con banco vinculado — la clienta

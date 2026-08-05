@@ -6,6 +6,80 @@
 
 ---
 
+## [2026-08-05] — El TTL del limpiador en 30 y publicado: cierra el riesgo de cobrar sin entregar — v0.6.5
+
+### Request original
+> si, arranquemos · cambios hechos en el nodo. puse 30 · cambio realizado sigue con la publicacion
+
+### Tipo de cambio
+- **FIXED (producción)**: `SLOT_HOLD_MINUTES = 30` en el nodo Code del WF4
+  `Leos Firm - Limpiar reservas vencidas`, **publicado** — versión activa
+  `60eb490d-d599-427f-8c09-653c5494cac6`. Era la mitad que faltaba del riesgo descrito en
+  `payments.md`: el `30` vive en dos sitios y solo estaba en el repo, así que **el limpiador borraba
+  a los 10 minutos slots que el código creía retenidos 30**. Con los cobros ya activos, un visitante
+  que tardara entre 10 y 30 minutos en pagar podía ser cobrado mientras su slot desaparecía. **Ya no**
+- **CHANGED**: la frecuencia del cron del WF4 pasó de 10 a 30 min. No era necesario y no es dañino
+  —con TTL 30 el barrido nunca borra antes de tiempo— pero un slot abandonado ahora se libera entre
+  los 30 y los 60 minutos en vez de entre 30 y 40
+- **FOUND**: el `10` no vivía en dos sitios sino en **tres**. Además de
+  `src/constants/business.ts` (ya en 30) y del nodo Code del WF4, el **WF2** escribe
+  *«Si el pago no llega en 10 minutos, el limpiador la borra»* en la `description` de **cada** evento
+  tentativo. No rompe nada —el limpiador filtra por `summary`, no por la descripción— pero es texto
+  que Claudia lee en su calendario, y es el mismo defecto que ya se había corregido en el WF3
+- **DECIDED**: el cambio se aplica **a mano en la UI de n8n**, no por MCP. Los dos workflows avisan en
+  sus propias sticky notes que el MCP resetea la credencial de Google Calendar al actualizarlos, y en
+  el WF4 uno de esos nodos **borra eventos del calendario real de la clienta**. Un `update_workflow`
+  por un número dejaría más trabajo manual del que ahorra, con un fallo posible peor
+- **REASONED**: subir el TTL es **estrictamente conservador** —con un umbral mayor el filtro devuelve
+  un subconjunto de lo que devolvía— así que **no** exige repetir el ensayo en seco que precedió a
+  conectar el nodo de borrar. Bajarlo sí lo exigiría. Queda escrito para la próxima vez
+- **CLARIFIED**: `10` y `30` son dos números distintos y la doc los confundía. El trigger corre cada
+  **10 minutos** (frecuencia del cron); el TTL es de **30** (retención). No hay que tocar el trigger:
+  con esa combinación un slot abandonado se borra entre los 30 y los 40 minutos
+- **DOCS**: puestos al día los estados que la sesión anterior dejó vencidos — WF3 publicado,
+  `N8N_PAYMENTS_WEBHOOK_URL` en Vercel, WF4 verificado y con el nodo de borrar conectado, prueba de
+  husos repetida con `Europe/Madrid`. La lista de pendientes de `scheduling.md` tenía cuatro entradas
+  duplicadas y cinco ya cumplidas
+
+### Archivos modificados
+- `docs/features/scheduling.md` — nueva sección *El limpiador y el TTL*; tabla de workflows,
+  costo de ADR-011 y lista de pendientes al día
+- `docs/features/payments.md` — el § *El riesgo del limpiador* gana la tabla de los tres cambios y el
+  porqué de hacerlos a mano
+- `docs/00-roadmap.md` — FASE 6 pasa a 🔨 *casi*; el riesgo del WF4 queda escrito como lo único
+  abierto que ya cuesta dinero
+- `CHANGELOG.md`
+- **Sin cambios de código.** `SLOT_HOLD_MINUTES` ya valía 30 en `src/constants/business.ts`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `mcp__n8n__get_workflow_details` sobre el WF4 (`hLWyt2vHv3CrCVBt`) y el WF2 (`5MnPI0yaiahvOybZ`)
+  para leer el valor real en producción en vez de fiarse de la doc — de ahí salió el hallazgo del WF2
+- **Tres lecturas de la instancia, una por intento**, comparando `versionId` con `activeVersionId`.
+  Los dos primeros intentos habrían pasado por buenos mirando solo la pantalla del editor
+- `publish_workflow` → `activeVersionId: 60eb490d-…`, que es exactamente el borrador verificado
+
+### Notas
+- 🐛 **El primer intento cambió el nodo equivocado**: el Schedule Trigger (frecuencia) en vez del nodo
+  Code (retención). Publicar eso habría sido **peor que no hacer nada** — cron cada 30 min con TTL
+  todavía en 10 borra entre los 10 y los 40 minutos: sigue matando reservas a los 10 y encima deja la
+  basura más tiempo. Se detectó leyendo la instancia, no el editor
+- 🐛 **Los dos primeros intentos quedaron sin publicar**, con `versionId` ≠ `activeVersionId`. El
+  editor mostraba el `30` y producción ejecutaba el `10`. Misma trampa que la corrección fantasma del
+  WF1. **La verificación que sirve es comparar los dos ids**
+- 🏷️ El nodo del trigger se sigue llamando «Cada 10 minutos» y corre cada 30, igual que la
+  `description` del workflow. No afecta a nada; anotado para la próxima vez que se toque el WF4
+- 💤 **DEUDA ACEPTADA: el WF2 se deja como está.** Cada evento tentativo sigue diciendo *«Si el pago
+  no llega en 10 minutos, el limpiador la borra»* y el plazo real ya es 30. **No puede causar ningún
+  comportamiento incorrecto** —el limpiador filtra por `summary` y `status`, nunca por la
+  descripción—, el WF2 sostiene todo el agendamiento y su nodo HTTP Request pierde la credencial de
+  Calendar con facilidad. Verificado sin cambios: `versionId` = `activeVersionId` = `ff5d064b-…`,
+  `updatedAt` 15:40:41Z, anterior a esta sesión. Se corrige al abrir el WF2 por un motivo real
+
+---
+
 ## [2026-08-05] — WF3 probado contra Calendar y Gmail reales — v0.6.4
 
 ### Request original
