@@ -1,6 +1,7 @@
 # Feature: Agendamiento — calendario propio sobre Google Calendar
 
-> **Estado:** 📐 Diseñado, sin implementar
+> **Estado:** 📐 Diseñado · **contrato Next.js ↔ n8n cerrado el 2026-08-05** · ninguna de las dos
+> mitades implementada. Se construyen **en paralelo** contra el contrato — ver § Contrato exacto
 > **Última actualización:** 2026-08-05
 > **Cuenta de Google:** el calendario y las credenciales viven en el **Google Console del cliente,
 > cuenta `marco@leosfirm.com`** — ver § Bloque A y ADR-012
@@ -138,6 +139,217 @@ Schedule Trigger (cada 10 min)
 Sin este workflow, cada checkout abandonado bloquea una hora de la agenda de Claudia para siempre.
 **Es parte del entregable, no un extra.**
 
+---
+
+## Contrato exacto entre Next.js y n8n
+
+> **Si estás montando los workflows, esta sección es tu contrato.** Los bloques de arriba describen
+> *qué hace* cada workflow; esta describe *qué recibe y qué tiene que devolver*, campo por campo.
+> Acordado el **2026-08-05**. Las dos mitades se construyen en paralelo y solo se encuentran aquí:
+> cualquier diferencia entre lo que devuelve n8n y lo que espera Next.js es un fallo silencioso.
+>
+> **Estado:** contrato cerrado, **ninguna de las dos mitades implementada todavía**.
+
+### Las tres llamadas y dónde va cada URL
+
+| # | Workflow | Ruta del webhook | Variable de entorno | Quién lo llama |
+|---|----------|------------------|---------------------|----------------|
+| 1 | `Leos Firm - Disponibilidad` | `/leos-firm/disponibilidad` | `N8N_AVAILABILITY_WEBHOOK_URL` | `GET /api/v1/availability` |
+| 2 | `Leos Firm - Reservar slot` | `/leos-firm/reservar` | `N8N_BOOKING_WEBHOOK_URL` | `POST /api/v1/appointments` |
+| 3 | `Leos Firm - Confirmar cita` | `/leos-firm/confirmar` | `N8N_CONFIRM_WEBHOOK_URL` | Webhook de Square (**FASE 6**) |
+| 4 | `Leos Firm - Limpiar reservas` | — (Schedule Trigger) | — | Nadie: corre solo cada 10 min |
+
+Las URLs se copian del panel del nodo Webhook, pestaña **Production URL** — nunca la *Test URL*, que
+solo responde mientras alguien tiene el editor abierto. Misma trampa que ya costó una sesión con el
+CRM ([`crm-sheets.md`](./crm-sheets.md) § Configuración).
+
+**Autenticación:** los tres usan la credencial **Header Auth** que ya existe,
+`Leos Firm - Token del sitio` (header `x-leosfirm-token`, valor = `N8N_WEBHOOK_TOKEN`). No hace falta
+crear una nueva: es el mismo secreto para todos los webhooks del proyecto.
+
+### ⚠️ Tres cosas que hay que configurar o el contrato no se cumple
+
+**1. El nodo Webhook tiene que responder con el nodo `Respond to Webhook`.**
+En el nodo Webhook, campo **Respond** → elegir **«Using 'Respond to Webhook' Node»**. Con el valor por
+defecto («Immediately») n8n contesta `{ "message": "Workflow got started" }` **antes** de consultar
+Calendar. Next.js recibiría un `200` sin datos y mostraría el calendario vacío sin ningún error a la
+vista. El CRM no tiene este problema porque a Next.js le basta con el `200`; acá el **cuerpo** es el
+dato.
+
+**2. Hay 8 segundos.** `src/lib/n8n/client.ts` aborta a los `8 000 ms` — un visitante esperando a que
+cargue el calendario no aguanta más. Si el rango de fechas hace que Calendar tarde, conviene acotarlo
+en el propio workflow antes que subir el timeout.
+
+**3. Los eventos de día completo no traen hora.** Ver § Trampas de Google Calendar, más abajo. Es el
+fallo más caro de los tres porque **no se ve**: produce doble reserva, no un error.
+
+### 1 · `Leos Firm - Disponibilidad`
+
+**Lo que manda Next.js** (`POST`, JSON):
+
+```json
+{
+  "timeMin": "2026-08-10T00:00:00.000Z",
+  "timeMax": "2026-09-10T00:00:00.000Z"
+}
+```
+
+Siempre UTC, siempre ISO-8601 con `Z`. El rango nunca pasa de 31 días.
+
+**Lo que Next.js espera de vuelta** — una lista de bloques ocupados. Se aceptan **dos formas**, a
+propósito, para que no dependa de cómo quede armado el workflow:
+
+*Forma A — plana (preferida, un nodo `Set` después de Calendar):*
+
+```json
+[
+  { "start": "2026-08-10T14:00:00.000Z", "end": "2026-08-10T15:00:00.000Z", "status": "confirmed" },
+  { "start": "2026-08-11T16:00:00.000Z", "end": "2026-08-11T17:00:00.000Z", "status": "tentative" }
+]
+```
+
+*Forma B — los objetos crudos de Google, tal como salen del nodo Calendar:*
+
+```json
+[
+  {
+    "start": { "dateTime": "2026-08-10T09:00:00-05:00" },
+    "end":   { "dateTime": "2026-08-10T10:00:00-05:00" },
+    "status": "confirmed",
+    "transparency": "opaque"
+  }
+]
+```
+
+**La forma B es perfectamente válida y probablemente la más segura**: menos nodos, menos que se
+rompa, y Next.js normaliza. También se acepta envuelto en `{ "busy": [...] }` por si el
+`Respond to Webhook` termina anidando. Una lista vacía `[]` es una respuesta correcta y significa
+"no hay nada ocupado en ese rango".
+
+**Devolver los tentativos.** Una reserva sin pagar ocupa igual (ADR-011). No filtrar por `status`.
+
+### 2 · `Leos Firm - Reservar slot`
+
+**Lo que manda Next.js:**
+
+```json
+{
+  "lead_id": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
+  "full_name": "Ana Rivera",
+  "email": "ana@ejemplo.com",
+  "phone": "+52 55 1234 5678",
+  "service_name": "Consultoría fiscal para extranjeros",
+  "service_slug": "consultoria-fiscal-extranjeros",
+  "start_utc": "2026-08-12T14:00:00.000Z",
+  "end_utc": "2026-08-12T15:00:00.000Z",
+  "client_timezone": "America/Mexico_City"
+}
+```
+
+> ⚠️ **Las claves van en inglés y en `snake_case`**, igual que el payload del CRM. El boceto del
+> workflow de arriba dice `summary: "RESERVA SIN PAGAR — {{ nombre }}"`: eso era pseudocódigo. La
+> expresión real es **`{{ $json.body.full_name }}`**. Un `{{ nombre }}` literal deja el título del
+> evento vacío y Claudia ve *"RESERVA SIN PAGAR — "* sin saber de quién es.
+
+**Lo que Next.js espera de vuelta:**
+
+```json
+{ "eventId": "abc123def456" }
+```
+
+También se acepta **`{ "id": "..." }`**, que es como lo devuelve el nodo de Google Calendar sin
+renombrar nada. Si vuelve cualquiera de las dos, la reserva se da por hecha.
+
+**Sin `eventId` no hay reserva.** Si la respuesta no trae ninguno de los dos campos, Next.js trata la
+llamada como fallida y le dice al visitante que llame por teléfono, aunque el evento se haya creado
+en Calendar. Preferimos un hueco fantasma que el limpiador borra en 10 minutos, antes que decirle a
+alguien que tiene cita cuando no podemos demostrarlo.
+
+**Qué tiene que quedar en el evento:**
+
+| Campo de Calendar | Valor |
+|---|---|
+| `summary` | `RESERVA SIN PAGAR — {{ $json.body.full_name }}` |
+| `start` / `end` | `start_utc` / `end_utc` |
+| `status` | `tentative` |
+| `transparency` | `opaque` ← **es lo que hace que el hueco desaparezca** |
+| `description` | `lead_id`, `service_name`, `phone`, `email` |
+
+Si `transparency` queda en `transparent`, Google marca el evento como "libre", el workflow de
+disponibilidad lo devuelve igual pero **Next.js lo va a ignorar** (ver trampas), y dos personas
+pueden llevarse el mismo horario.
+
+### 3 · `Leos Firm - Confirmar cita` (FASE 6, para que quede montado ya)
+
+**Lo que mandará el webhook de Square** — nunca el navegador (ADR-002):
+
+```json
+{
+  "eventId": "abc123def456",
+  "lead_id": "3f1c8a9e-77b4-4c21-9a2e-0d5b6f8c1234",
+  "full_name": "Ana Rivera",
+  "email": "ana@ejemplo.com",
+  "service_name": "Consultoría fiscal para extranjeros"
+}
+```
+
+**Lo que se espera de vuelta:** `{ "meetingUrl": "https://meet.google.com/xxx-yyyy-zzz" }`
+
+El contrato de este puede moverse cuando se construya la FASE 6 — es el único de los cuatro que
+todavía no tiene un consumidor escrito.
+
+### Trampas de Google Calendar que resuelve Next.js
+
+Van documentadas acá para que **no** se resuelvan dos veces. Next.js normaliza los tres casos, así
+que el workflow puede devolver los eventos crudos sin filtrar nada:
+
+| Caso | Qué manda Google | Qué hace Next.js |
+|---|---|---|
+| **Evento de día completo** | `start: { "date": "2026-08-12" }`, **sin `dateTime`** | Lo trata como ocupado de 00:00 a 24:00 en `America/Chicago`. Si se leyera solo `dateTime`, el bloqueo desaparecería y el día se ofrecería libre → **doble reserva** |
+| **Evento cancelado** | `status: "cancelled"` | Lo descarta. Google los sigue devolviendo un tiempo; contarlos bloquearía huecos que están libres |
+| **Evento marcado «Libre»** | `transparency: "transparent"` | Lo descarta. Es la semántica de Google: ese evento no ocupa agenda |
+
+El primero es el peligroso: los otros dos hacen perder ventas, ese hace vender dos veces la misma
+hora.
+
+### Lo que Next.js hace cuando n8n no responde
+
+Mismo criterio que el CRM: **un fallo nuestro no se convierte en un fallo del visitante**.
+
+| Situación | Respuesta al visitante |
+|---|---|
+| Disponibilidad no responde / da error | `502` + mensaje amable + **teléfono de la firma** |
+| Reservar no responde | `502` + teléfono. **No se retuvo nada** — no hay que compensar |
+| Reservó bien pero el CRM falla | `201` con `crmDelivery: "failed"`. La cita sigue viva; se pierde la fila |
+| El slot se lo llevaron entre medias | `409` + horarios alternativos del mismo día |
+
+### Mientras no existan las URLs: el mock
+
+La mitad de Next.js se construye contra este contrato **antes** de que los workflows existan, con un
+mock aislado en `src/lib/n8n/mock.ts`.
+
+**Cuándo entra el mock:** cuando falta la variable de entorno **y** no estamos en producción.
+
+```
+¿hay N8N_AVAILABILITY_WEBHOOK_URL?  ── sí ──▶ n8n de verdad
+            │
+            no
+            ▼
+    ¿NODE_ENV = production?  ── sí ──▶ 502 + teléfono (nunca horarios falsos)
+            │
+            no
+            ▼
+    mock (ocupados deterministas, con un día lleno para ver el caso "sin cupo")
+```
+
+**Cambiar al webhook real es poner la variable y volver a desplegar. No se toca código.**
+
+En producción el mock **no puede** activarse por diseño: un sitio publicado que ofrece horarios
+inventados y finge reservar es peor que uno que dice "llámanos". Es la misma lección de las variables
+que faltaban en Vercel y dejaron el CRM guardando cero leads en silencio.
+
+---
+
 ## Endpoints de Next.js
 
 | Método | Ruta | Qué hace |
@@ -266,6 +478,26 @@ Es el correo (`marco@leosfirm.com`) si es el calendario principal de esa cuenta,
 | 3 | Ventana máxima hacia adelante | 60 días |
 | 4 | Duración de la sesión | 60 min para los 8 servicios |
 | 5 | Días u horas bloqueados fijos | Ninguno |
+| 6 | ¿Se respeta `bufferMinutes` entre citas? | **No** — ver abajo |
+
+#### ⚠️ Decisión 6: `bufferMinutes` está en conflicto consigo mismo
+
+`BUSINESS_HOURS` (`src/constants/business.ts`) declara `bufferMinutes: 15` y lo describe como
+*"gap between appointments"*, pero también declara `slotIntervalMinutes: 60` con sesiones de 60
+minutos. **Los dos no caben:** si las citas empiezan cada hora y duran una hora, no queda hueco
+donde meter 15 minutos.
+
+Aplicar el buffer literalmente tendría un costo de negocio grande y nada evidente: una cita a las
+9:00 invalidaría la de las 10:00, y la agenda de Claudia pasaría de **8 huecos al día a 4**.
+
+**Lo que hace el código mientras tanto:** calcula solape estricto — un slot está libre si no se pisa
+con ningún evento. `bufferMinutes` queda declarado pero **sin usar**, y anotado como tal en el
+código para que nadie crea que se olvidó.
+
+**Lo que hay que preguntarle a la clienta:** ¿quiere un descanso real entre consultas? Si la
+respuesta es sí, lo correcto **no** es aplicar el buffer al cálculo, sino acortar la sesión a 45
+minutos dentro del hueco de 60 — se conservan los 8 huecos diarios y el descanso es real. Es un
+cambio de `durationMinutes` en el catálogo, no de la aritmética.
 
 ### Verificación antes de codear
 

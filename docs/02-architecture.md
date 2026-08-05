@@ -294,6 +294,9 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `NEXT_PUBLIC_SITE_URL` | URL pública del sitio | pública | SÍ |
 | `N8N_CRM_WEBHOOK_URL` | Webhook del CRM en n8n (ADR-010) | secreta | SÍ |
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n, header `x-leosfirm-token` | secreta | SÍ |
+| `N8N_AVAILABILITY_WEBHOOK_URL` | Webhook de disponibilidad (FASE 5). Sin ella: mock fuera de producción, `502` en producción | secreta | NO |
+| `N8N_BOOKING_WEBHOOK_URL` | Webhook de reserva tentativa (FASE 5). Mismo comportamiento al faltar | secreta | NO |
+| `N8N_CONFIRM_WEBHOOK_URL` | Webhook de confirmación tras el pago (FASE 6) | secreta | NO |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | pública | ⏸️ congelada |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anónima (respeta RLS) | pública | ⏸️ congelada |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio — **solo servidor** | secreta | ⏸️ congelada |

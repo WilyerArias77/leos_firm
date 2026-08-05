@@ -134,6 +134,23 @@ anticipación mínima, ventana máxima) tienen valores por defecto y no bloquean
 calendario de Claudia y la fila del CRM avanza a `agenda`.
 **Doc:** [`features/scheduling.md`](./features/scheduling.md) — **ya escrito**
 
+**La fase se construye en dos mitades en paralelo (2026-08-05).** El contrato que las une está
+cerrado y documentado campo por campo en
+[`features/scheduling.md`](./features/scheduling.md) § *Contrato exacto entre Next.js y n8n*:
+
+| Mitad | Quién | Estado |
+|-------|-------|--------|
+| Los 4 workflows de n8n + credencial de Calendar | Wilyer | 🔨 En curso |
+| `/agendar`, los 2 endpoints y la aritmética de husos | Next.js | ⬜ Sin empezar |
+
+La mitad de Next.js **no espera** a que existan los webhooks: se construye contra el contrato con un
+mock local, y pasar a producción es poner `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL`
+— sin tocar código. **El mock no puede activarse en producción por diseño.**
+
+⏳ **Dos columnas nuevas en la hoja del CRM** (`Politica aceptada el`, `IP de aceptacion`) son
+requisito de esta fase y las crea quien mantiene el workflow, no el código:
+[`features/crm-sheets.md`](./features/crm-sheets.md) § *Dos columnas nuevas*.
+
 ### FASE 6 — Square: checkout + webhook ⬜
 Web Payments SDK, `POST /checkout`, webhook con firma HMAC e idempotencia. Al confirmarse el pago:
 el evento tentativo pasa a confirmado con enlace de Meet y el CRM avanza a `pagado`.

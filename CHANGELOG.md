@@ -101,6 +101,85 @@
 
 ---
 
+## [2026-08-05] — Contrato Next.js ↔ n8n del agendamiento — v0.4.2
+
+### Request original
+> Vamos a implementar la mitad de Next.js de la FASE 5 […] otra persona del equipo está montando en
+> paralelo los 4 workflows de n8n y la credencial de Google Calendar. Yo todavía no tengo las URLs
+> reales de esos webhooks […] construimos contra ese contrato con un mock del lado del cliente n8n,
+> de forma que cambiar al webhook real después sea solo una variable de entorno, sin tocar lógica.
+> · no toques n8n mi compañero se encarga de eso
+> · sube todo a github y documenta los cambios mi amigo esta desarrollando los 4 borradores de n8n
+> si algo de esto le afecta documentalo claramente
+
+### Tipo de cambio
+- **DOCS**: se cierra el **contrato campo por campo** entre Next.js y los 4 workflows de n8n, para
+  que las dos mitades de la FASE 5 se construyan en paralelo sin verse
+- **ADDED (config)**: `N8N_AVAILABILITY_WEBHOOK_URL`, `N8N_BOOKING_WEBHOOK_URL` y
+  `N8N_CONFIRM_WEBHOOK_URL` — **opcionales**, para no tumbar el CRM cuando faltan
+- **DECIDED**: 24 h de anticipación mínima · 60 días de ventana · el mock nunca corre en producción
+- **OPEN**: `bufferMinutes` se declara en conflicto consigo mismo y queda **sin aplicar**
+
+> **Sin código.** Esta entrada es solo documentación: la mitad de Next.js todavía no se escribió.
+
+### Lo que le afecta a quien monta los workflows
+
+1. **El nodo Webhook tiene que responder con `Respond to Webhook`.** Con el valor por defecto
+   («Immediately») n8n contesta `{"message":"Workflow got started"}` antes de consultar Calendar, y
+   el calendario del sitio saldría vacío **sin ningún error a la vista**. El CRM no tiene este
+   problema porque ahí basta el `200`; en agendamiento el cuerpo *es* el dato.
+2. **Las claves del payload van en inglés y `snake_case`** (`full_name`, `start_utc`…), igual que el
+   CRM. El boceto decía `{{ nombre }}`: era pseudocódigo. La expresión real es
+   `{{ $json.body.full_name }}`.
+3. **Se aceptan dos formas de respuesta** en disponibilidad: la plana `{start,end,status}` y **los
+   objetos crudos de Google sin transformar**. La segunda es válida y probablemente más segura —
+   menos nodos que se rompan. También se acepta `{ "id": … }` en vez de `{ "eventId": … }`, que es
+   como lo devuelve el nodo de Calendar sin renombrar nada.
+4. **Dos columnas nuevas en la hoja del CRM** (`Politica aceptada el`, `IP de aceptacion`): el
+   esquema de los tres nodos de Sheets pasa de **25 a 27 columnas** y hay que refrescarlo.
+5. **8 segundos de presupuesto.** `src/lib/n8n/client.ts` aborta ahí.
+6. **La misma credencial Header Auth sirve para los cuatro webhooks.** No crear una por workflow.
+
+### Trampas de Google Calendar que resuelve Next.js (para no resolverlas dos veces)
+- **Evento de día completo** → llega `start.date` sin `dateTime`. Next.js lo trata como ocupado
+  00:00–24:00. Es la peligrosa: leer solo `dateTime` haría **vender dos veces la misma hora**.
+- **Evento cancelado** (`status: "cancelled"`) → se descarta.
+- **Evento marcado «Libre»** (`transparency: "transparent"`) → se descarta.
+
+El workflow puede devolver los eventos crudos sin filtrar nada.
+
+### Archivos modificados
+- `docs/features/scheduling.md` — nueva sección **§ Contrato exacto entre Next.js y n8n** (las 3
+  llamadas con su JSON de ida y vuelta, las 3 trampas de Calendar, qué hace Next.js cuando n8n no
+  responde, y cómo funciona el mock). Decisión 6 del Bloque C sobre `bufferMinutes`
+- `docs/features/crm-sheets.md` — § *Dos columnas nuevas que hay que crear para la FASE 5*, con el
+  orden de los tres pasos y qué se pierde si no se hacen
+- `docs/00-roadmap.md` — FASE 5 dividida en dos mitades con dueño y estado
+- `docs/02-architecture.md` — 3 variables nuevas en la tabla de entorno
+- `.env.example` — bloque de agendamiento, con por qué son opcionales
+
+### Cambios en base de datos
+- Ninguno. Supabase sigue congelado (ADR-010). El CRM necesita 2 columnas nuevas **en la hoja**.
+
+### Validación
+- `npm run lint` ✅ · `npm run build` ✅ (sin cambios de código: se ejecutan para confirmar que el
+  árbol sigue verde tras integrar ADR-012)
+
+### Notas
+- ⚠️ **El mock no puede activarse en producción por diseño.** Sin URL y con `NODE_ENV=production`,
+  `/agendar` responde `502` con el teléfono de la firma. Un sitio publicado que ofrece horarios
+  inventados y finge reservar es peor que uno que dice "llámanos" — es la misma lección de las
+  variables que faltaban en Vercel y dejaron el CRM guardando cero leads en silencio.
+- ⚠️ **`bufferMinutes: 15` y `slotIntervalMinutes: 60` no caben juntos** con sesiones de 60 min.
+  Aplicarlo literalmente dejaría a Claudia con 4 huecos al día en vez de 8. Si la clienta quiere
+  descanso real entre consultas, lo correcto es **acortar la sesión a 45 min**, no tocar la
+  aritmética. Pendiente de preguntar.
+- ⚠️ **Sin las 2 columnas nuevas, la evidencia de aceptación de la política se pierde en silencio.**
+  El agendamiento funciona igual; lo que falta aparece el día que alguien reclame un reembolso.
+- Sigue pendiente lo de v0.4.1: **`N8N_CRM_WEBHOOK_URL` y `N8N_WEBHOOK_TOKEN` en Vercel**.
+
+---
+
 ## [2026-08-05] — El CRM entrega de verdad — v0.4.1
 
 ### Request original
