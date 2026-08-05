@@ -6,6 +6,53 @@
 
 ---
 
+## [2026-08-05] — WF5 `Registrar pago` creado, y un dato que se perdía en silencio — v0.6.1
+
+### Request original
+> seguimos con el WF5
+
+### Tipo de cambio
+- **ADDED**: workflow `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) — **creado, sin publicar**.
+  Atiende las dos llamadas del webhook por cobro: reclama el `payment_id` en la pestaña `Pagos` y
+  después cierra la misma fila como `confirmado` o `error`
+- **DECIDED**: `Always Output Data` en el nodo de búsqueda. Sin eso, un pago que **no** está en la
+  hoja hace que el nodo no emita ningún item, el flujo se corta, nadie responde el webhook y Next.js
+  lo lee como «WF5 no respondió». Y ese es el camino **normal**: la primera vez que llega un pago la
+  hoja siempre está vacía
+- **DECIDED**: el nodo de reclamo lee del webhook **por nombre**
+  (`$('Recibir pago de Square').item.json.body…`). Después del lookup `$json` es el resultado de la
+  búsqueda —vacío en el caso normal—, así que `$json.body.payment_id` habría escrito una fila en blanco
+- **DECIDED**: el nodo de cierre **no mapea `Recibido el`**, para no machacar la hora del reclamo con
+  la del cierre — es el único dato que dice cuánto tardó en confirmarse
+- **FOUND (defecto en producción, sin corregir todavía)**: el WF1 `CRM de leads` **pierde el enlace de
+  la videollamada**. Su nodo *Guardar pago confirmado* no mapea `Enlace de la reunion`, así que el
+  `meeting_url` que manda `syncPaymentToCrm` no se escribe nunca; y *Guardar cita elegida* sí la
+  mapea, contra un campo que `CrmAppointmentRow` no tiene, escribiendo vacío. Estaba anotado como
+  corrección documental en `crm-sheets.md`; es un dato que se pierde
+
+### Archivos modificados
+- `docs/features/payments.md` · `CHANGELOG.md`
+- Fuera del repo: workflow `PkwmwCia2wqQzXwG` en la instancia de n8n
+
+### Cambios en base de datos
+- Ninguno. En la hoja del CRM: la pestaña **`Pagos`** sigue pendiente de crearse a mano.
+
+### Validación
+- `validate_workflow` ✅ (11 nodos) · credenciales asignadas automáticamente al crear:
+  `Leos Firm - Token del sitio` y `api_sheet_aiinovate`
+- ❌ **Sin ejecutar.** No puede probarse hasta que exista la pestaña `Pagos`: contra una pestaña
+  inexistente el nodo lanza y nadie responde el webhook.
+
+### Notas
+- ⛔ **Orden obligatorio para que esto funcione:** crear la pestaña `Pagos` con sus 11 encabezados →
+  publicar el WF5 → recién entonces probar. Publicar antes de crear la pestaña cambia un `503` por
+  otro.
+- **Los encabezados van sin tildes** y **antes** de la primera ejecución, por la misma razón que en
+  `Leads`: son nombres de clave, y con la hoja vacía n8n escribe las claves del sobre del webhook en
+  vez de las columnas mapeadas.
+
+---
+
 ## [2026-08-05] — FASE 6: el cobro con Square, de punta a punta del lado de Next.js — v0.6.0
 
 ### Request original

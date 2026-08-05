@@ -330,7 +330,7 @@ por correo, que además es donde el cliente lo va a buscar el día de la cita.
 | # | Workflow | Estado | Qué hace |
 |---|---|---|---|
 | 3 | `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) | Listo, **sin publicar** | tentativo → confirmado + Meet + correos |
-| 5 | `Leos Firm - Registrar pago` | **No existe** | Reclama el `event_id` y escribe la fila en `Pagos` |
+| 5 | `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) | **Creado 2026-08-05, sin publicar** | Reclama el `payment_id` y escribe la fila en `Pagos` |
 
 ### Cambios al WF3 antes de publicarlo
 
@@ -343,19 +343,39 @@ por correo, que además es donde el cliente lo va a buscar el día de la cita.
    porque el Meet es asíncrono, y `sendUpdates=none` en ambas llamadas para que Google no mande su
    propia invitación además de la nuestra.
 
-### WF5 · `Leos Firm - Registrar pago`
+### WF5 · `Leos Firm - Registrar pago` — creado el 2026-08-05 (`PkwmwCia2wqQzXwG`)
+
+Atiende las **dos** llamadas que le hace el webhook por cada cobro, y se ramifica por `status`:
 
 ```
-Webhook POST /leos-firm/pago   (Header Auth, el mismo x-leosfirm-token)
-  → Google Sheets · lookup en `Pagos` por `ID de evento (Square)`
-  → If: ¿existe?
-      sí  → Respond { duplicate: true }
-      no  → Sheets append (estado `recibido`) → Respond { duplicate: false }
+Webhook POST /leos-firm/pago   (Header Auth, el mismo x-leosfirm-token, responseNode)
+  → If «Es el primer aviso del pago»  ($json.body.status === 'recibido')
+      sí → Sheets · lookup en `Pagos` por `Pago (Square)`   ⚠️ Always Output Data
+           → If «Ya estaba registrado»
+               sí → Respond { duplicate: true }
+               no → Sheets appendOrUpdate (estado `recibido`) → Respond { duplicate: false }
+      no → Sheets appendOrUpdate (estado `confirmado` | `error`) → Respond { ok: true }
 ```
 
-También atiende la actualización final (`status: confirmado` / `error`) con un `appendOrUpdate` sobre
-la misma clave. **Una variable de entorno nueva:** `N8N_PAYMENTS_WEBHOOK_URL`, y `"confirm"` y
-`"payments"` se añaden al tipo `N8nWebhook` de `src/lib/n8n/client.ts`. El token es el que ya existe.
+**Tres decisiones que no se ven en el diagrama y sin las cuales no funciona:**
+
+1. ⚠️ **`Always Output Data` en el nodo de búsqueda.** Sin eso, un pago que **no** está en la hoja
+   hace que el nodo no devuelva **ningún** item: el flujo se corta ahí, nadie responde, y el webhook
+   de Next.js espera hasta su timeout de 8 s y lo lee como «WF5 no respondió» → `503`. Y ese es el
+   camino **normal**, no el raro: la primera vez que llega un pago la hoja siempre está vacía.
+2. **El nodo de reclamo lee del webhook por nombre**
+   (`$('Recibir pago de Square').item.json.body…`), no de `$json`. Después del lookup, `$json` es el
+   resultado de la búsqueda —vacío en el caso normal—, así que un `$json.body.payment_id` escribiría
+   una fila en blanco.
+3. **El cierre NO mapea `Recibido el`.** Es un `appendOrUpdate` sobre la misma fila, y volver a
+   escribir esa columna machacaría la hora del reclamo con la del cierre. Se pierde el único dato que
+   dice cuánto tardó en confirmarse.
+
+**Las credenciales quedaron asignadas solas** al crearlo: `Leos Firm - Token del sitio` (Header Auth)
+y `api_sheet_aiinovate` (Google Sheets). No hay que reconectarlas a mano.
+
+**Ninguna variable de entorno nueva más allá de `N8N_PAYMENTS_WEBHOOK_URL`**, ya declarada. El token
+es el que ya existe.
 
 ---
 
@@ -573,10 +593,20 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
 
 ### Lo que falta, y sin esto NO hay cobro funcionando
 
-- [ ] ⛔ **WF5 `Leos Firm - Registrar pago` — no existe.** Mientras no exista, el webhook responde
-      `503` y **ningún pago se confirma** (§ *Qué pasa hoy si alguien paga*). Es el bloqueante nº 1
+- [x] **WF5 `Leos Firm - Registrar pago` creado** (`PkwmwCia2wqQzXwG`), con credenciales asignadas
+- [ ] ⛔ **Crear la pestaña `Pagos`** con sus 11 encabezados, **antes** de publicar el WF5 y antes de
+      su primera ejecución. Si el WF5 corre contra una pestaña que no existe, el nodo lanza y **nadie
+      responde el webhook** — el mismo `503`, por otro motivo
+- [ ] ⛔ **Publicar el WF5** — creado pero inactivo. Mientras siga así, el webhook responde `503` y
+      **ningún pago se confirma** (§ *Qué pasa hoy si alguien paga*)
 - [ ] ⛔ **WF3: contrato nuevo + `If-Match`, y publicarlo** (hoy no lo está a propósito)
-- [ ] ⛔ **Crear la pestaña `Pagos`** con sus 11 encabezados, **antes** de la primera ejecución
+- [ ] ⛔ **WF1 `CRM de leads`: mover `Enlace de la reunion` de la etapa `agenda` a `pagado`.** No es
+      solo la corrección documental que ya estaba anotada: **es un dato que hoy se pierde.** El nodo
+      *Guardar pago confirmado* no mapea esa columna, así que el `meeting_url` que manda
+      `syncPaymentToCrm` no se escribe nunca, y el nodo *Guardar cita elegida* sí la mapea contra un
+      campo que `CrmAppointmentRow` **no tiene** — escribe vacío. Resultado: el enlace de la
+      videollamada no llega jamás a la hoja. **El WF1 está activo**, así que tocarlo es un cambio en
+      producción
 - [ ] ⛔ **Poner `30` dentro del nodo Code del WF4**, o el limpiador borra slots a los 10 minutos
       mientras el código promete 30
 - [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox
