@@ -144,6 +144,20 @@ excepción es deliberada: está explicada en `src/lib/env.ts` y en `03-security.
    el spreadsheet.
 4. **Publicar** el workflow y copiar la Production URL a `N8N_CRM_WEBHOOK_URL`.
 
+### "The 'Column to Match On' parameter is required"
+
+El *resource mapper* de Google Sheets guarda tres cosas juntas: `matchingColumns` (por cuál columna
+emparejar), `value` (qué escribir) y `schema` (qué columnas existen). **Declarar `matchingColumns`
+con el `schema` vacío no basta**: n8n valida la primera contra el segundo, no la encuentra y vuelve a
+pedirla. Es lo que pasó al crear el workflow desde el SDK, donde el esquema no se descubre solo.
+
+Los tres nodos declaran ahora las **25 columnas** de la hoja, con `ID` marcada como `defaultMatch`.
+El `value` de cada uno sigue siendo un subconjunto: el esquema describe la hoja completa, el `value`
+describe lo que esa etapa escribe.
+
+> Si el error reaparece tras editar la hoja, es que n8n perdió el esquema: abrir el nodo, refrescar
+> las columnas y volver a elegir **ID** en *Column to Match On*.
+
 ### Cuando el nodo "no encuentra la hoja"
 
 Pasó en el montaje inicial y el mensaje de n8n no ayuda a distinguir la causa. El documento se
