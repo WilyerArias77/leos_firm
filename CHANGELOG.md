@@ -6,6 +6,48 @@
 
 ---
 
+## [2026-08-05] — Las ADR de la FASE 6 al registro, y `payments.md` deja de describir un pasado — v0.6.6
+
+### Request original
+> continua
+
+### Tipo de cambio
+- **DOCS**: **ADR-013** (la idempotencia la da el evento de Calendar; la hoja es el registro) y
+  **ADR-014** (el contexto de la cita viaja en la metadata de la orden de Square) copiadas de
+  `features/payments.md` a `02-architecture.md`, que es el registro autoritativo. En el feature doc
+  pasan de *propuesta* a **aceptada**, con una nota de que la autoridad es el otro archivo
+- **FOUND**: **ADR-011 nunca había llegado al registro.** `02-architecture.md` saltaba de la 010 a la
+  012, y ADR-011 —la retención del slot es un evento tentativo— es la base sobre la que se apoya
+  ADR-013 y está citada por media documentación. Copiada también, con el aprendizaje del día
+  incorporado: `SLOT_HOLD_MINUTES` vive en dos sitios y desincronizarlos cobra sin poder entregar
+- **DOCS**: `payments.md` describía un estado que dejó de ser cierto hace horas. Corregidos el
+  encabezado (*«falta la mitad de n8n, WF5 no existe»*), la tabla de workflows (WF3 y WF5 constaban
+  «sin publicar») y el § *Qué pasa hoy si alguien paga*, que narraba la secuencia previa a WF5
+  terminando en `503`. Ahora describe la cadena completa y **tabula los caminos de fallo** que
+  siguen vigentes
+- **FIXED (doc)**: en `crm-sheets.md`, `Enlace de la reunion` figuraba en la etapa `agenda`. La
+  escribe `pagado` — el Meet no existe antes del pago. Era la última secuela del defecto corregido en
+  el WF1
+
+### Archivos modificados
+- `docs/02-architecture.md` — ADR-011, ADR-013 y ADR-014
+- `docs/features/payments.md` · `docs/features/crm-sheets.md` · `CHANGELOG.md`
+- **Sin cambios de código ni de workflows.**
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- Lectura del registro de ADR en `02-architecture.md` para confirmar el hueco de la 011 antes de
+  escribir nada
+
+### Notas
+- El § *Qué pasa hoy si alguien paga* pasa de narrar una carencia a documentar garantías. Los cuatro
+  caminos de fallo tabulados —`503` y reintento de 72 h, segundo correo evitado, 412 por `If-Match`,
+  y el `404` del limpiador— son justamente lo que se verificó con ejecuciones reales
+
+---
+
 ## [2026-08-05] — El TTL del limpiador en 30 y publicado: cierra el riesgo de cobrar sin entregar — v0.6.5
 
 ### Request original

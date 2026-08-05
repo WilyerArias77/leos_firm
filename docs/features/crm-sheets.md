@@ -82,7 +82,7 @@ mapea por nombre: **un encabezado mal escrito pierde ese dato en silencio**, Goo
 | `IP` | `consent_ip` | formulario |
 | `Fecha de la cita` | `appointment_at` | agenda |
 | `Zona horaria del cliente` | `appointment_timezone` | agenda |
-| `Enlace de la reunion` | `meeting_url` | agenda |
+| `Enlace de la reunion` | `meeting_url` | **pagado** — el Meet no existe antes del pago |
 | `Pago (Square)` | `payment_id` | pagado |
 | `Monto pagado` | `amount_usd` | pagado |
 | `Pagado el` | `paid_at` | pagado |

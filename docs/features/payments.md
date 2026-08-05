@@ -1,20 +1,24 @@
 # Feature: Pagos con Square — checkout y confirmación de la cita
 
-> **Estado:** 🔨 **La mitad de Next.js está construida** (2026-08-05): checkout, webhook, poll de
-> estado y la pantalla de pago con el Web Payments SDK. **Falta la mitad de n8n** — WF5 no existe y
-> WF3 no está publicado — y sin ella **el webhook responde `503` a propósito** (ver
-> § *Qué pasa hoy si alguien paga*)
+> **Estado:** ✅ **Las dos mitades cerradas y probadas en sandbox** (2026-08-05). La cadena completa
+> —checkout → Square → webhook → WF5 → WF3 → WF1— está publicada y verificada de punta a punta contra
+> Calendar, Sheets y Gmail reales. El riesgo del limpiador borrando el slot mientras se paga quedó
+> cerrado el mismo día (§ *El riesgo del limpiador*).
+> **Falta para producción:** la prueba sobre el sitio desplegado con la tarjeta de sandbox, y la
+> cuenta de producción de Square verificada con banco vinculado (§ *Pendiente*)
 > **Última actualización:** 2026-08-05
 > **Archivos:** `src/lib/square/{client,signature,webPayments}.ts` ·
 > `src/services/{payment,checkout}.service.ts` · `src/app/api/v1/checkout/route.ts` ·
 > `src/app/api/v1/webhooks/square/route.ts` · `src/app/api/v1/orders/[id]/status/route.ts` ·
 > `src/components/features/payments/PaymentPanel/` · `src/types/{payment,square}.types.ts` ·
 > `src/lib/validation/{checkout,square-webhook}.schema.ts`
-> **Workflows de n8n:** `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`, listo sin publicar) +
-> **uno nuevo**, `Leos Firm - Registrar pago`
+> **Workflows de n8n:** `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`, ✅ publicado) ·
+> `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`, ✅ publicado) ·
+> `Leos Firm - Limpiar reservas vencidas` (`hLWyt2vHv3CrCVBt`, ✅ TTL 30)
 > **Decisiones asociadas:** ADR-002 (el webhook es la verdad del pago) · ADR-006 (precios en el
 > servidor) · ADR-009 (todos los servicios se cobran) · ADR-011 (la retención es un evento
-> tentativo) · **ADR-013 y ADR-014 se proponen aquí**
+> tentativo) · **ADR-013 y ADR-014 nacieron aquí** y están aceptadas en
+> [`02-architecture.md`](../02-architecture.md)
 > **Depende de:** [`scheduling.md`](./scheduling.md) — cuando esto empieza, ya hay un `eventId`
 > tentativo · [`crm-sheets.md`](./crm-sheets.md) — la fila del lead ya existe en `agenda`
 
@@ -89,7 +93,9 @@ webhook sabe que alguien pagó y no sabe qué cita confirmar.
 
 ## ADR-013: la idempotencia la da el evento de Calendar; la hoja es el registro
 
-**Fecha:** 2026-08-05 · **Estado:** propuesta — se copia a `02-architecture.md` al abrir la FASE 6
+**Fecha:** 2026-08-05 · **Estado:** ✅ **aceptada** — copiada a
+[`02-architecture.md`](../02-architecture.md) el 2026-08-05. **Ese documento es la autoridad**; lo de
+aquí es el razonamiento largo que la originó
 
 **Contexto.** El diseño original guardaba los `event_id` procesados en una tabla `webhook_events` de
 Supabase, con una restricción `UNIQUE` haciendo el trabajo pesado. Sin base de datos, hay que separar
@@ -138,7 +144,9 @@ ejecutarse dos veces ya está guardado en Calendar** — no hacía falta inventa
 
 ## ADR-014: el contexto de la cita viaja dentro de la orden de Square
 
-**Fecha:** 2026-08-05 · **Estado:** propuesta — se copia a `02-architecture.md` al abrir la FASE 6
+**Fecha:** 2026-08-05 · **Estado:** ✅ **aceptada** — copiada a
+[`02-architecture.md`](../02-architecture.md) el 2026-08-05. **Ese documento es la autoridad**; lo de
+aquí es el razonamiento largo que la originó
 
 **Contexto.** El hueco 2: el webhook recibe un pago y necesita `lead_id` y `eventId` para saber qué
 confirmar. La tabla `orders` de Supabase era el puente entre ambos mundos.
@@ -329,10 +337,10 @@ por correo, que además es donde el cliente lo va a buscar el día de la cita.
 
 | # | Workflow | Estado | Qué hace |
 |---|---|---|---|
-| 3 | `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) | Listo, **sin publicar** | tentativo → confirmado + Meet + correos |
-| 5 | `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) | **Creado 2026-08-05, sin publicar** | Reclama el `payment_id` y escribe la fila en `Pagos` |
+| 3 | `Leos Firm - Confirmar cita` (`5Tx6yxAmPBMghDBS`) | ✅ **PUBLICADO** — versión activa `263ced76` | tentativo → confirmado + Meet + correos |
+| 5 | `Leos Firm - Registrar pago` (`PkwmwCia2wqQzXwG`) | ✅ **PUBLICADO** y probado por sus tres caminos | Reclama el `payment_id` y escribe la fila en `Pagos` |
 
-### WF3 · Cambios aplicados el 2026-08-05 — **sin publicar todavía**
+### WF3 · Cambios aplicados el 2026-08-05 — ✅ publicados
 
 1. ✅ **Contrato nuevo** (ADR-014): entra `{ event_id, lead_id, payment_id, amount_usd, paid_at }` —
    **solo identificadores**. El nombre, el correo, el teléfono, el servicio y el huso del cliente se
@@ -542,25 +550,29 @@ reales. Cuando el token hacía falta de verdad, Square rechaza con
 
 ## Qué pasa hoy si alguien paga
 
-Con las credenciales de sandbox puestas y **sin WF5**, la secuencia real es:
+Con las credenciales de sandbox puestas y **la cadena completa publicada**, la secuencia real es:
 
 ```
 tarjeta → /checkout → Square cobra ✅
         → webhook: firma verificada ✅
-        → claimPaymentRow → N8N_PAYMENTS_WEBHOOK_URL no existe → null
-        → 503 → Square reintenta durante 72 h
+        → claimPaymentRow → WF5 escribe la fila en `Pagos` como `recibido` ✅
+        → 200 a Square, y el resto en after()
+        → WF3: GET + ETag → PATCH con If-Match → confirmed + Meet ✅
+        → WF1: la fila del CRM avanza a `pagado` con el enlace de la reunion ✅
+        → WF5 cierra la fila de `Pagos` como `confirmado` ✅
 ```
 
-**Es el comportamiento correcto y es deliberado.** Sin WF5 no sabemos si ese pago ya se procesó, y
-seguir adelante podría reemplazar un enlace de Meet ya enviado por correo (ADR-013). El `503` deja el
-evento en la cola de reintentos de Square: **cuando WF5 exista y se publique, los pagos pendientes se
-confirman solos**, sin tocar código y sin perder ninguno.
+**Los caminos de fallo siguen siendo los diseñados**, y ninguno confirma a ciegas:
 
-El mock tampoco lo tapa: `src/lib/n8n/mock.ts` **se niega** a simular `confirm` y `payments`. Una
+| Qué falla | Qué pasa |
+|---|---|
+| Falta la clave de firma, o WF5 no responde | **`503`**, no `200`. Square reintenta 72 h y el pago se recupera solo |
+| El `event_id` ya estaba reclamado en `Pagos` | La ejecución sale por `Ya estaba confirmada`: **cero segundo correo** |
+| Dos webhooks a la vez sobre el mismo evento | El segundo choca con el **412** de Calendar (`If-Match`) y no produce efecto |
+| El limpiador borró el slot mientras se pagaba | GET → **404** → `502` → fila en `error`, y `COBRADO SIN CONFIRMAR` en los logs. **Mucho menos probable desde que el TTL es 30** |
+
+El mock no tapa nada: `src/lib/n8n/mock.ts` **se niega** a simular `confirm` y `payments`. Una
 confirmación falsa marcaría como pagada una cita que nadie pagó.
-
-**Para cerrar la fase hacen falta, en este orden:** WF5 creado y publicado → WF3 con el contrato
-nuevo, `If-Match` y publicado → la pestaña `Pagos` con sus 11 encabezados → el `30` dentro del WF4.
 
 ---
 
@@ -720,16 +732,16 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
       Calendar; publicado por MCP, que no reescribe nodos. **Con esto cierra el riesgo de cobrar sin
       poder entregar.** La frecuencia del cron subió también a 30 min
 - [ ] 🏷️ Renombrar el nodo `Cada 10 minutos` del WF4 —corre cada 30— y su `description`. Cosmético
-- [ ] **Poner `30` en la descripción que escribe el WF2** (nodo `Crear evento TENTATIVO`): cada
-      evento tentativo dice hoy *«Si el pago no llega en 10 minutos, el limpiador la borra»*, y
-      Claudia lo lee en su calendario. No rompe nada —el limpiador se guía por el `summary`— pero es
-      exactamente el defecto que ya se corrigió en el WF3. También a mano: ese nodo HTTP Request
-      pierde la credencial con cada update por MCP
+- [ ] 💤 **DEUDA ACEPTADA (2026-08-05): el `30` en la descripción que escribe el WF2** (nodo
+      `Crear evento TENTATIVO`). Ver la tabla del § *El riesgo del limpiador* para el porqué
 - [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox
       (`4111 1111 1111 1111`) — en local la firma no puede validar y es correcto
 - [ ] **Cuenta de producción de Square** verificada y con banco vinculado — la clienta
-- [ ] Copiar **ADR-013** y **ADR-014** a `docs/02-architecture.md`
+- [x] **ADR-013 y ADR-014 copiadas a [`02-architecture.md`](../02-architecture.md)** (2026-08-05).
+      De paso se copió **ADR-011**, que nunca había llegado al registro —saltaba de la 010 a la 012—
+      y del que ADR-013 depende
 - [ ] `NEXT_PUBLIC_SITE_URL` en Vercel = el dominio real, o la firma del webhook falla siempre
-- [ ] Corregir en `crm-sheets.md` la etapa de `Enlace de la reunion`: es `pagado`, no `agenda`
+- [x] Corregida en [`crm-sheets.md`](./crm-sheets.md) la etapa de `Enlace de la reunion`: es
+      `pagado`, no `agenda` (2026-08-05)
 - [ ] Cupón de referido del 100 % (FASE 10): **no pasa por Square**. Sin pago no hay webhook, así que
       la confirmación tendrá que dispararse desde `/checkout`. Diseñarlo entonces, no ahora

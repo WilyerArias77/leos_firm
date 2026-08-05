@@ -534,6 +534,39 @@ Next.js ──POST webhook──▶ n8n ──┬──▶ Google Sheets   (CRM)
   justificado en el propio archivo: un 500 en el diagnóstico pierde el lead *y* la persona.
 - Los cron de recordatorios dejan de necesitar Vercel Pro: los ejecuta n8n (`04-deployment.md`).
 
+### ADR-011: La retención del slot es un evento tentativo en Google Calendar
+
+**Fecha:** 2026-08-04 · **Detalle:** [`features/scheduling.md`](./features/scheduling.md)
+
+**Contexto.** La regla de negocio dice que ninguna cita existe sin pago confirmado, pero entre elegir
+la hora y terminar de pagar pasan minutos en los que otro visitante puede llevarse el mismo slot. El
+diseño original resolvía esto con una tabla `slot_holds` en Supabase — que ahora está congelado
+(ADR-010). Sin base de datos, la retención necesita otro lugar donde vivir.
+
+**Decisión.** El slot se retiene **creando el evento en Google Calendar con `status: 'tentative'`** y
+un resumen que lo delata: `RESERVA SIN PAGAR — <nombre>`. Cuando Square confirma el pago, el mismo
+evento pasa a `confirmed`, cambia de título y recibe el enlace de Meet. Si el pago no llega, un
+workflow programado lo borra.
+
+**Consecuencias.**
+- Google Calendar sigue siendo la **única** fuente de verdad de la disponibilidad (ADR-003 intacto):
+  la retención ocupa espacio real, así que el siguiente visitante ya no ve ese hueco.
+- Claudia ve las reservas sin pagar en su calendario y distingue una cita real de una a medias de un
+  vistazo.
+- No hace falta base de datos para el bloqueo. Un problema menos y una integración menos.
+- **El nodo nativo de Calendar de n8n (v1.3) no expone `status`**, solo `showMeAs`. Como todo este ADR
+  se sostiene sobre `status: 'tentative'`, los workflows que crean y confirman el evento llaman a la
+  API de Calendar por HTTP Request en vez de usar el nodo.
+- **Costo:** un abandono deja basura en el calendario hasta que el limpiador pasa. El limpiador corre
+  cada 30 minutos y la retención es `SLOT_HOLD_MINUTES`, hoy **30**. Son dos números distintos aunque
+  hoy coincidan —frecuencia del cron y retención— y `SLOT_HOLD_MINUTES` **vive en dos sitios**:
+  `src/constants/business.ts` y el nodo Code del WF4, que es la única copia fuera del repo. Si se
+  desincronizan, el limpiador puede borrar un slot que se está pagando: **cobro hecho, cita
+  imposible**. Pasó, y está contado en [`features/payments.md`](./features/payments.md).
+- **Carrera pendiente de resolver:** dos personas pueden crear el evento tentativo casi a la vez.
+  Google Calendar no impide solapes. La mitigación es revalidar la disponibilidad justo antes de
+  crear el evento y aceptar la ventana de riesgo de unos segundos, que a este volumen es teórica.
+
 ### ADR-012: Las dos integraciones de Google viven en cuentas de dueños distintos
 
 **Fecha:** 2026-08-05
@@ -575,3 +608,82 @@ detalle olvidado:
   workflow del CRM, que acaba de quedar verde. La migración se hace con el agendamiento ya
   funcionando, en un solo movimiento y con una verificación de escritura real.
 - El calendario **no arrastra** ninguna de estas dudas: nace en la cuenta correcta.
+
+### ADR-013: La idempotencia la da el evento de Calendar; la hoja es el registro
+
+**Fecha:** 2026-08-05 · **Detalle:** [`features/payments.md`](./features/payments.md)
+
+**Contexto.** Square reintenta un webhook hasta 72 horas, así que `payment.updated` llega más de una
+vez por diseño. El diseño original guardaba los `event_id` procesados en una tabla `webhook_events` de
+Supabase, con una restricción `UNIQUE` haciendo el trabajo pesado. Sin base de datos hay que separar
+dos cosas que esa tabla resolvía juntas: **la exclusión mutua** y **el registro auditable**. Un
+registro en una hoja de cálculo es un log, no un candado: ni Google Sheets ni el Data Table de n8n
+ofrecen «escribe solo si no existe» de forma atómica.
+
+**Decisión.** Se separan, y cada una va donde puede cumplirse de verdad.
+
+**1. La guardia atómica es la transición `tentative → confirmed` del propio evento de Calendar, con
+`If-Match` sobre el ETag.** El WF3 ya lee el evento antes de tocarlo; envía ese ETag en la cabecera
+`If-Match` del PATCH. Si otra ejecución lo confirmó en el intervalo, Google responde **412 Precondition
+Failed** y esa ejecución no hace nada. Es un *compare-and-swap* real, provisto por Google, sin
+infraestructura nueva. Encaja con lo ya decidido: **el estado que hay que proteger de ejecutarse dos
+veces ya está guardado en Calendar** (ADR-003, ADR-011) — no hacía falta inventarle un espejo.
+
+**2. El registro es una pestaña `Pagos` en la MISMA hoja del CRM**, una fila por `event_id` de Square.
+En la hoja y no en el Data Table de n8n porque el permiso `drive.file` es por archivo y ese archivo lo
+creó la propia credencial (ADR-012), así que una pestaña nueva hereda el permiso; porque Claudia lo ve
+donde ya trabaja (ADR-010) y un pago atascado tiene que verse sin entrar a n8n; y porque es el registro
+que los reembolsos de la FASE 9 van a necesitar. Ninguna de las dos opciones es atómica: por eso el
+candado real está en el punto 1.
+
+**Consecuencias.**
+- La pestaña `Pagos` es a la vez log, anti-replay de primera línea y **cola de reparación**: una fila
+  en `recibido` que no avanza a `confirmado` es un cobro sin cita, y se ve de un vistazo.
+- Es una hoja, no una base de datos: dos webhooks simultáneos podrían escribir dos filas para el mismo
+  `event_id`. **No importa** — la segunda ejecución choca contra el 412 de Calendar y no produce ningún
+  efecto. El registro puede tener un duplicado; la cita no.
+- Los dos nodos HTTP del WF3 usan `fullResponse` + `neverError`, y es lo que hace viable todo lo
+  anterior: así **un 412 es un dato que se enruta**, no una excepción que tumba el flujo sin responderle
+  a nadie — y un webhook sin respuesta es un `null` en Next.js, es decir una fila en `error` por algo
+  que en realidad salió bien.
+- Hay que mantener a mano una pestaña más y sus encabezados, con la misma regla de siempre: **un
+  encabezado mal escrito pierde el dato en silencio.**
+
+### ADR-014: El contexto de la cita viaja dentro de la orden de Square
+
+**Fecha:** 2026-08-05 · **Detalle:** [`features/payments.md`](./features/payments.md)
+
+**Contexto.** El cuerpo de `payment.updated` trae `payment_id`, `order_id`, `amount_money` y `status`.
+**No trae `lead_id` ni `event_id`**, y sin base de datos no hay dónde mirarlos: el webhook sabe que
+alguien pagó y no sabe qué cita confirmar. La tabla `orders` de Supabase era el puente entre ambos
+mundos.
+
+**Decisión.** El contexto viaja **con el pago**, puesto por el servidor en `POST /api/v1/checkout`:
+
+| Dónde | Qué | Por qué ahí |
+|---|---|---|
+| `Order.metadata` | `lead_id`, `event_id`, `service_slug` | Es el campo que Square ofrece para exactamente esto |
+| `Payment.reference_id` | `lead_id` | Ancla redundante y **visible en el panel de Square**: Claudia puede cruzar un cobro con una fila del CRM sin ayuda de nadie. El UUID mide 36 caracteres y el límite del campo es 40 |
+
+El webhook, tras verificar la firma, hace **`RetrieveOrder(order_id)`** y saca la metadata de ahí.
+
+**La llamada extra a Square es deliberada, no un descuido.** Más allá de la firma, el cuerpo del
+webhook no se usa como fuente de datos: el importe y el estado se releen de Square y se comparan contra
+`priceCents` del catálogo (ADR-006). Un webhook con firma válida sigue siendo un mensaje sobre cuyo
+contenido no tenemos control.
+
+**Nada de PII entra en la metadata de Square.** Nombre, correo y teléfono **no** viajan ahí — Square
+documenta la metadata como campo no apto para datos sensibles, y no hace falta: esos datos ya están en
+la `description` del evento tentativo, que el WF3 lee de todos modos (ADR-011).
+
+**Consecuencias.**
+- `POST /api/v1/checkout` crea **orden + pago**, no solo un pago. Es un paso más que un `CreatePayment`
+  pelado, y es el precio de no tener base de datos.
+- **El contrato del WF3 recibe solo identificadores** —`event_id`, `lead_id`, `payment_id`,
+  `amount_usd`, `paid_at`— y toma nombre, correo, teléfono, servicio y huso **del propio evento
+  tentativo**, parseándolos del `summary` y de la `description` que escribe el WF2.
+- Ese parseo de texto plano es la parte frágil. **Mejora recomendada al WF2:** escribir además
+  `extendedProperties.private` con `lead_id`, `service_slug`, `full_name` y `email` — un mapa
+  clave-valor pensado para esto y que no se ve en la UI del calendario. Cuesta actualizar y republicar
+  un workflow que ya funciona, y eso resetea su credencial, así que queda como recomendación y no como
+  bloqueante.
