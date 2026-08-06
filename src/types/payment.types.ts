@@ -68,6 +68,13 @@ export type ConfirmedPayment = {
  * Name, email and service are NOT here: the workflow reads them off the
  * tentative event it is about to confirm (ADR-014). Sending them would be a
  * second source of truth for the same fact.
+ *
+ * The last two fields are the exception, and they are not data the event has:
+ * they are the client's link to manage their own appointment (FASE 9,
+ * `docs/features/appointment-management.md`). The token is SIGNED HERE because
+ * the signing key never leaves the app (Mandamiento VIII), and the full URL
+ * travels alongside it so n8n never has to concatenate a path onto a host — one
+ * stray slash there is a broken link nobody notices until a client reports it.
  */
 export type ConfirmAppointmentPayload = {
   event_id: string;
@@ -75,6 +82,10 @@ export type ConfirmAppointmentPayload = {
   payment_id: string;
   amount_usd: string;
   paid_at: string;
+  /** HMAC-signed, stateless, no PII inside (ADR-016). */
+  access_token: string;
+  /** `https://<site>/agendar/cita/<token>` — what the email links to. */
+  appointment_url: string;
 };
 
 /**

@@ -13,11 +13,25 @@ export const PRICING_COPY: Record<PricingModel, { label: string | null; note: st
     label: null,
     note: "Precio cerrado del servicio.",
   },
-  "initial-consultation": {
-    label: "Consulta inicial",
-    note: "Se abona al costo total del servicio que contrates.",
+  deposit: {
+    // Short: it renders inside a Badge next to the price.
+    label: "Abono al total",
+    note:
+      "Este pago aparta tu cita y se descuenta completo del costo del servicio. " +
+      "No es el precio del servicio: Claudia te dice cuánto es durante la llamada, " +
+      "porque el costo depende de tu caso.",
   },
 };
+
+/**
+ * Notice requested by the client, 2026-08-06, word for word.
+ *
+ * Shown above the catalog and inside the diagnosis card of every service page.
+ * It says the same thing as `PRICING_COPY.deposit.note` in one line, and the
+ * client wants it visible before the visitor opens any service.
+ */
+export const DEPOSIT_NOTICE =
+  "El valor cancelado para la consulta será tomado como abono para el servicio contratado.";
 
 /**
  * Service catalog — source: `context.md` §5.
@@ -30,11 +44,11 @@ export const PRICING_COPY: Record<PricingModel, { label: string | null; note: st
  *
  * - Two services carry their own closed price and `full-service` pricing —
  *   paying closes the service.
- * - The other six charge `INITIAL_CONSULTATION.priceCents` as an
- *   `initial-consultation`: it books the first session with Claudia and is
- *   credited toward the quote she gives during that call. Their final price
- *   still depends on the case, which is exactly why it is quoted live and not
- *   printed here.
+ * - The other six charge `INITIAL_CONSULTATION.priceCents` as a `deposit`: it
+ *   **holds the appointment** and comes off the real cost of the service in full.
+ *   It is not a cheaper version of the service and it is not a product of its
+ *   own. Their final price depends on the case, which is exactly why Claudia
+ *   quotes it live and it is not printed here.
  *
  * There is no unpriced path any more: a visitor who finishes the diagnosis
  * always lands on the same schedule-and-pay flow.
@@ -82,7 +96,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Acompañamiento completo para extranjeros que necesitan crear y estructurar una empresa en Estados Unidos. No se trata solo de registrar una entidad: se define la estructura que corresponde a tu operación, tus socios y tus objetivos fiscales, para no tener que corregirla después.",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [
@@ -101,7 +115,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Manejo contable mensual para empresas que ya están operando en Estados Unidos, con entrega de reportes financieros. Se contrata por suscripción con cobro automático y una cuota inicial de configuración (set-up).",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: [
@@ -119,7 +133,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Gestión de la nómina para empresas con empleados en Estados Unidos, cumpliendo con las obligaciones que corresponden a tu estado y a tu tipo de entidad.",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: ["Procesamiento de nómina", "Cumplimiento de obligaciones asociadas"],
@@ -134,7 +148,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Cumplimiento del Sales Tax y de las obligaciones estatales que aplican a tu operación. Cada estado tiene reglas distintas: definimos cuáles te corresponden y mantenemos la empresa al día.",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: true,
     includes: ["Determinación de obligaciones estatales", "Presentaciones periódicas"],
@@ -149,7 +163,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Diagnóstico y regularización de empresas ya constituidas que se atrasaron en sus obligaciones fiscales o que fueron estructuradas sin considerar sus implicaciones. Ordenamos la situación y dejamos la entidad en cumplimiento.",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [
@@ -168,7 +182,7 @@ export const SERVICES: readonly Service[] = [
     longDescription:
       "Acompañamiento a empresas extranjeras que quieren expandir su operación a Estados Unidos: qué estructura conviene, cómo se relaciona con la empresa de origen y qué obligaciones nacen de esa decisión.",
     priceCents: INITIAL_CONSULTATION.priceCents,
-    pricingModel: "initial-consultation",
+    pricingModel: "deposit",
     durationMinutes: INITIAL_CONSULTATION.durationMinutes,
     isSubscription: false,
     includes: [

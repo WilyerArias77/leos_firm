@@ -105,6 +105,37 @@ function mockBooking(payload: unknown): { eventId: string } {
   return { eventId: `mock-evt-${suffix}` };
 }
 
+/**
+ * An appointment 48 hours from now — far enough that the ≥24 h branch of the
+ * policy is what shows by default, which is the screen worth looking at while
+ * building. Shifting the clock is how the other branch gets exercised.
+ *
+ * Simulating a READ is not the same as simulating a payment: nothing here tells
+ * anyone their money moved. That line is drawn in `mockN8nResponse`.
+ */
+function mockAppointment(payload: unknown): Record<string, unknown> {
+  const { event_id: eventId } = (payload ?? {}) as { event_id?: string };
+  const start = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+  return {
+    found: true,
+    status: "confirmed",
+    start_utc: toUtcIso(start),
+    end_utc: toUtcIso(end),
+    service_name: "Consultoría fiscal para extranjeros",
+    service_slug: "consultoria-fiscal-extranjeros",
+    lead_id: "00000000-0000-4000-8000-000000000000",
+    full_name: "Ana Rivera (MOCK)",
+    email: "ana@ejemplo.com",
+    client_timezone: "America/Mexico_City",
+    meeting_url: "https://meet.google.com/mock-aaaa-bbb",
+    // Echoed so a wrong token in the URL is visible in dev instead of silently
+    // showing the same appointment for every link.
+    mock_event_id: eventId ?? "",
+  };
+}
+
 /** Returns what the corresponding workflow would, or `null` if it has none. */
 export function mockN8nResponse(webhook: string, payload: unknown): unknown {
   // Money is never mocked. A fake confirmation would mark an appointment as
@@ -122,6 +153,14 @@ export function mockN8nResponse(webhook: string, payload: unknown): unknown {
 
   if (webhook === "availability") return mockAvailability(payload);
   if (webhook === "booking") return mockBooking(payload);
+  if (webhook === "appointment") return mockAppointment(payload);
+
+  // Cancelling and asking for another time move a calendar event and send an
+  // email — the same class of side effect `booking` already simulates, and no
+  // money is involved: refunds are manual by design (FASE 9). Answering the
+  // happy path is what lets the two buttons be clicked through locally.
+  if (webhook === "cancel") return { cancelled: true };
+  if (webhook === "reschedule") return { received: true };
 
   return null;
 }

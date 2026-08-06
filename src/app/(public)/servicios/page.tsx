@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/Card";
 import { DiagnosticTrigger } from "@/components/features/diagnostic/DiagnosticTrigger";
 import { ServiceCard } from "@/components/features/services/ServiceCard";
 import { getServices } from "@/services/service.service";
+import { DIAGNOSTIC_COPY } from "@/constants/content/diagnostic";
+import { DEPOSIT_NOTICE } from "@/constants/content/services";
 
 export const metadata: Metadata = {
   title: "Servicios",
@@ -39,7 +41,7 @@ export default async function ServicesPage() {
                 ¿No sabes cuál de todos necesitas?
               </h2>
               <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-                Responde 3 preguntas y te decimos qué corresponde a tu caso, sin costo.
+                {DIAGNOSTIC_COPY.teaser}
               </p>
             </div>
 
@@ -50,7 +52,13 @@ export default async function ServicesPage() {
             />
           </Card>
 
-          <ul className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Aviso pedido por la clienta el 2026-08-06: va arriba de todas las
+              tarjetas, antes de que el visitante entre a un servicio. */}
+          <p className="mt-10 rounded-card border border-gold/40 bg-surface-muted p-4 text-center text-sm leading-relaxed text-ink">
+            {DEPOSIT_NOTICE}
+          </p>
+
+          <ul className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {services.map((service) => (
               <li key={service.slug}>
                 <ServiceCard service={service} />

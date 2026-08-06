@@ -297,6 +297,11 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `N8N_AVAILABILITY_WEBHOOK_URL` | Webhook de disponibilidad (FASE 5). Sin ella: mock fuera de producción, `502` en producción | secreta | NO |
 | `N8N_BOOKING_WEBHOOK_URL` | Webhook de reserva tentativa (FASE 5). Mismo comportamiento al faltar | secreta | NO |
 | `N8N_CONFIRM_WEBHOOK_URL` | Webhook de confirmación tras el pago (FASE 6) | secreta | NO |
+| `N8N_PAYMENTS_WEBHOOK_URL` | Webhook del registro de pagos, pestaña `Pagos` (FASE 6, ADR-013) | secreta | NO |
+| `N8N_APPOINTMENT_WEBHOOK_URL` | Webhook que lee la cita del calendario (FASE 9). Sin base de datos, es la única forma de mostrarla | secreta | NO |
+| `N8N_CANCEL_WEBHOOK_URL` | Webhook de cancelación: libera el slot, CRM `cancelado`, dos correos (FASE 9) | secreta | NO |
+| `N8N_RESCHEDULE_WEBHOOK_URL` | Webhook que le pide otro horario a Claudia por correo. **No reagenda** (FASE 9) | secreta | NO |
+| `APPOINTMENT_TOKEN_SECRET` | Firma el enlace de la cita que va en el correo (**ADR-016**). Mín. 32 chars. ⚠️ **Rotarla invalida todos los enlaces ya enviados** | secreta | SÍ |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | pública | ⏸️ congelada |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anónima (respeta RLS) | pública | ⏸️ congelada |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio — **solo servidor** | secreta | ⏸️ congelada |
@@ -475,9 +480,9 @@ Eso tenía dos costos que se hicieron evidentes al operarlo: Claudia quedaba obl
 del correo para saber si tenía clientes nuevos, y el sitio mantenía **dos flujos distintos** —uno
 automatizado y uno manual— para el mismo tipo de visitante.
 
-**Decisión:** Los seis servicios sin precio pasan a cobrar una **consulta inicial de $50**, que se
-abona al costo total del servicio que el cliente contrate. Claudia da el precio final durante esa
-llamada y cobra el resto por su infraestructura habitual. Los dos servicios con precio cerrado no
+**Decisión:** Los seis servicios sin precio pasan a cobrar **$50 para apartar la cita**, y ese monto
+**se descuenta completo del costo real** del servicio. Claudia da ese costo durante la llamada —cotiza
+por caso— y cobra el resto por su infraestructura habitual. Los dos servicios con precio cerrado no
 cambian.
 
 Modelado con `Service.pricingModel`:
@@ -485,7 +490,13 @@ Modelado con `Service.pricingModel`:
 | Modelo | Servicios | Qué significa |
 |--------|-----------|---------------|
 | `full-service` | Consultoría fiscal ($150) · Elecciones fiscales ($250) | El pago cierra el servicio |
-| `initial-consultation` | Los otros seis ($50) | Paga la primera sesión y se abona a la cotización |
+| `deposit` | Los otros seis ($50) | **Aparta la cita** y se descuenta completo del costo real |
+
+> ⚠️ **Corrección del 2026-08-06 (la clienta).** Este modelo se llamaba `initial-consultation` y se
+> anunciaba como «Consulta inicial», y **el nombre era el error**: se leía como si los $50 compraran una
+> consulta más barata, un producto con su propio alcance. No compran nada por sí solos — son **dinero a
+> cuenta** que reserva el horario. Renombrado a `deposit` en el tipo, en el catálogo y en la copy
+> (`PRICING_COPY.deposit.label` = «Abono al total»). **No reintroducir el nombre viejo.**
 
 **Consecuencias:**
 - `Service.priceCents` deja de ser `number | null` y pasa a `number`. **No existe un camino sin
@@ -687,3 +698,49 @@ la `description` del evento tentativo, que el WF3 lee de todos modos (ADR-011).
   clave-valor pensado para esto y que no se ve en la UI del calendario. Cuesta actualizar y republicar
   un workflow que ya funciona, y eso resetea su credencial, así que queda como recomendación y no como
   bloqueante.
+
+### ADR-015: la marca de «recordatorio enviado» vive en el propio evento de Calendar
+
+**Fecha:** 2026-08-06 · **Detalle:** [`features/notifications.md`](./features/notifications.md)
+
+Registrada aquí como propuesta del doc de notificaciones. El registro completo vive en ese archivo.
+
+### ADR-016: el token de la cita es firmado y no se guarda en ningún lado
+
+**Fecha:** 2026-08-06 · **Detalle:**
+[`features/appointment-management.md`](./features/appointment-management.md)
+
+**Contexto.** ADR-001 dice que el cliente no crea cuenta y que su cita se identifica con un
+`access_token` opaco enviado por correo. Ese diseño asumía una columna `appointments.access_token` en
+Supabase contra la que comparar. **Supabase está congelado** (ADR-010) y el CRM es una hoja: no hay
+dónde guardar un token, y leer la hoja de vuelta en cada visita sería una llamada a n8n por página
+servida, con un `403` de Google como modo de fallo. Un UUID aleatorio necesita un sitio donde estar
+escrito para significar algo.
+
+**Decisión.** El token **se firma en vez de guardarse**:
+
+```
+token = base64url(eventId) + "." + base64url( HMAC-SHA256(eventId, APPOINTMENT_TOKEN_SECRET) )
+```
+
+Verificar es recalcular el HMAC y compararlo **en tiempo constante** (`crypto.timingSafeEqual`),
+igual que la firma del webhook de Square (`src/lib/square/signature.ts`). Sin estado, sin base de
+datos y sin una llamada de red para saber si un enlace es legítimo.
+
+**Consecuencias.**
+- **Nada de PII dentro del token**: solo el `eventId` de Google, que es opaco y no nombra a nadie. El
+  resto se lee del evento **después** de verificar la firma.
+- **No caduca por sí mismo** — no lleva fecha dentro. Lo que caduca es la cita: si el evento ya no
+  existe, la página responde `notFound()`.
+- **Firma inválida y cita inexistente responden lo mismo** (`404`). Distinguirlas sería un oráculo
+  para saber qué tokens son criptográficamente válidos.
+- **Es un portador: quien tiene el enlace puede cancelar.** Misma propiedad que el `access_token` de
+  ADR-001 y deliberada — pedir una contraseña a quien solo quiere mover una cita mata la función. Lo
+  que la hace aceptable: el enlace solo sale en el correo de esa persona, cancelar **no mueve
+  dinero** (los reembolsos son manuales) y los dos endpoints tienen rate limit.
+- ⚠️ **Rotar `APPOINTMENT_TOKEN_SECRET` invalida TODOS los enlaces ya enviados**, sin período de
+  gracia — no puede haberlo sin estado. Rotarlo exige saber qué citas futuras existen y reenviarles
+  el enlace.
+- `getAppointmentTokenSecret()` **sí lanza** cuando falta la variable, al revés que `getN8nEnv()`. La
+  excepción de aquel («un 500 en el diagnóstico pierde el lead y la persona») no aplica: sin secreto
+  no hay nada que servir en esa página, y servir algo sería peor.

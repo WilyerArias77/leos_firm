@@ -9,22 +9,46 @@
 
 /**
  * How far down the funnel the contact got. Each stage overwrites the same row,
- * keyed by `leadId` — Claudia reads one line per person, not three.
+ * keyed by `leadId` — Claudia reads one line per person, not four.
  *
  * `formulario` — finished the diagnosis. The contact exists, nothing is owed.
  * `agenda`     — picked a day and time; the slot is held, payment pending.
  * `pagado`     — Square confirmed the payment and the appointment is real.
+ * `cancelado`  — the client cancelled from their own link (FASE 9). TERMINAL.
  *
  * The order matters: a stage never moves backwards, so a late webhook cannot
  * downgrade a paid row.
  */
-export type CrmStage = "formulario" | "agenda" | "pagado";
+export type CrmStage = "formulario" | "agenda" | "pagado" | "cancelado";
 
+/**
+ * `cancelado` gets the HIGHEST number, and that alone is what makes it terminal
+ * — no new rule was needed. The one that already existed does all the work: a
+ * late `agenda` (2) cannot resurrect a cancelled appointment and a delayed
+ * Square webhook (3) cannot either, because both are lower than 4.
+ */
 export const CRM_STAGE_ORDER: Record<CrmStage, number> = {
   formulario: 1,
   agenda: 2,
   pagado: 3,
+  cancelado: 4,
 };
+
+/**
+ * Whether a row in `from` may be written as `to`.
+ *
+ * ⚠️ **Defined here, not yet enforced by the workflow.** WF1 does an
+ * `appendOrUpdate` keyed by `ID` without looking at the previous stage — a debt
+ * `docs/features/crm-sheets.md` § Pendiente has carried since before FASE 9.
+ * This function exists so the rule is written in exactly one place for the day
+ * the workflow reads it, instead of being re-derived in a Code node.
+ *
+ * Equal stages are allowed: rewriting `pagado` over `pagado` is the idempotent
+ * second delivery of one Square payment, and it writes the same values.
+ */
+export function canAdvanceStage(from: CrmStage, to: CrmStage): boolean {
+  return CRM_STAGE_ORDER[to] >= CRM_STAGE_ORDER[from];
+}
 
 /**
  * Whether the row reached the sheet.

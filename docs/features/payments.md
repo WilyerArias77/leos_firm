@@ -662,10 +662,12 @@ es una opción.
 
 ## Puesta en marcha
 
-**Bloque A — la cuenta (la clienta, y tarda días).** Cuenta en `app.squareup.com` a nombre de
-**Leos Firm LLC** con EIN y dirección de San Antonio, identidad verificada y cuenta bancaria de la
-LLC vinculada. Es donde caen los depósitos: no puede ser una cuenta personal, misma lógica que
-ADR-012.
+**Bloque A — la cuenta.** ✅ **Ya existía y está verificada** (comprobado por API el 2026-08-06, ver
+§ *El 401 de producción*): merchant `QVGQDZCV0X3WD`, *Leos Firm LLC*, `ACTIVE`, `USD`, location
+`7Z92KDMVTEGHQ` en San Antonio TX con `AUTOMATIC_TRANSFERS`, **creada en 2020**. La firma ya cobra por
+ahí desde antes de este proyecto, así que este bloque nunca fue un pendiente — este documento y el
+roadmap lo dieron por pendiente durante dos días sin haberlo comprobado. Cumple de sobra lo que se le
+pedía: cuenta de la LLC, no personal, misma lógica que ADR-012.
 
 **Bloque B — la aplicación (`developer.squareup.com`, mismo login).** *Create Application* →
 `Leos Firm Web`. Con el toggle en **Sandbox**: *Credentials* da el Application ID y el Access Token;
@@ -728,23 +730,72 @@ Y el frente **ya está en producción**: el bundle desplegado sirve
 `NEXT_PUBLIC_SQUARE_LOCATION_ID = 7Z92KDMVTEGHQ` — ninguno es el de sandbox. El navegador carga
 `web.squarecdn.com` y emite tokens de producción; el servidor sigue sin un token de producción válido.
 
-> ⚠️ **`.env.vercel` del repo está desactualizado y es una trampa.** Dice `sandbox-sq0idb-…`,
-> `LB2XHFGDVRJZJ` y `SQUARE_ENVIRONMENT=sandbox`, que ya no es lo que corre. Quien resincronice Vercel
-> desde ese archivo devolvería el sitio a sandbox. **Las cuatro credenciales de producción son
-> distintas de las de sandbox** (§ Bloque B) y hay que traerlas todas juntas o ninguna.
+#### Los cuatro tokens probados contra la API, 2026-08-06 — el lado de Square está COMPLETO
+
+La conclusión por eliminación de arriba era correcta, pero se llegó a ella **sin haber probado nunca
+el token de producción**. La única verificación por API que había en este documento
+(`GET /v2/locations → LB2XHFGDVRJZJ`) era contra **sandbox**. Probados por fin los dos tokens del
+repo contra los dos entornos, la matriz no deja nada abierto:
+
+| Token | `connect.squareup.com` (prod) | `connect.squareupsandbox.com` |
+|---|---|---|
+| el de `.env` (`EAAAlyGy…`) | **401** `AUTHENTICATION_ERROR/UNAUTHORIZED` | **200** · `LB2XHFGDVRJZJ` «Default Test Account» |
+| el de `.env.vercel` (`EAAAl_RH…`) | **200** · `7Z92KDMVTEGHQ` «Leos Firm LLC» | **401** `AUTHENTICATION_ERROR/UNAUTHORIZED` |
+
+**El token de producción es válido y es el de la clienta.** Merchant `QVGQDZCV0X3WD`, *Leos Firm LLC*,
+`ACTIVE`, `USD`, `US`. Su location `7Z92KDMVTEGHQ` está `ACTIVE`, en `America/Chicago` —el huso de la
+firma—, con capacidades `CREDIT_CARD_PROCESSING` y `AUTOMATIC_TRANSFERS`, y **creada el 2020-06-26**:
+es la cuenta real con la que la firma ya cobra desde hace años.
+
+Y la suscripción de webhook de producción **también existe y está activa**:
+
+```
+GET /v2/webhooks/subscriptions (prod) → 200
+  leos_firm_pago_consulta · enabled: true · api_version 2026-07-15
+  https://leos-firm.vercel.app/api/v1/webhooks/square
+  payment.created, payment.updated, refund.created, refund.updated
+```
+
+La `api_version` coincide con la que fija `square@45`, la URL es la del sitio desplegado y los cuatro
+eventos son los que el webhook espera. **En Square no falta absolutamente nada**, y en particular:
+
+> ❌ **Era falso que hiciera falta «verificar la cuenta con banco vinculado».** La cuenta está
+> `ACTIVE` con transferencias automáticas desde 2020 — la clienta ya recibe pagos por ahí. Square
+> **no** pide ninguna aprobación extra para cobrar desde el propio sitio con el Web Payments SDK,
+> porque la aplicación de `developer.squareup.com` vive bajo el mismo login de la firma y su access
+> token de producción sirve de inmediato. (El único caso que exigiría un paso extra sería cobrar
+> **hacia la cuenta de la clienta desde una aplicación de otra cuenta**: eso no se puede con un access
+> token, necesita OAuth. No es lo que hay aquí — el token es de `QVGQDZCV0X3WD`.)
+
+> ⚠️ **`.env.vercel` era una trampa, pero no la que decía este documento.** No tenía credenciales de
+> sandbox: tenía el application id y el token de **producción** junto al location de **sandbox**
+> (`LB2XHFGDVRJZJ`), una mezcla que no puede funcionar con ningún token. Corregido a `7Z92KDMVTEGHQ`,
+> el único location que ese token puede cobrar.
+
+**Entonces el `401` sale de una sola cosa: `SQUARE_ACCESS_TOKEN` en Vercel no es el token de
+producción.** Es la única hipótesis que sobrevive, y es reproducible exactamente: el token de `.env`
+—de sandbox— contra la API de producción devuelve ese mismo `401 AUTHENTICATION_ERROR/UNAUTHORIZED`,
+que es la firma que el log de Vercel registró en los dos intentos. Encaja con lo demás: alguien
+actualizó a mano el application id y el location en el panel de Vercel y **no actualizó el token**.
 
 **Qué hay que hacer, y es en el panel de Vercel, no en el código:**
 
-1. Decidir el entorno y ponerlo entero, sin mezclar mitades:
-   - **producción** → `SQUARE_ACCESS_TOKEN` **de producción**, `SQUARE_ENVIRONMENT=production`,
-     `SQUARE_WEBHOOK_SIGNATURE_KEY` de la suscripción de producción, y el application/location que ya
-     están puestos. Exige la cuenta verificada con banco vinculado (§ Bloque A, la clienta);
-   - **sandbox** → los cuatro valores de sandbox, incluidos el application id y el location id, que
-     hoy están en producción.
-2. **Volver a desplegar.** Vercel no recoge variables nuevas en un despliegue ya hecho — la lección
+1. **`SQUARE_ACCESS_TOKEN` = el token de producción** (el de `.env.vercel`, verificado arriba). Los
+   otros tres ya están bien: `SQUARE_ENVIRONMENT=production`, el application id de producción, y el
+   location que hay que dejar en `7Z92KDMVTEGHQ`.
+2. **`SQUARE_WEBHOOK_SIGNATURE_KEY` = la de la suscripción `leos_firm_pago_consulta`.** Es el segundo
+   bloqueante, y está justo detrás del primero: si aquí quedó la clave de sandbox, el cobro pasará y
+   el webhook rebotará con firma inválida → dinero cobrado y cita sin confirmar. Es el peor estado
+   posible del sistema, así que se cambia **junto con** el token, no después.
+3. **`NEXT_PUBLIC_SITE_URL` = `https://leos-firm.vercel.app`**, carácter por carácter igual a la URL
+   registrada en la suscripción, o la firma falla siempre.
+4. **Volver a desplegar.** Vercel no recoge variables nuevas en un despliegue ya hecho — la lección
    que ya costó tener el CRM guardando cero leads en silencio.
-3. Comprobar con un pago real. Si vuelve a fallar, **ahora el log lo dice**: `401` es el token,
-   `403` es el location, `400 · IDEMPOTENCY_KEY_REUSED` sería la idempotencia.
+5. Comprobar con un pago real. **Ojo: ya es producción, la tarjeta se cobra de verdad.** El servicio
+   más barato son los $50 de consulta inicial, y se reembolsa desde el panel de Square. La tarjeta
+   `4111 1111 1111 1111` **no** sirve aquí: es de sandbox y en producción la rechaza el banco.
+6. Si vuelve a fallar, **ahora el log lo dice**: `401` es el token, `403` es el location,
+   `400 · IDEMPOTENCY_KEY_REUSED` sería la idempotencia.
 
 **Lo que sí se corrigió en el código:** los cuatro `console.error` de Square registran ahora
 `category/code` además del estado HTTP. Son identificadores, no PII ni contenido, así que caben en el
@@ -754,6 +805,59 @@ hoy, reproducida en local con un token de sandbox y `SQUARE_ENVIRONMENT=producti
 ```
 [pago] Square rechazó el cobro (401 · AUTHENTICATION_ERROR/UNAUTHORIZED)
 ```
+
+### ✅ Verificar las credenciales de producción sin cobrar un centavo
+
+**Resuelto el 2026-08-06 a las 14:35 UTC.** Las dos credenciales que movían dinero se verificaron por
+separado y **sin pasar una tarjeta**. Es el procedimiento a repetir cada vez que se toquen, y evita la
+trampa de la v0.7.3: dar un diagnóstico por eliminación en lugar de comprobarlo.
+
+**Prueba A — el access token, vía `/api/v1/orders/[id]/status`.** Se pide una orden inventada:
+
+```bash
+curl -s "https://leos-firm.vercel.app/api/v1/orders/TOKENTEST-$(date -u +%H%M%S)/status"
+```
+
+La respuesta al cliente es `{"data":{"status":"pending"}}` en todos los casos —el endpoint nunca
+convierte un fallo nuestro en un pago fallido—, así que **el veredicto está en el log de Vercel**, no
+en el `curl`:
+
+| Línea en el log | Significado |
+|---|---|
+| `(401 · AUTHENTICATION_ERROR/UNAUTHORIZED)` | el token **no** es del entorno que se llama |
+| `(403 · AUTHENTICATION_ERROR/FORBIDDEN)` | token válido, **location de otra cuenta** |
+| **`(404 · INVALID_REQUEST_ERROR/NOT_FOUND)`** | ✅ **el token autenticó**; solo falta la orden, que es lo esperado |
+
+Resultado real, las cuatro peticiones idénticas:
+`[pago] no pudimos leer el estado de la orden (404 · INVALID_REQUEST_ERROR/NOT_FOUND)`.
+
+> ⚠️ **Cómo encontrar esa línea, porque el primer intento no la encuentra.** Es una invocación de
+> función, y el filtro por defecto del panel muestra peticiones estáticas —que no llevan log: su
+> `message` viene vacío. En **Logs del proyecto** (no los del despliegue) hay que fijar el host en
+> `leos-firm.vercel.app` y quedarse con las entradas `"type": "function"`. Un export lleno de
+> `"type": "static"` con `HeadlessChrome` y `undici` no es tu petición: es Vercel precalentando las
+> páginas tras compilar. Y los logs de runtime **se retienen ~1 h**: hay que mirar en caliente.
+
+> 💡 **Atajo de latencia, antes de abrir el panel.** Si `getSquareEnv()` devolviera `null` por una
+> variable ausente, `readOrderStatus` corta sin llamar a Square y responde en decenas de ms. Un tiempo
+> estable de **240–350 ms** ya demuestra que hay ida y vuelta real a la API y que las variables están
+> cargadas. Solo queda por saber qué contestó Square.
+
+**Prueba B — la signature key, vía *Send Test Event*.** En *Developer Dashboard → Webhooks →
+`leos_firm_pago_consulta` → Send Test Event*. Square muestra el código de respuesta, y el log de
+Vercel lo confirma del otro lado:
+
+- **200** y **ninguna línea de error** → ✅ la clave y `NEXT_PUBLIC_SITE_URL` son correctas. Lo segundo
+  va incluido: el HMAC se calcula sobre `notificationUrl + rawBody`, así que una URL distinta en un
+  solo carácter habría fallado
+- **401** → la clave es de otro entorno, o la URL no coincide
+
+Resultado real: `POST /api/v1/webhooks/square` → **200**, `Square Connect v2`, 1215 ms, sin errores.
+El evento de prueba llega sin metadata de cita y termina en un 200 silencioso **a propósito**, sin
+confirmar nada — ver `readOrderContext`.
+
+> 🔤 **`404 Â· INVALID_REQUEST_ERROR` no es un bug.** El `Â·` es el `·` de nuestro log mal
+> decodificado por el exportador de Vercel. El código no escribe nada raro.
 
 **Bloque D — la hoja.** Crear la pestaña `Pagos` con sus 11 encabezados. Manual, como las dos
 columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
@@ -832,19 +936,32 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
       misma petición sigue devolviendo un solo pago (§ *Las dos claves de idempotencia*)
 - [x] **Los logs de Square registran `category/code`** (2026-08-06), no solo el estado HTTP. Es lo que
       hacía indistinguibles el `401` del token, el `403` del location y el `400` de la clave reusada
-- [ ] 🔴 **Credenciales de Square en Vercel — EL CHECKOUT ESTÁ CAÍDO POR ESTO.** El frente ya sirve
-      application id y location de **producción** (`sq0idp-…` / `7Z92KDMVTEGHQ`) y el servidor no tiene
-      un token de producción válido → `401` en cada pago. Poner las cuatro credenciales del mismo
-      entorno y **volver a desplegar** (§ *El 401 de producción*)
-- [ ] ⚠️ **`.env.vercel` del repo desactualizado**: dice sandbox y producción sirve producción.
-      Resincronizar Vercel desde ese archivo devolvería el sitio a sandbox
-- [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox
-      (`4111 1111 1111 1111`) — en local la firma no puede validar y es correcto
-- [ ] **Cuenta de producción de Square** verificada y con banco vinculado — la clienta
+- [x] ✅ **El lado de Square verificado por API, entero** (2026-08-06): token de producción válido
+      → merchant `QVGQDZCV0X3WD` *Leos Firm LLC* `ACTIVE`/`USD`, location `7Z92KDMVTEGHQ` `ACTIVE` con
+      `CREDIT_CARD_PROCESSING` y `AUTOMATIC_TRANSFERS`, y suscripción `leos_firm_pago_consulta`
+      `enabled` con los 4 eventos y la `api_version` correcta. **No falta nada en Square**
+- [x] ✅ **`.env.vercel` corregido** (2026-08-06): tenía el location de **sandbox**
+      (`LB2XHFGDVRJZJ`) junto a credenciales de producción — no lo que este documento decía. Ahora
+      `7Z92KDMVTEGHQ`, el único que ese token puede cobrar
+- [x] ✅ **`.env` local corregido** (2026-08-06): `SQUARE_ENVIRONMENT` había quedado en `production`
+      con las tres credenciales de sandbox tras reproducir el 401 a propósito. Vuelve a `sandbox`, y
+      con eso el checkout local funciona otra vez
+- [x] ✅ **`SQUARE_ACCESS_TOKEN` de producción en Vercel, VERIFICADO** (2026-08-06 14:35 UTC). El log
+      dice `(404 · INVALID_REQUEST_ERROR/NOT_FOUND)` en las cuatro peticiones de prueba: Square
+      autenticó y solo se quejó de la orden inventada. **El checkout ya puede cobrar**
+      (§ *Verificar las credenciales sin cobrar un centavo*)
+- [x] ✅ **`SQUARE_WEBHOOK_SIGNATURE_KEY` de producción en Vercel, VERIFICADA** (2026-08-06 14:30 UTC)
+      con *Send Test Event*: `POST /api/v1/webhooks/square` → `200`, `Square Connect v2`, sin errores.
+      Confirma de paso `NEXT_PUBLIC_SITE_URL`, que va dentro del HMAC
+- [x] ✅ **`NEXT_PUBLIC_SITE_URL` en Vercel** — verificada por el 200 de la Prueba B, no por
+      inspección: si difiriera en un carácter, la firma habría fallado
+- [ ] Probar de punta a punta **sobre el sitio desplegado**. Ya es producción: **la tarjeta se cobra
+      de verdad** y `4111 1111 1111 1111` no sirve. Usar los $50 de consulta inicial y reembolsar desde
+      el panel de Square
 - [x] **ADR-013 y ADR-014 copiadas a [`02-architecture.md`](../02-architecture.md)** (2026-08-05).
       De paso se copió **ADR-011**, que nunca había llegado al registro —saltaba de la 010 a la 012—
       y del que ADR-013 depende
-- [ ] `NEXT_PUBLIC_SITE_URL` en Vercel = el dominio real, o la firma del webhook falla siempre
+- [x] `NEXT_PUBLIC_SITE_URL` en Vercel = el dominio real (2026-08-06) — ver el punto de arriba
 - [x] Corregida en [`crm-sheets.md`](./crm-sheets.md) la etapa de `Enlace de la reunion`: es
       `pagado`, no `agenda` (2026-08-05)
 - [ ] Cupón de referido del 100 % (FASE 10): **no pasa por Square**. Sin pago no hay webhook, así que

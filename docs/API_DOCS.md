@@ -19,7 +19,7 @@
 | Tipo | Cómo | Se usa en |
 |------|------|-----------|
 | **Pública** | Sin credenciales, con rate limit por IP | Catálogo, disponibilidad, checkout |
-| **Token de cita** | `access_token` (UUID) en la ruta o el body | Ver / reprogramar / cancelar la propia cita |
+| **Token de cita** | Token **firmado con HMAC** en la ruta, verificado en tiempo constante (ADR-016). No se guarda en ningún lado | Ver / cancelar / pedir otro horario para la propia cita |
 | **Firma de webhook** | `x-square-hmacsha256-signature` verificada con HMAC en tiempo constante | Webhooks de Square |
 | **Cron** | `Authorization: Bearer ${CRON_SECRET}` | Endpoints `/cron/*` |
 | **Admin** | Cookie de sesión de Supabase Auth + rol en `admin_profiles` | Panel administrativo |
@@ -39,10 +39,17 @@
 | POST | `/api/v1/checkout` | Crear orden y cobrar con Square | Pública + rate limit | ✅ Implementado |
 | POST | `/api/v1/webhooks/square` | Confirmación de pago (fuente de verdad) | Firma HMAC | ✅ Implementado (**responde `503` hasta que exista el WF5**) |
 | GET | `/api/v1/orders/[id]/status` | Polling del estado del pago | Pública + rate limit (id opaco) | ✅ Implementado |
-| GET | `/api/v1/appointments/[token]` | Ver la propia cita | Token de cita | ⏳ FASE 9 |
-| PATCH | `/api/v1/appointments/[token]` | Reprogramar (≥24 h) | Token de cita | ⏳ FASE 9 |
-| DELETE | `/api/v1/appointments/[token]` | Cancelar (política §8) | Token de cita | ⏳ FASE 9 |
+| POST | `/api/v1/appointments/[token]/cancel` | Cancelar la propia cita (política §8) | Token firmado + rate limit | ✅ Implementado |
+| POST | `/api/v1/appointments/[token]/reschedule-request` | Pedirle otro horario a Claudia. **No reagenda** | Token firmado + rate limit | ✅ Implementado |
 | POST | `/api/v1/checkout/validate-coupon` | Validar un cupón de referido | Pública | ⏳ FASE 10 |
+
+> **La cita se VE en una página, no en un endpoint.** No existe
+> `GET /api/v1/appointments/[token]`: la página `/agendar/cita/[token]` es un Server Component que
+> verifica el token y lee la cita él mismo. Un endpoint intermedio solo añadiría una superficie
+> pública que devuelve datos de una cita ajena a quien acierte un token.
+>
+> Y no hay `PATCH`: reprogramar de verdad quedó **fuera del alcance** de la FASE 9
+> ([`features/appointment-management.md`](./features/appointment-management.md)).
 
 ### Endpoints eliminados del plan
 
@@ -363,14 +370,78 @@ tirar la notificación o a confirmar dos veces.
 
 ---
 
-### Gestión de la cita ⏳ FASE 9
+### Gestión de la cita ✅
 
-**`GET|PATCH|DELETE /api/v1/appointments/[token]`** — Token de cita
+Diseño completo en
+[`features/appointment-management.md`](./features/appointment-management.md).
 
-`PATCH` (reprogramar) y `DELETE` (cancelar) aplican la política §8: ≥24 h sin costo /
-reembolso menos comisiones; <24 h no reembolsable. La decisión de reembolso se calcula en el
-servidor a partir de la fecha de la cita, nunca se acepta del cliente.
-Rate limit por IP para impedir enumeración de tokens.
+`[token]` es el token **firmado** que viaja en el correo de confirmación (ADR-016):
+`base64url(eventId) + "." + base64url(HMAC-SHA256(eventId, APPOINTMENT_TOKEN_SECRET))`. No se guarda
+en ningún lado — verificarlo es recalcular el HMAC y compararlo en tiempo constante.
+
+> **Regla común a los dos:** una firma inválida y una cita que ya no existe responden **exactamente
+> lo mismo** (`404 NOT_FOUND`). Distinguirlas convertiría el endpoint en un oráculo para saber qué
+> tokens son criptográficamente válidos. Y el token se **vuelve a verificar aquí** aunque la página
+> ya lo hubiera hecho: que la página lo validara no prueba que esta petición venga de la página.
+
+---
+
+**`POST /api/v1/appointments/[token]/cancel`** — Token firmado · rate limit 5 / 10 min por IP
+
+Sin cuerpo. Libera el slot en Calendar, pone la fila del CRM en `cancelado` y manda dos correos
+—a `claudia@leosfirm.com` y al cliente— a través del workflow `Leos Firm - Cancelar cita`.
+
+**El servidor calcula la política §8 con su propio reloj, en UTC**, y el veredicto viaja al correo de
+Claudia porque es lo que le dice si reembolsa:
+
+| Horas hasta la cita | `refund_window` | Qué se le dice a Claudia |
+|---|---|---|
+| ≥ 24 h | `mayor-24h` | Corresponde reembolso menos comisiones, o crédito |
+| < 24 h | `menor-24h` | No corresponde reembolso |
+
+**Ningún reembolso se ejecuta aquí** ([`03-security.md`](./03-security.md)): lo hace Claudia desde el
+panel de Square. Este endpoint no llama a Square en ningún momento.
+
+**Response 200**
+```json
+{ "data": { "cancelled": true, "alreadyCancelled": false }, "message": "Cita cancelada" }
+```
+
+`alreadyCancelled: true` es un **éxito**: alguien pulsó dos veces o abrió el enlace en dos
+dispositivos, y no salió un segundo par de correos.
+
+**Errores:** `404 NOT_FOUND` (firma inválida **o** cita inexistente) · **`409 APPOINTMENT_PAST`** (la
+consulta ya empezó: §8 la da por realizada) · `429 RATE_LIMITED` · **`502 UPSTREAM_ERROR`** — y el
+mensaje de este último dice que **la cita sigue en pie**, porque es cierto y porque dejar a alguien
+creyendo que canceló es el peor final posible.
+
+---
+
+**`POST /api/v1/appointments/[token]/reschedule-request`** — Token firmado · rate limit 5 / 10 min
+
+**No reagenda.** Manda un correo a Claudia con la cita actual y el horario que el cliente escriba;
+ella lo acuerda por fuera. Nada se mueve en Calendar y ninguna etapa del CRM cambia.
+
+**Request**
+```json
+{ "preference": "Cualquier día de la próxima semana por la tarde, después de las 3." }
+```
+
+`preference` es texto libre, **máximo 500 caracteres**, validado con Zod en cliente y servidor
+(`src/lib/validation/appointment-management.schema.ts`). Termina dentro de un correo HTML, así que es
+entrada no confiable: el workflow lo escapa antes de incrustarlo.
+
+**Response 202**
+```json
+{ "data": { "received": true }, "message": "Solicitud enviada" }
+```
+
+**`202` y no `200` a propósito:** la petición se aceptó, la reprogramación **no ocurrió**. La
+pantalla dice lo mismo con palabras — *«Claudia te va a escribir»*, nunca *«tu cita fue
+reprogramada»*.
+
+**Errores:** `400 VALIDATION_ERROR` · `404 NOT_FOUND` · `409 APPOINTMENT_PAST` · `429 RATE_LIMITED` ·
+`502 UPSTREAM_ERROR`
 
 ---
 

@@ -1,5 +1,6 @@
 import { API_ROUTES } from "@/constants/routes";
 import { appointmentSchema } from "@/lib/validation/appointment.schema";
+import { rescheduleRequestSchema } from "@/lib/validation/appointment-management.schema";
 import { toFieldErrors } from "@/lib/validation/lead.schema";
 import type { AppointmentPayload } from "@/lib/validation/appointment.schema";
 import type { CalendarDay } from "@/lib/utils/timezone";
@@ -113,6 +114,90 @@ export async function createAppointment(
     }
 
     return { ok: true, hold: body.data };
+  } catch {
+    return { ok: false, message: "No pudimos conectar con el servidor." };
+  }
+}
+
+/**
+ * Managing an appointment that already exists (FASE 9 —
+ * `docs/features/appointment-management.md`).
+ *
+ * Both calls carry the signed token in the PATH and nothing in the body that
+ * decides anything: the server re-verifies the signature, re-reads the
+ * appointment and re-applies `context.md` §8 on its own clock. The browser is
+ * a button, not a source of truth.
+ */
+
+export type AppointmentActionResult =
+  | { ok: true; alreadyDone: boolean }
+  | { ok: false; message: string; fieldErrors?: Record<string, string> };
+
+/** Cancels the appointment. No refund is issued anywhere in this path. */
+export async function cancelAppointmentByToken(
+  token: string,
+): Promise<AppointmentActionResult> {
+  return postAction(API_ROUTES.cancelAppointment(token), undefined, {
+    fallback: "No pudimos cancelar tu cita. Sigue en pie.",
+    alreadyDoneKey: "alreadyCancelled",
+  });
+}
+
+/**
+ * Asks Claudia for another time. **Nothing is rescheduled by this call** — the
+ * appointment stands until she answers, and the screen says so.
+ */
+export async function requestRescheduleByToken(
+  token: string,
+  preference: string,
+): Promise<AppointmentActionResult> {
+  const parsed = rescheduleRequestSchema.safeParse({ preference });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Revisa lo que escribiste antes de enviarlo.",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  }
+
+  return postAction(API_ROUTES.rescheduleRequest(token), parsed.data, {
+    fallback: "No pudimos enviar tu solicitud.",
+  });
+}
+
+/** The shape both actions share: POST, read the envelope, never throw. */
+async function postAction(
+  url: string,
+  payload: unknown,
+  options: { fallback: string; alreadyDoneKey?: string },
+): Promise<AppointmentActionResult> {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {}),
+    });
+
+    const body: ApiEnvelope<Record<string, unknown>> = await response
+      .json()
+      .catch(() => ({}));
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: body.message ?? options.fallback,
+        fieldErrors: body.details,
+      };
+    }
+
+    // `alreadyCancelled` is a success: someone clicked twice or opened the link
+    // on two devices. The UI says "ya estaba cancelada" instead of celebrating.
+    const alreadyDone = options.alreadyDoneKey
+      ? body.data?.[options.alreadyDoneKey] === true
+      : false;
+
+    return { ok: true, alreadyDone };
   } catch {
     return { ok: false, message: "No pudimos conectar con el servidor." };
   }

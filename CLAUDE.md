@@ -19,8 +19,9 @@ Servicio → DIAGNÓSTICO GRATUITO (popup, captura el lead ANTES del pago)
 ```
 
 **Un solo camino para los 8 servicios** (ADR-009). Dos tienen precio cerrado ($150 y $250); los otros
-seis cobran una **consulta inicial de $50 que se abona al costo total** del servicio, y Claudia da el
-precio final durante esa llamada. No existe un servicio sin precio, ni una rama de "correo a
+seis cobran **$50 para apartar la cita**, y ese monto **se descuenta completo del costo real** del
+servicio. **No es una «consulta inicial»** y no compra nada por sí solo: es dinero a cuenta. Claudia
+da el costo real durante esa llamada, porque cotiza por caso. No existe un servicio sin precio, ni una rama de "correo a
 Claudia": eso desapareció con ADR-009.
 
 **Stack:** Next.js 16 (App Router) · TypeScript · TailwindCSS v4
@@ -119,9 +120,11 @@ Documentación local y confiable: `node_modules/next/dist/docs/`
 - El cliente **debe** aceptar la política de cancelación en el intake → se registra `accepted_at` + IP.
 - Referidos de abogados de inmigración: **primeros 30 minutos gratis** (vía cupón).
 - Precios **siempre en centavos** y leídos en el servidor desde el catálogo, nunca del cliente.
-- **Todos los servicios se cobran** (ADR-009). Los seis de `pricingModel: "initial-consultation"`
-  cobran $50 que **se abonan al costo total** — decirlo siempre, nunca vender el $50 como el precio
-  del servicio.
+- **Todos los servicios se cobran** (ADR-009). Los seis de `pricingModel: "deposit"` cobran $50 **para
+  apartar la cita**, y ese monto **se descuenta completo del costo real** del servicio. Decirlo
+  siempre. **Nunca** vender el $50 como el precio del servicio ni llamarlo «consulta inicial»: no es un
+  producto, es dinero a cuenta. El identificador se llamaba `"initial-consultation"` y ese nombre era
+  justamente el error — corregido el 2026-08-06 a instancias de la clienta.
 - Fechas **siempre en UTC**; la firma opera en `America/Chicago`.
 
 ---

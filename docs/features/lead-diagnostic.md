@@ -101,10 +101,26 @@ Sale del catálogo, y su lectura depende de `pricingModel` (ADR-009):
 |----------|--------|----------------|---------------------|
 | Consultoría fiscal para empresarios extranjeros | $150 | `full-service` | "Precio cerrado del servicio" |
 | Elecciones fiscales | $250 | `full-service` | "Precio cerrado del servicio" |
-| Los otros 6 | $50 | `initial-consultation` | "Consulta inicial · Se abona al costo total del servicio" |
+| Los otros 6 | $50 | `deposit` | "Abono al total · Este pago aparta tu cita y se descuenta completo del costo del servicio. No es el precio del servicio: Claudia te dice cuánto es durante la llamada, porque el costo depende de tu caso." |
 
 El texto sale de `PRICING_COPY` (`src/constants/content/services.ts`), nunca del JSX: la clienta
 puede reformular qué significa el cobro sin que nadie toque un componente.
+
+### Cambio de textos del 2026-08-06
+
+- **El antetítulo ya no dice "gratuito":** `DIAGNOSTIC_COPY.eyebrow` pasó de *"Diagnóstico gratuito"*
+  a *"Accede a tu diagnóstico"*. Lo leen el popup (`DiagnosticIntro`) y la tarjeta del `aside` de
+  `/servicios/[slug]`, que hasta ahora lo tenía escrito a mano.
+- **`DIAGNOSTIC_COPY.teaser` es nuevo:** *"Responde estas preguntas y te indicaremos a qué corresponde
+  tu caso y cuál es el siguiente paso"*. Sustituye a los dos textos que contaban las preguntas en voz
+  alta —el de la tarjeta del servicio y el del atajo de `/servicios`— y los unifica en una constante.
+- **La tarjeta del servicio perdió el botón del teléfono** y en su lugar muestra `DEPOSIT_NOTICE`
+  ([`public-site.md`](./public-site.md) § *Cambios de contenido*).
+
+> El teléfono **sigue** en la pantalla de resultado del popup (`DiagnosticResult`): ahí no es un CTA
+> alternativo sino la vía de recuperación cuando el CRM no aceptó el lead (`delivery === "failed"`), y
+> quitarlo dejaría ese caso sin salida. Si la clienta lo quiere fuera también de ahí, hay que decidir
+> primero con qué se reemplaza esa recuperación.
 
 ## Componentes / Archivos
 
@@ -197,6 +213,11 @@ Desde el 2026-08-03 el modal cumple el patrón estándar y ya no necesita justif
 
 ## Pendiente
 
+- [ ] **Dos textos siguen diciendo "gratuito" y siguen contando 3 preguntas**, y el cambio del
+      2026-08-06 no los tocó porque la clienta los pidió palabra por palabra en su momento:
+      `DIAGNOSTIC_COPY.declineLabel` (*"No quiero mi diagnóstico gratuito, solo estoy viendo"*), el
+      `label` del `DiagnosticTrigger` de `/servicios` (*"Hacer mi diagnóstico gratuito"*) y los dos
+      `introBody*` del popup (*"Son 3 preguntas rápidas…"*). Decisión de la clienta
 - [x] ~~Entregar el lead de verdad~~ — cerrado el 2026-08-04: va al CRM de Google Sheets vía n8n.
 - [ ] **FASE 5 — Conectar el botón "Agendar y pagar"** con `/agendar`. Hoy el resultado dice con
       todas sus letras que la agenda en línea todavía no está activa y ofrece el teléfono.

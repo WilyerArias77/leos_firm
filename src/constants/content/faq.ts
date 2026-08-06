@@ -42,6 +42,6 @@ export const FAQ: readonly FaqItem[] = [
   {
     question: "¿El pago de la consultoría es reembolsable?",
     answer:
-      "No. Debido a que la consultoría implica la reserva exclusiva de tiempo profesional y la prestación de un servicio personalizado, los pagos realizados no son reembolsables. Si necesitas reprogramar tu cita, con gusto podremos ayudarte siempre que nos notifiques con la anticipación establecida en nuestra política de cancelación.",
+      "Depende de cuándo canceles. Si cancelas con 24 horas o más de anticipación, puedes recibir un reembolso menos las comisiones bancarias o de procesamiento, o dejar el monto como crédito para una consultoría futura. Con menos de 24 horas el pago ya no es reembolsable, porque el tiempo profesional quedó reservado en exclusiva para ti. Reprogramar es sin costo siempre que nos avises con al menos 24 horas. Y si somos nosotros quienes cancelamos, eliges: reprogramar sin costo o el reembolso completo.",
   },
 ] as const;

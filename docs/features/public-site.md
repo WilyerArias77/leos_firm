@@ -154,8 +154,82 @@ y confirmar que el HTML servido contiene el contenido nuevo antes de dar por bue
 - **Los medios de `public/` se sirven desde el repo.** Solo vale para archivos livianos; lo pesado
   va a Storage o CDN.
 
+## FASE 8 — Cierre de front end (2026-08-06)
+
+Cinco archivos nuevos, todos en la raíz de `app/` porque son los que Next.js resuelve por convención.
+
+| Archivo | Qué resuelve |
+|---|---|
+| `not-found.tsx` | 404 con las tres salidas que existen: catálogo, FAQ y teléfono |
+| `error.tsx` | 500 dentro del layout público, con botón de reintento (`reset`) |
+| `global-error.tsx` | El fallo del propio layout raíz. Trae su `<html>` y `<body>` |
+| `robots.ts` | `/robots.txt` |
+| `sitemap.ts` | `/sitemap.xml`, con los 8 servicios leídos del catálogo |
+
+Más `src/constants/site.ts` (`SITE_URL`), y en el layout público un **skip link**.
+
+**Tres decisiones que no son obvias:**
+
+1. **`not-found.tsx` va en la raíz, no en `(public)/`, y dibuja el Header y el Footer a mano.** Una URL
+   que no coincide con ninguna ruta nunca entra en un grupo, así que un `not-found` dentro de
+   `(public)` no la vería y el layout de ese grupo no está en el árbol. `error.tsx` es al contrario:
+   sí vive dentro del layout, así que **no** repite el chrome — hacerlo mostraría dos cabeceras.
+
+2. **`global-error.tsx` no importa nada de `@/components` ni de `@/constants`.** Si un módulo falla al
+   evaluarse, puede ser justo la razón por la que se está renderizando: el respaldo de una página rota
+   no puede romperse igual. Por eso el teléfono está escrito a mano ahí — la única duplicación
+   deliberada del proyecto.
+
+3. **`SITE_URL` se centraliza porque ya tenía tres lectores** (`metadataBase`, `robots`, `sitemap`) con
+   el mismo fallback copiado, y un cuarto indirecto que es el que muerde: el HMAC del webhook de Square
+   se calcula sobre `notificationUrl + rawBody`, así que un carácter de diferencia invalida **todas**
+   las firmas ([`payments.md`](./payments.md)).
+
+**Qué se excluye del `sitemap` y del indexado, a propósito:** `/agendar` (solo significa algo con un
+lead y un slot retenido), `/agendar/cita/*` (lleva el token de acceso del visitante en la URL —
+indexarlo lo publicaría), `/api/*` y `/dashboard`.
+
+**Accesibilidad revisada:** las dos `<Image>` tienen `alt`, `Input` asocia su `<label>` con `htmlFor`,
+hay 12 `aria-label` en componentes con icono, y el skip link es ahora el primer elemento enfocable de
+cada página. Lo que **no** se hizo es una auditoría con lector de pantalla ni una medición de
+contraste token por token.
+
+## Cambios de contenido pedidos por la clienta (2026-08-06)
+
+Cuatro cambios de texto sobre la **tarjeta de diagnóstico** —la que vive en el `aside` de las 8
+páginas de servicio— y un aviso nuevo en el catálogo. Ninguno toca lógica.
+
+| Antes | Ahora | Dónde |
+|---|---|---|
+| Antetítulo *"Diagnóstico gratuito"* | *"Accede a tu diagnóstico"* | `DIAGNOSTIC_COPY.eyebrow` — la tarjeta y el popup lo leen del mismo sitio |
+| *"Responde 3 preguntas y te decimos qué corresponde a tu caso y cuál es el siguiente paso"* | *"Responde estas preguntas y te indicaremos a qué corresponde tu caso y cuál es el siguiente paso"* | `DIAGNOSTIC_COPY.teaser` — nuevo, compartido por la tarjeta y el atajo de `/servicios` |
+| Botón con el teléfono debajo del CTA | `DEPOSIT_NOTICE` en su lugar | `servicios/[slug]/page.tsx` |
+| *(no existía)* | `DEPOSIT_NOTICE` arriba de la rejilla de tarjetas | `servicios/page.tsx` |
+
+**El título "¿Es este el servicio que necesitas?" se queda tal cual**, por pedido expreso.
+
+**Por qué el antetítulo y el teaser pasaron a `DIAGNOSTIC_COPY`.** Estaban escritos a mano en el JSX
+de dos páginas distintas, así que "cambiar el título en todos los formularios" eran dos ediciones que
+podían desincronizarse. Ahora es una (Mandamiento II: los textos del diagnóstico viven en
+`DIAGNOSTIC_COPY`).
+
+> ⚠️ **`DEPOSIT_NOTICE` se muestra en las 8 páginas de servicio, y solo es cierto en 6.**
+> Los dos servicios `full-service` ($150 y $250) tienen **precio cerrado**: su pago no es un abono a
+> nada. En sus páginas el aviso convive con `PRICING_COPY["full-service"].note` —*"Precio cerrado del
+> servicio"*— y se contradicen a la vista del mismo visitante. Se implementó tal como lo pidió la
+> clienta; condicionarlo a `pricingModel === "deposit"` es una línea (ver *Pendiente*).
+
 ## Pendiente
 
+- [ ] 🔴 **`DEPOSIT_NOTICE` contradice a los dos servicios de precio cerrado.** Decisión de la
+      clienta: o el aviso se limita a los 6 servicios `deposit`, o se reformula para que sea cierto
+      también con $150 y $250. Hoy se muestra en los 8 (pedido literal del 2026-08-06)
+- [ ] 🔴 **CONTRADICCIÓN LEGAL EN PRODUCCIÓN — ya se está cobrando.** La FAQ dice *"los pagos no son
+      reembolsables"* y `context.md` §8 dice que con ≥24 h hay reembolso menos comisiones, o crédito.
+      Este pendiente decía «antes de cobrar de verdad»; **ese momento ya pasó** (primer pago real el
+      2026-08-06). Los dos textos le llegan al mismo cliente y se contradicen
+- [ ] **Auditoría de accesibilidad de verdad**: lector de pantalla, recorrido completo por teclado del
+      popup de diagnóstico y del calendario, y contraste medido. Lo hecho en la FASE 8 es la base
 - [x] ~~**Respuestas de las 7 FAQ**~~ — entregadas por Claudia el 2026-08-03 y publicadas en
       `src/constants/content/faq.ts`. Ojo: la respuesta de reembolso dice *"los pagos no son
       reembolsables"*, más restrictiva que `context.md` §8 (con ≥24 h: reembolso menos comisiones o

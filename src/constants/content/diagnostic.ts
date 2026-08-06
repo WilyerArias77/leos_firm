@@ -14,7 +14,19 @@ import type { DiagnosticQuestion, DiagnosticQuestionId } from "@/types/diagnosti
  */
 
 export const DIAGNOSTIC_COPY = {
-  eyebrow: "Diagnóstico gratuito",
+  /**
+   * Wording requested by the client, 2026-08-06: the title stops advertising
+   * "gratuito" and invites the visitor to act. Rendered in uppercase by CSS,
+   * so it reads "ACCEDE A TU DIAGNÓSTICO".
+   */
+  eyebrow: "Accede a tu diagnóstico",
+  /**
+   * The pitch of the diagnosis card, shared by every entry point so the client
+   * rewords it once (client request, 2026-08-06 — it no longer counts the
+   * questions out loud).
+   */
+  teaser:
+    "Responde estas preguntas y te indicaremos a qué corresponde tu caso y cuál es el siguiente paso.",
   introTitle: "¿Te decimos exactamente qué necesitas?",
   introBody:
     "Son 3 preguntas rápidas. Con tus respuestas identificamos qué servicio corresponde a tu caso y cuál es el siguiente paso.",

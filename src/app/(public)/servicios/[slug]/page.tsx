@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, Clock, Phone } from "lucide-react";
+import { ArrowLeft, Check, Clock } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { Section } from "@/components/layout/Section";
 import { Card } from "@/components/ui/Card";
@@ -12,12 +12,10 @@ import {
   getServiceSlugs,
   getServices,
 } from "@/services/service.service";
-import { COMPANY } from "@/constants/business";
+import { DIAGNOSTIC_COPY } from "@/constants/content/diagnostic";
 import { INTAKE_REQUIREMENTS } from "@/constants/content/policies";
-import { PRICING_COPY } from "@/constants/content/services";
+import { DEPOSIT_NOTICE, PRICING_COPY } from "@/constants/content/services";
 import { ROUTES } from "@/constants/routes";
-
-const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
 
 export async function generateStaticParams() {
   const slugs = await getServiceSlugs();
@@ -130,7 +128,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
             <aside className="lg:col-span-1">
               <Card className="sticky top-40 p-6">
                 <p className="text-xs font-medium tracking-widest text-accent uppercase">
-                  Diagnóstico gratuito
+                  {DIAGNOSTIC_COPY.eyebrow}
                 </p>
 
                 <h2 className="mt-2 font-serif text-xl text-navy-900">
@@ -138,8 +136,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
                 </h2>
 
                 <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-                  Responde 3 preguntas y te decimos qué corresponde a tu caso y cuál
-                  es el siguiente paso.
+                  {DIAGNOSTIC_COPY.teaser}
                 </p>
 
                 <DiagnosticTrigger
@@ -150,13 +147,12 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
                   className="mt-5 w-full"
                 />
 
-                <a
-                  href={PHONE_HREF}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-card border border-navy-200 bg-surface px-5 py-2.5 text-sm font-medium text-navy-900 transition-colors hover:bg-surface-muted"
-                >
-                  <Phone className="h-4 w-4" aria-hidden="true" />
-                  {COMPANY.phone}
-                </a>
+                {/* Reemplaza al botón del teléfono, retirado por pedido de la
+                    clienta el 2026-08-06: la tarjeta empuja al diagnóstico, no
+                    a la llamada. */}
+                <p className="mt-3 rounded-card border border-border bg-surface-muted p-3 text-sm leading-relaxed text-ink-muted">
+                  {DEPOSIT_NOTICE}
+                </p>
 
                 <p className="mt-6 border-t border-border pt-4 text-xs leading-relaxed text-ink-muted">
                   Las citas se confirman únicamente después del pago. Consulta la{" "}

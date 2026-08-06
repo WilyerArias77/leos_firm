@@ -56,9 +56,9 @@ export const CANCELLATION_POLICY_ITEMS: readonly PolicyItem[] = [
       "Al reservar y realizar el pago, el cliente confirma que ha leído, comprendido y acepta estas políticas.",
   },
   {
-    title: "Ventas finales",
+    title: "Consultoría ya iniciada",
     description:
-      "Todas las ventas son finales y no se ofrecen reembolsos una vez iniciada la consultoría.",
+      "Una vez iniciada la consultoría, el servicio se considera prestado y el pago no es reembolsable. Las cancelaciones anteriores a la cita se rigen por los plazos indicados arriba.",
   },
 ] as const;
 

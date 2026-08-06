@@ -63,6 +63,18 @@ const n8nSchema = z.object({
 
   /** Payment registry — `Leos Firm - Registrar pago` (FASE 6, ADR-013). */
   N8N_PAYMENTS_WEBHOOK_URL: z.string().url().optional(),
+
+  /**
+   * Appointment management (FASE 9) — `features/appointment-management.md`.
+   *
+   * Optional for the same reason the scheduling ones are: the workflows are
+   * created but not published yet, and requiring them would take down the CRM
+   * and the checkout, which do work. Outside production the mock answers; in
+   * production a missing URL is a `502` with the firm's phone number.
+   */
+  N8N_APPOINTMENT_WEBHOOK_URL: z.string().url().optional(),
+  N8N_CANCEL_WEBHOOK_URL: z.string().url().optional(),
+  N8N_RESCHEDULE_WEBHOOK_URL: z.string().url().optional(),
 });
 
 /**
@@ -202,6 +214,41 @@ export function getSquareEnv(): SquareEnv | null {
   }
 
   return parsed.data;
+}
+
+/**
+ * Secret that signs the client's appointment link (ADR-016 —
+ * `docs/features/appointment-management.md`).
+ *
+ * Validated on its own and not inside `serverSchema` for the same reason Square
+ * and n8n are: that schema demands Supabase, Google and Anthropic keys this
+ * project does not have. Reading it to render an appointment page would throw
+ * over values that page never touches.
+ *
+ * **This one THROWS when it is missing**, unlike `getN8nEnv()` and
+ * `getSquareEnv()`. The exception those two make — "a 500 loses the lead and the
+ * person" — does not apply: without the secret there is nothing to serve on that
+ * page, and serving something would be worse. A link signed with no secret lets
+ * anyone cancel anyone's appointment.
+ *
+ * 32 characters minimum, same floor as `N8N_WEBHOOK_TOKEN` doubled: this one
+ * guards a cancel button, not a spreadsheet row.
+ *
+ * ⚠️ Rotating it invalidates EVERY link already sent by email, with no grace
+ * period — there cannot be one without state. See the ADR before rotating.
+ */
+export function getAppointmentTokenSecret(): string {
+  const secret = process.env.APPOINTMENT_TOKEN_SECRET;
+
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "APPOINTMENT_TOKEN_SECRET ausente o demasiado corto (mínimo 32 caracteres).\n" +
+        "Genérala con `openssl rand -base64 32` y ponla en .env.local Y en Vercel.\n" +
+        "See .env.example and docs/02-architecture.md",
+    );
+  }
+
+  return secret;
 }
 
 /**

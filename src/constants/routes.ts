@@ -26,4 +26,12 @@ export const API_ROUTES = {
   intake: "/api/v1/intake",
   availability: "/api/v1/availability",
   appointments: "/api/v1/appointments",
+  /**
+   * The two actions behind the client's own appointment link (FASE 9).
+   * `token` is the HMAC-signed token from the confirmation email (ADR-016).
+   */
+  cancelAppointment: (token: string) =>
+    `/api/v1/appointments/${encodeURIComponent(token)}/cancel`,
+  rescheduleRequest: (token: string) =>
+    `/api/v1/appointments/${encodeURIComponent(token)}/reschedule-request`,
 } as const;

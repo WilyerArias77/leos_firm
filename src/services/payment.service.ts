@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import { SquareError } from "square";
 import { centsToNumber, centsToUsdString, getSquareClient } from "@/lib/square/client";
 import { requestFromN8n } from "@/lib/n8n/client";
+import { createAppointmentToken } from "@/lib/utils/appointmentToken";
+import { ROUTES } from "@/constants/routes";
+import { SITE_URL } from "@/constants/site";
 import { ORDER_METADATA_KEYS } from "@/types/payment.types";
 import type { Service } from "@/types/content.types";
 import type {
@@ -28,7 +31,11 @@ import type {
  * hands work to n8n — none of them takes a client's word for anything.
  */
 
-/** Square's currency for this account. Verified by API: `LB2XHFGDVRJZJ` is USD. */
+/**
+ * Square's currency for this account. Verified by API against BOTH environments on
+ * 2026-08-06: sandbox `LB2XHFGDVRJZJ` and production `7Z92KDMVTEGHQ` (merchant
+ * `QVGQDZCV0X3WD`, Leos Firm LLC, San Antonio TX) are each `USD`.
+ */
 const CURRENCY = "USD";
 
 /**
@@ -508,18 +515,28 @@ export async function settlePaymentRow(row: {
  * Returns `null` when n8n did not answer, which is NOT the same as
  * `alreadyConfirmed`. The first is a failure that needs a person; the second is
  * ADR-013's `If-Match` doing its job on a duplicate delivery, and is a success.
+ *
+ * This is also where the client's management link is minted (FASE 9): the
+ * confirmation email is the only message they get with a link in it, so it is
+ * the only place the token can travel. Signing it here keeps
+ * `APPOINTMENT_TOKEN_SECRET` inside the app — n8n receives a finished URL and
+ * never learns how it was made.
  */
 export async function confirmAppointment(params: {
   eventId: string;
   leadId: string;
   payment: ConfirmedPayment;
 }): Promise<ConfirmAppointmentResult | null> {
+  const accessToken = createAppointmentToken(params.eventId);
+
   const payload: ConfirmAppointmentPayload = {
     event_id: params.eventId,
     lead_id: params.leadId,
     payment_id: params.payment.paymentId,
     amount_usd: params.payment.amountUsd,
     paid_at: params.payment.paidAt,
+    access_token: accessToken,
+    appointment_url: `${SITE_URL}${ROUTES.appointment(accessToken)}`,
   };
 
   return requestFromN8n<ConfirmAppointmentResult>("confirm", payload);

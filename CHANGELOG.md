@@ -6,6 +6,397 @@
 
 ---
 
+## [2026-08-06] — La tarjeta del diagnóstico deja de ofrecer el teléfono — v0.9.1
+
+### Request original
+> 1. Cambiar el título en todos los formularios: quitar "DIAGNÓSTICO GRATUITO" y poner
+> "ACCEDE A TU DIAGNÓSTICO". 2. Dejar igual "¿Es este el servicio que necesitas?". 3. Cambiar
+> "Responde 3 preguntas y te decimos qué corresponde a tu caso y cuál es el siguiente paso" por
+> "Responde estas preguntas y te indicaremos a qué corresponde tu caso y cuál es el siguiente paso".
+> 4. Quitar el botón con el número telefónico en todos los formularios y agregar el mensaje "El valor
+> cancelado para la consulta será tomado como abono para el servicio contratado". 5. En servicios,
+> arriba de todos los formularios, poner ese mismo mensaje.
+
+### Tipo de cambio
+- **CONTENT (`src/constants/content/diagnostic.ts`)**: `eyebrow` pasa de *"Diagnóstico gratuito"* a
+  *"Accede a tu diagnóstico"* — el CSS lo pone en mayúsculas. Nuevo `teaser`, el texto que pidió la
+  clienta, **compartido** por la tarjeta del servicio y el atajo del catálogo
+- **CONTENT (`src/constants/content/services.ts`)**: `DEPOSIT_NOTICE`, el aviso del abono, palabra por
+  palabra
+- **UI (`src/app/(public)/servicios/[slug]/page.tsx`)**: el antetítulo y el teaser dejan de estar
+  escritos a mano y se leen de `DIAGNOSTIC_COPY`; **fuera el botón del teléfono** y en su lugar
+  `DEPOSIT_NOTICE`. Se van los imports de `COMPANY` y `Phone`, que ya no tenían lector
+- **UI (`src/app/(public)/servicios/page.tsx`)**: `DEPOSIT_NOTICE` arriba de la rejilla de tarjetas, y
+  el teaser del atajo unificado con el de la tarjeta
+- **SIN CAMBIO, a propósito**: el título *"¿Es este el servicio que necesitas?"* (pedido explícito) y
+  el teléfono de `DiagnosticResult`, que ahí no es un CTA sino la salida cuando el CRM rechaza el lead
+
+### Archivos modificados
+- `src/constants/content/{diagnostic,services}.ts` ·
+  `src/app/(public)/servicios/page.tsx` · `src/app/(public)/servicios/[slug]/page.tsx`
+- Docs: `docs/features/public-site.md` · `docs/features/lead-diagnostic.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ (21 rutas, las 8 de servicio siguen prerrenderizando) · `npm run lint` ✅
+- ⚠️ **Advertido a la clienta:** `DEPOSIT_NOTICE` se muestra en los 8 servicios pero solo es cierto en
+  los 6 de `pricingModel: "deposit"`. En `consultoria-fiscal-extranjeros` ($150) y
+  `elecciones-fiscales` ($250) convive con *"Precio cerrado del servicio"* y lo contradice. Queda
+  como pendiente en [`public-site.md`](docs/features/public-site.md); condicionarlo es una línea
+
+---
+
+## [2026-08-06] — El cliente ya puede cancelar su propia cita — v0.9.0
+
+### Request original
+> FASE 9 — Cancelar y reprogramar cita (versión mínima). […] TOKEN DE ACCESO, SIN BASE DE DATOS […]
+> NO implementes: reembolsos automáticos, reprogramación en vivo, panel de administración.
+
+### Tipo de cambio
+- **FEAT (`src/lib/utils/appointmentToken.ts`)**: token de cita **firmado y sin estado** (ADR-016).
+  `base64url(eventId) + "." + base64url(HMAC-SHA256(eventId, secreto))`, comparado con
+  `timingSafeEqual` igual que la firma de Square. Sin PII dentro: solo el `eventId` de Google
+- **FEAT (`src/lib/env.ts`)**: `getAppointmentTokenSecret()` — el único getter nuevo que **sí lanza**;
+  y `N8N_APPOINTMENT_WEBHOOK_URL` · `N8N_CANCEL_WEBHOOK_URL` · `N8N_RESCHEDULE_WEBHOOK_URL`
+- **FEAT (`src/app/(public)/agendar/cita/[token]/page.tsx`)**: la página de la cita. Verifica el HMAC,
+  lee el evento, calcula **en el servidor y en UTC** las horas que faltan y dice qué aplica según
+  `context.md` §8. Muestra las dos horas —la del visitante y la de San Antonio— y el enlace de Meet
+- **FEAT (`src/app/api/v1/appointments/[token]/cancel`)**: cancela. Libera el slot, CRM a `cancelado`
+  y dos correos. **El correo a Claudia lleva el veredicto ≥24 h / <24 h**, que es lo que le dice si
+  reembolsa. Ningún reembolso se ejecuta aquí (`03-security.md`)
+- **FEAT (`src/app/api/v1/appointments/[token]/reschedule-request`)**: **no reagenda**. Manda el
+  horario preferido (texto libre, máx. 500, Zod) a Claudia y responde **`202`**, no `200`
+- **FEAT (`src/services/appointment-management.service.ts`)**: `describeCancellationWindow`,
+  `fetchAppointment`, `cancelAppointment`, `requestReschedule`. Toda la política §8 vive aquí
+- **FEAT (`src/types/crm.types.ts`)**: `cancelado` en `CrmStage` con el número **más alto** de
+  `CRM_STAGE_ORDER` — eso solo la hace terminal, sin regla nueva. Más `canAdvanceStage()`
+- **FEAT (`src/types/payment.types.ts` · `payment.service.ts`)**: `ConfirmAppointmentPayload` gana
+  `access_token` y `appointment_url`. El token se firma en Next.js: la clave nunca sale de la app
+- **FEAT (componentes)**: `AppointmentActions` (los dos botones, con confirmación antes de cancelar) y
+  `AppointmentTime` (la hora en el huso real del navegador, con `useSyncExternalStore` como
+  `BookingFlow` — no un `useEffect`, que el lint de React Compiler rechaza)
+- **FEAT (n8n)**: WF8 `Consultar cita` (`84YbxlHq8PKOkzoh`), WF9 `Cancelar cita` (`KsSCuk7Rw9FV0cr3`)
+  y WF10 `Pedir otro horario` (`JFOoJwE7Uw8zWiEc`). **Creados y SIN PUBLICAR**
+
+### Archivos modificados
+- Nuevos: `src/lib/utils/appointmentToken.ts` · `src/types/appointment.types.ts` ·
+  `src/services/appointment-management.service.ts` ·
+  `src/lib/validation/appointment-management.schema.ts` ·
+  `src/app/(public)/agendar/cita/[token]/page.tsx` ·
+  `src/app/api/v1/appointments/[token]/{cancel,reschedule-request}/route.ts` ·
+  `src/components/features/appointments/{AppointmentActions,AppointmentTime}/`
+- Modificados: `src/lib/env.ts` · `src/lib/n8n/{client,mock}.ts` · `src/services/payment.service.ts` ·
+  `src/services/appointment.service.ts` · `src/types/{crm,payment}.types.ts` ·
+  `src/constants/{business,routes}.ts` · `.env.example`
+- Docs: **`docs/features/appointment-management.md` (nuevo)** · `docs/API_DOCS.md` ·
+  `docs/02-architecture.md` (ADR-016 + 6 variables) · `docs/00-roadmap.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno en Supabase (congelado). **Ninguna columna nueva en la hoja**: la cancelación escribe solo
+  `ID`, `Estado` y `Actualizado`, para no exigir un paso manual más en el CRM.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- ⬜ **Sin probar contra n8n real**: los tres workflows están creados pero no publicados, y publicar
+  pone tres webhooks en producción — **eso necesita autorización explícita** (4 Leyes de Operación)
+
+### Notas
+- **ADR-016 nace de un hueco de ADR-001.** Aquel prometía un `access_token` UUID guardado junto a la
+  cita; con Supabase congelado no hay dónde guardarlo, y un UUID sin un sitio donde esté escrito no
+  significa nada. Firmarlo resuelve lo mismo sin estado y sin una llamada de red por página servida
+- ⚠️ **Rotar `APPOINTMENT_TOKEN_SECRET` invalida TODOS los enlaces ya enviados por correo**, sin
+  período de gracia. No puede haberlo sin estado
+- **Firma inválida y cita inexistente responden lo mismo** (`notFound()` / `404`). Distinguirlas sería
+  un oráculo para saber qué tokens son criptográficamente válidos
+- **El veredicto que cuenta es el del endpoint, no el de la página.** Alguien puede abrir el enlace a
+  24 h y 10 minutos y pulsar cancelar media hora después: el endpoint recalcula con su propio reloj
+- **La cancelación usa `transparency: transparent`, no `DELETE` ni `status: cancelled`.** Las tres
+  liberan el hueco, pero un `DELETE` no tiene deshacer y `status: cancelled` **es** un borrado para la
+  API de Google. Con `transparent` el hueco vuelve a ofrecerse y Claudia conserva el rastro
+- 🔴 **Al crear los workflows, n8n asignó `api_gmail_aiinovate` a los tres nodos de Gmail** y dejó los
+  tres HTTP sin credencial. Es exactamente lo que advertían `payments.md` y `scheduling.md`, y hay que
+  arreglarlo a mano antes de publicar
+- 🔧 **El correo del WF3 todavía no usa el enlace.** El payload ya lo lleva; falta pegarlo en el HTML
+  del nodo de Gmail, **a mano en la UI** para no perder las credenciales del workflow que sostiene la
+  confirmación de todas las citas
+
+---
+
+## [2026-08-06] — Los $50 no compran una consulta: apartan la cita — v0.8.2
+
+### Request original
+> El sistema pone 50$ para las citas que antes no tenían precio y ahora sí, pero lo toma como cita
+> inicial, NO este valor es para reservar la cita, es un abono al valor real, que recibirá la persona
+> al entrar realmente a la reunión, que ya claudia se encargará de decirles cual es
+
+### Tipo de cambio
+- **BREAKING (interno) — `PricingModel`**: `"initial-consultation"` → **`"deposit"`**. El nombre era el
+  error, no solo la copy: hacía leer los $50 como una consulta más barata —un producto con su propio
+  alcance— cuando no compran nada por sí solos. Renombrado en el tipo, en los seis servicios del
+  catálogo y en la clave de `PRICING_COPY`
+- **FIX (copy, `PRICING_COPY`)**: el `label` que veía el visitante pasa de **«Consulta inicial»** a
+  **«Abono al total»**, y el `note` de «Se abona al costo total del servicio que contrates» a *«Este
+  pago aparta tu cita y se descuenta completo del costo del servicio. No es el precio del servicio:
+  Claudia te dice cuánto es durante la llamada, porque el costo depende de tu caso.»*
+- **DOCS**: corregidos `CLAUDE.md` (dos sitios), `02-architecture.md` (ADR-009 y su tabla),
+  `features/lead-diagnostic.md`, y los comentarios de `content.types.ts` y `business.ts`
+
+### Archivos modificados
+- `src/types/content.types.ts` · `src/constants/content/services.ts` · `src/constants/business.ts`
+- `CLAUDE.md` · `docs/02-architecture.md` · `docs/features/lead-diagnostic.md` · `CHANGELOG.md`
+- **Ningún componente cambia**: los cinco que muestran el precio leen `PRICING_COPY`, que es el punto
+  de extensión que se dejó justo para esto (Mandamiento II)
+
+### Cambios en base de datos
+- Ninguno en Supabase (congelado). En la hoja del CRM, la columna `Tipo de cobro` empieza a escribir
+  **«Abono al total»** en lugar de «Consulta inicial» — sale de `PRICING_COPY[...].label`. Las filas
+  históricas conservan el texto viejo; no se reescriben.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- Cero apariciones de `initial-consultation` en `src/`, salvo la nota histórica del tipo que existe
+  precisamente para que nadie lo reintroduzca
+
+### Notas
+- **Que un solo `sed` y dos textos arreglaran esto es la prueba de que `PRICING_COPY` estaba bien
+  diseñado.** Su comentario original decía que existía «para que la clienta pueda reformular qué
+  significan los $50 sin que nadie toque JSX». Ocurrió exactamente eso, y ningún componente se tocó
+- **`INITIAL_CONSULTATION` en `business.ts` NO se renombró**, y es deliberado: su
+  `durationMinutes` sí describe la primera sesión, que es real. Solo `priceCents` es el abono. Queda
+  documentado en el propio constante para que la próxima lectura no repita el malentendido
+- **Lo que sigue diciéndolo mal está fuera del repo:** el correo de confirmación que manda
+  `Leos Firm - Confirmar cita` no menciona el abono, y debería — un cliente que pagó $50 tiene que
+  saber que ese monto se le descuenta. Es un cambio en n8n, no en código
+
+---
+
+## [2026-08-06] — Primer pago real, y las políticas dejan de contradecirse — v0.8.1
+
+### Request original
+> corrige las politicas usa la de 24h tercero revisa lo del pago […] eso ya resuelve tus dudas no?
+
+### Tipo de cambio
+- **FIX (`src/constants/content/faq.ts`)**: la respuesta de reembolsos decía **«No. […] los pagos
+  realizados no son reembolsables»**, que contradecía `context.md` §8 y la propia página de políticas.
+  Ahora explica los cuatro casos reales: ≥24 h reembolso menos comisiones o crédito · <24 h no
+  reembolsable · reprogramar gratis con ≥24 h · si cancela la firma, el cliente elige
+- **FIX (`src/constants/content/policies.ts`)**: el punto *«Ventas finales: todas las ventas son
+  finales…»* contradecía el punto de 24 h **dos líneas más arriba, en la misma página**. Pasa a
+  *«Consultoría ya iniciada»*, que es lo que quería decir: el pago no se devuelve una vez empezada la
+  sesión, y antes de eso rigen los plazos
+- **DOCS**: FASE 5 y FASE 6 marcadas completas con la evidencia de los cuatro intentos
+
+### Archivos modificados
+- `src/constants/content/faq.ts` · `src/constants/content/policies.ts`
+- `docs/00-roadmap.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno en Supabase (congelado). En la hoja, cuatro filas nuevas escritas por el flujo real.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- **✅ FASE 5 CERRADA**: las columnas Z y AA se llenaron por primera vez —y cuatro veces—, incluidas
+  las tres reservas cuyo pago falló, que es justo lo que ADR-008 quería
+- **✅ FASE 6 CERRADA — primer pago real** el 2026-08-06 a las 14:48:59 UTC: Marco Bustamante,
+  `bookkeeping`, $50. Cobró, el evento pasó a confirmado, Google generó el Meet
+  (`meet.google.com/mdf-dwrq-aog`), el correo llegó y la fila `110b82aa-…` avanzó a `pagado`
+
+### Notas
+- **Los cuatro intentos fechan el fallo y el arreglo al minuto**, y confirman el diagnóstico de v0.7.5:
+  tres pagos fallidos a las 03:35, 04:27 y 05:17 con el token equivocado; token verificado a las 14:35;
+  pago bueno a las 14:48. **Nada estaba roto en el código** — era una variable de Vercel
+- **Corrección a mi propio análisis:** la fila que revisé como «el pago que no se registró»
+  (`db0979de-…`, `agenda`, sin datos de pago) era **uno de los tres intentos fallidos**, no el bueno.
+  El bueno es otra fila, con otro `leadId`. La alarma era mía, no del sistema
+- 💡 **Hallazgo de producto:** cada pasada por el embudo acuña un `leadId` nuevo y el upsert va por
+  `ID`, así que un reintento crea fila nueva en vez de actualizar. Marco quedó con cuatro. No es un bug
+  (ADR-008 conserva al que abandona), pero si molesta se deduplica por correo en el WF1 — **nunca**
+  tocando el `leadId`, que es lo que ata el embudo entero
+- **Limpieza pendiente en la hoja:** borrar las tres filas `agenda` de Marco. Sus eventos tentativos ya
+  los borró el WF4
+
+---
+
+## [2026-08-06] — El sitio ya sabe qué decir cuando algo no existe o se rompe — v0.8.0
+
+### Request original
+> primero termina el tema del desarrollo front end cierra eso de una vez
+
+### Tipo de cambio
+- **FEAT (`src/app/not-found.tsx`)**: 404 con las tres salidas reales — catálogo, FAQ y teléfono
+- **FEAT (`src/app/error.tsx`)**: 500 dentro del layout público, con `reset`. Dice que **el horario
+  sigue apartado**, porque es cierto: la reserva tentativa sobrevive a un render fallido
+- **FEAT (`src/app/global-error.tsx`)**: el fallo del layout raíz. Trae su propio `<html>`/`<body>`
+- **FEAT (`src/app/robots.ts`)**: `/robots.txt`
+- **FEAT (`src/app/sitemap.ts`)**: `/sitemap.xml` con los 8 servicios leídos del catálogo
+- **FEAT (`src/constants/site.ts`)**: `SITE_URL`, antes copiado con su fallback en tres sitios
+- **FEAT (`src/app/layout.tsx`)**: `openGraph`, `twitter`, `robots` y `canonical`
+- **FEAT (A11Y, `src/app/(public)/layout.tsx`)**: skip link + `id="contenido"` en el `<main>`
+
+### Archivos modificados
+- Nuevos: `src/app/not-found.tsx` · `src/app/error.tsx` · `src/app/global-error.tsx` ·
+  `src/app/robots.ts` · `src/app/sitemap.ts` · `src/constants/site.ts`
+- Modificados: `src/app/layout.tsx` · `src/app/(public)/layout.tsx`
+- Docs: `docs/features/public-site.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ — `/robots.txt` y `/sitemap.xml` aparecen en la tabla de rutas, 21 páginas
+  generadas
+- `npm run lint` ✅ sin avisos
+- Accesibilidad revisada: las dos `<Image>` con `alt`, `Input` con `htmlFor`, 12 `aria-label`
+
+### Notas
+- **`not-found.tsx` va en la raíz y dibuja el chrome a mano; `error.tsx` no.** Una URL que no coincide
+  con ninguna ruta nunca entra en un grupo, así que un `not-found` dentro de `(public)` no la vería y
+  ese layout no está en el árbol. `error.tsx` sí vive dentro del layout: repetir Header y Footer
+  mostraría dos de cada uno
+- **`global-error.tsx` no importa nada del proyecto, a propósito.** Si un módulo falla al evaluarse
+  puede ser la razón por la que se renderiza; el respaldo de una página rota no puede romperse igual.
+  El teléfono está escrito a mano ahí — la única duplicación deliberada del código
+- **`SITE_URL` no es una limpieza cosmética.** Su cuarto lector es indirecto y es el que muerde: el
+  HMAC del webhook de Square se calcula sobre `notificationUrl + rawBody`, así que un carácter de
+  diferencia invalida **todas** las firmas
+- 🔴 **Encontrado al documentar, y es urgente:** la FAQ dice *"los pagos no son reembolsables"* y
+  `context.md` §8 dice que con ≥24 h hay reembolso menos comisiones o crédito. El pendiente decía
+  «unificar antes de cobrar de verdad» — **ese momento ya pasó**. Los dos textos le llegan al mismo
+  cliente. Lo decide la clienta, no el código
+- **Roadmap recortado el mismo día:** *Referidos* y *Post-cita* salen del alcance. *Gestión de la cita*
+  se queda pero recortada a lo mínimo (cancelar y pedir cambio con token, sin reembolso automático) y
+  pasa a ser la FASE 9; *Hardening + deploy* pasa a ser la FASE 10
+
+---
+
+## [2026-08-06] — El token era, y ahora está probado: `404` en vez de `401` — v0.7.5
+
+### Request original
+> Ya reemplacé con los valores correctos de producción el Square access token y la signature key […]
+> mira aquí están si están agregadas → *(export de logs de Vercel)* miraaa
+
+### Tipo de cambio
+- **VERIFICACIÓN (producción, sin cobrar nada)**: las dos credenciales que mueven dinero, comprobadas
+  por separado y sin pasar una tarjeta:
+  - **`SQUARE_ACCESS_TOKEN`** ✅ — las cuatro peticiones de prueba a `/api/v1/orders/[id]/status` con
+    una orden inventada devuelven `[pago] no pudimos leer el estado de la orden (404 ·
+    INVALID_REQUEST_ERROR/NOT_FOUND)`. **`404`, no `401`**: Square autenticó y solo se quejó de la
+    orden. El checkout ya puede cobrar
+  - **`SQUARE_WEBHOOK_SIGNATURE_KEY`** ✅ — *Send Test Event* → `POST /api/v1/webhooks/square` `200`,
+    `Square Connect v2`, 1215 ms, **sin ninguna línea de error**. Confirmado por los dos lados, no solo
+    por el código que muestra Square
+  - **`NEXT_PUBLIC_SITE_URL`** ✅ — incluida en el mismo `200`: va dentro del HMAC, así que un carácter
+    distinto lo habría roto
+- **VERIFICACIÓN (inventario)**: las **12 variables** que la app exige están en Vercel, ninguna falta y
+  ninguna sobra. Y las ausentes (`SUPABASE_*`, `GOOGLE_*`, `ANTHROPIC_API_KEY`, `CRON_SECRET`) son
+  inocuas: `getServerEnv()` —el único validador que las pide— solo se llama desde
+  `src/lib/supabase/admin.ts`, congelado y sin uso (ADR-010). Ninguna ruta viva lo toca
+- **VERIFICACIÓN (bundle desplegado)**: `/agendar` sirve `sq0idp-Ny5NuCHxdDE78vhPBitpZw` y
+  `7Z92KDMVTEGHQ`, con **cero** apariciones del location de sandbox
+- **DOCS**: nueva § *Verificar las credenciales de producción sin cobrar un centavo* en `payments.md`,
+  con las dos pruebas como procedimiento repetible, la tabla `401`/`403`/`404`, y **cómo encontrar la
+  línea en el panel de Vercel** — que es donde se perdieron dos intentos
+
+### Archivos modificados
+- `docs/features/payments.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+- **Ningún cambio de código.**
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- Contra el sitio desplegado, 4 peticiones (`14:31:59`, `14:32:21`, `14:32:21`, `14:32:22` UTC) más una
+  quinta de control (`14:35:44`): las cinco con el mismo `404 · NOT_FOUND`
+- Despliegue confirmado: `dpl_HRWAymtUDpJv9vsvjbMdbRVCLj3b`, `production`, rama `main`, región `iad1`
+
+### Notas
+- **El diagnóstico de v0.7.4 era correcto y esta vez además está probado.** La diferencia de método es
+  toda la lección de este episodio: v0.7.3 dedujo por eliminación y se equivocó dos días; v0.7.4 probó
+  los tokens contra la API; v0.7.5 probó el token que **de verdad corre en producción**, que no es lo
+  mismo que el que uno cree haber pegado
+- **Atajo que ahorra abrir el panel:** una latencia estable de 240–350 ms ya demuestra que Square está
+  siendo contactado. Si faltara una variable, `getSquareEnv()` devolvería `null` y `readOrderStatus`
+  cortaría en decenas de ms sin llamar a nadie
+- **Dos exports de log se perdieron antes de acertar**, y por un motivo que merecía documentarse: el
+  filtro por defecto muestra `"type": "static"`, que **no lleva log** (`message` vacío). Un export con
+  `HeadlessChrome` y `undici` es Vercel precalentando el build, no la petición que se busca. Hay que
+  quedarse con `"type": "function"` y mirar antes de que expire la retención de ~1 h
+- `404 Â· INVALID_REQUEST_ERROR` **no es un bug**: es el `·` mal decodificado por el exportador de Vercel
+- 🎯 **Queda una sola cosa en el bloque de pagos: la prueba de punta a punta con tarjeta real.** Cobra
+  de verdad ($50 de consulta inicial, reembolsables desde Square) y **cierra las FASES 5, 6 y 7 a la vez**
+
+---
+
+## [2026-08-06] — Square no necesitaba ninguna verificación: le faltaba un token en Vercel — v0.7.4
+
+### Request original
+> Necesito resolver lo de square al parecer nada que logra recibir los pagos, no hemos descubierto
+> porqué, sigues diciendo que falta verificación de Square pero la clienta recibe pagos por ahí,
+> entonces no es congruente con lo que dices que no está verificado o se necesita un nivel extra de
+> verificacion para integrarlo a la pagina? segundo si ya realizaste una auditoria y todo estaba
+> correcto, que sigue pasando? debo de ir a algun lugar a traerte info adicional???
+
+### Tipo de cambio
+- **VERIFICACIÓN (Square, por API)**: los **dos tokens del repo probados contra los dos entornos**, que
+  es lo que la auditoría anterior nunca hizo — solo había verificado sandbox. Resultado: el token de
+  producción es **válido** y es el de la clienta (merchant `QVGQDZCV0X3WD`, *Leos Firm LLC*, `ACTIVE`,
+  `USD`, location `7Z92KDMVTEGHQ` en `America/Chicago` con `AUTOMATIC_TRANSFERS`, **creada en 2020**),
+  y la suscripción `leos_firm_pago_consulta` está `enabled` con los 4 eventos y la `api_version` que
+  fija `square@45`. **En Square no falta nada**
+- **CONFIG (`.env.vercel`, no versionado)**: `NEXT_PUBLIC_SQUARE_LOCATION_ID` pasa de
+  `LB2XHFGDVRJZJ` —el de **sandbox**— a `7Z92KDMVTEGHQ`. Tenía el location de sandbox junto al
+  application id y el token de producción
+- **CONFIG (`.env`, no versionado)**: `SQUARE_ENVIRONMENT` vuelve de `production` a `sandbox`. Había
+  quedado así tras reproducir el 401 a propósito en v0.7.3, y con las tres credenciales de sandbox al
+  lado **ningún pago local podía funcionar**
+- **DOCS**: corregidas dos afirmaciones **falsas** que llevaban dos días en la documentación — que la
+  cuenta de Square estaba sin verificar y «tarda días», y que `.env.vercel` tenía credenciales de
+  sandbox (tenía una mezcla). Nueva § *Los cuatro tokens probados contra la API*
+- **CÓDIGO**: el comentario de `CURRENCY` citaba solo el location de sandbox como prueba de que la
+  moneda es USD; ahora cita los dos, verificados
+
+### Archivos modificados
+- `src/services/payment.service.ts` — solo el comentario de `CURRENCY`; ninguna lógica cambia
+- `docs/features/payments.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+- `.env` y `.env.vercel` — no versionados (`.gitignore`, v0.7.3)
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- **Contra la API real de Square**, matriz completa de 4 llamadas:
+
+  | Token | `connect.squareup.com` | `connect.squareupsandbox.com` |
+  |---|---|---|
+  | `.env` (`EAAAlyGy…`) | **401** `AUTHENTICATION_ERROR/UNAUTHORIZED` | **200** · `LB2XHFGDVRJZJ` |
+  | `.env.vercel` (`EAAAl_RH…`) | **200** · `7Z92KDMVTEGHQ` | **401** `AUTHENTICATION_ERROR/UNAUTHORIZED` |
+
+- `GET /v2/merchants/me` y `GET /v2/webhooks/subscriptions` en producción: `200` los dos
+
+### Notas
+- **La causa del `401` es una sola variable: `SQUARE_ACCESS_TOKEN` en Vercel no es el de producción.**
+  Es la única hipótesis que sobrevive a la matriz, y es exactamente reproducible — el token de sandbox
+  contra la API de producción devuelve el mismo `401 AUTHENTICATION_ERROR/UNAUTHORIZED` que registró
+  el log. Encaja con lo demás: alguien actualizó a mano el application id y el location en el panel de
+  Vercel y **no actualizó el token**
+- **La auditoría de v0.7.3 acertó el diagnóstico y falló el método.** Cerró «token que no corresponde
+  al entorno» **por eliminación**, sin probar el token, y en la misma frase repitió como pendiente una
+  verificación de cuenta que nadie había comprobado. Una llamada `GET /v2/locations` lo habría cerrado
+  en un minuto: **el token estaba en el repo desde el principio**
+- ⚠️ **Queda un segundo bloqueante escondido detrás del primero:** si `SQUARE_WEBHOOK_SIGNATURE_KEY`
+  en Vercel es la de sandbox, al arreglar el token el cobro pasará y el webhook rebotará por firma
+  inválida → **dinero cobrado y cita sin confirmar**, el peor estado posible del sistema. Las dos
+  variables se cambian juntas, no una y luego la otra
+- ⚠️ **La próxima prueba de punta a punta cobra dinero real.** `4111 1111 1111 1111` es de sandbox y
+  en producción la rechaza el banco. Se prueba con los $50 de consulta inicial y se reembolsa desde el
+  panel de Square
+
+---
+
 ## [2026-08-06] — El pago fallaba por dos motivos distintos, y solo uno era el que se veía — v0.7.3
 
 ### Request original

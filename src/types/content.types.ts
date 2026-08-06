@@ -10,13 +10,21 @@
  * What the amount the visitor pays online actually buys (ADR-009).
  *
  * - `full-service` — the payment closes the service. Nothing else is charged.
- * - `initial-consultation` — the payment covers the first session and is
- *   credited toward the final quote, which Claudia gives during that call.
+ * - `deposit` — the payment **holds the appointment** and is credited, in full,
+ *   against the real cost of the service. Claudia gives that cost during the
+ *   call, because she prices per case.
  *
  * Both models charge online and both book a slot: the difference is what the
  * client is told they are paying for, never whether the flow changes.
+ *
+ * ⚠️ **This member used to be called `initial-consultation`, and the name was the
+ * bug** (renamed 2026-08-06, at the client's correction). It read as though the
+ * $50 bought a first consultation — a cheap product with its own scope — when it
+ * buys nothing on its own: it is money on account. Every surface that showed it
+ * inherited that reading, and the label the visitor saw literally said
+ * «Consulta inicial». Do not reintroduce the old name, in code or in copy.
  */
-export type PricingModel = "full-service" | "initial-consultation";
+export type PricingModel = "full-service" | "deposit";
 
 export type Service = {
   slug: string;

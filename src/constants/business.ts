@@ -39,12 +39,21 @@ export const BUSINESS_HOURS = {
 } as const;
 
 /**
- * Price of the initial consultation (ADR-009).
+ * The deposit that holds the appointment, and the length of that first session
+ * (ADR-009).
  *
- * The six services that used to be quote-based now charge this amount to book
- * the first session, and it is credited toward the final quote Claudia gives
- * during the call. It lives here — not spread across the catalog — so changing
- * it is one number in one file.
+ * The six services that used to be quote-based charge `priceCents` **to hold the
+ * slot**, and the whole amount comes off the real cost of the service. It does
+ * not buy a cheaper "initial consultation" — see `PricingModel` in
+ * `src/types/content.types.ts` for why that reading was a bug, corrected by the
+ * client on 2026-08-06. Claudia gives the real cost during the call because she
+ * prices per case.
+ *
+ * The name is kept for `INITIAL_CONSULTATION.durationMinutes`, which genuinely
+ * describes the first session. Only `priceCents` is the deposit.
+ *
+ * It lives here — not spread across the catalog — so changing it is one number
+ * in one file.
  */
 export const INITIAL_CONSULTATION = {
   priceCents: 5_000,
@@ -121,6 +130,21 @@ export const AVAILABILITY_RATE_LIMIT = {
 
 /** Rate limit for `POST /api/v1/appointments` — as tight as the lead one. */
 export const APPOINTMENT_RATE_LIMIT = {
+  maxRequests: 5,
+  windowMs: 10 * 60 * 1000,
+} as const;
+
+/**
+ * Rate limit for the two endpoints behind the client's appointment link
+ * (`docs/features/appointment-management.md`).
+ *
+ * Tight, and for a different reason than the others: these take a signed token
+ * in the path, so the limit is what makes brute-forcing one pointless on top of
+ * the HMAC that already makes it infeasible (`03-security.md` — "rate limit por
+ * IP en los endpoints que aceptan token"). Nobody cancels the same appointment
+ * five times in ten minutes for a legitimate reason.
+ */
+export const APPOINTMENT_ACCESS_RATE_LIMIT = {
   maxRequests: 5,
   windowMs: 10 * 60 * 1000,
 } as const;
