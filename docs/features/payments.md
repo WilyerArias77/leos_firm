@@ -4,9 +4,12 @@
 > —checkout → Square → webhook → WF5 → WF3 → WF1— está publicada y verificada de punta a punta contra
 > Calendar, Sheets y Gmail reales. El riesgo del limpiador borrando el slot mientras se paga quedó
 > cerrado el mismo día (§ *El riesgo del limpiador*).
-> **Falta para producción:** la prueba sobre el sitio desplegado con la tarjeta de sandbox, y la
-> cuenta de producción de Square verificada con banco vinculado (§ *Pendiente*)
-> **Última actualización:** 2026-08-05
+> 🔴 **El checkout está caído en producción desde el 2026-08-06**: Square responde `401` porque las
+> credenciales del servidor no corresponden al entorno que ya sirve el frente. **Se arregla en Vercel,
+> no en el código** — § *El 401 de producción*.
+> **Falta para producción:** esas credenciales, la prueba sobre el sitio desplegado, y la cuenta de
+> producción de Square verificada con banco vinculado (§ *Pendiente*)
+> **Última actualización:** 2026-08-06
 > **Archivos:** `src/lib/square/{client,signature,webPayments}.ts` ·
 > `src/services/{payment,checkout}.service.ts` · `src/app/api/v1/checkout/route.ts` ·
 > `src/app/api/v1/webhooks/square/route.ts` · `src/app/api/v1/orders/[id]/status/route.ts` ·
@@ -257,12 +260,50 @@ operaciones**, que no es negociable:
    `amount` en el body se ignora sin comentarios (ADR-006).
 3. `CreateOrder` con `metadata: { lead_id, event_id, service_slug }` y el line item del catálogo.
 4. `CreatePayment` con `sourceId`, `orderId`, `referenceId: lead_id` y un **`idempotencyKey` por
-   intento**, derivado de `lead_id + event_id + priceCents` — no un UUID nuevo por clic, o el doble
-   clic deja de estar protegido.
+   token de tarjeta**, derivado de `lead_id + event_id + priceCents + sourceId`. **No** el mismo que
+   el de la orden — ver § *Las dos claves de idempotencia*, que es donde esto se rompió.
 5. Responder `201` con `{ orderId, status: "pending" }`. **La respuesta no confirma nada.**
 
 > **El slot ya está apartado cuando esto se ejecuta.** Este endpoint no valida disponibilidad ni crea
 > eventos: si llega sin `eventId`, es un error del cliente, no algo que compensar reservando aquí.
+
+#### Las dos claves de idempotencia — corregido el 2026-08-06
+
+Durante un día hubo **una sola clave** para la orden y para el pago, derivada de
+`lead_id + event_id + priceCents`. El razonamiento escrito al lado era que así un doble clic o un
+fetch reintentado mandan la misma clave y Square devuelve el pago original en vez de cobrar dos
+veces.
+
+**Ese razonamiento tiene un agujero: `card.tokenize()` emite un `sourceId` NUEVO en cada clic.** La
+clave era la misma y los parámetros no, que es exactamente lo que Square rechaza:
+
+```
+400 · INVALID_REQUEST_ERROR / IDEMPOTENCY_KEY_REUSED
+     "Different request parameters used for the same idempotency_key"
+```
+
+Y como no es un `PAYMENT_METHOD_ERROR`, sale por la rama de «fallo nuestro»: `502` con el teléfono de
+la firma. **El daño real no es el error suelto, es que el camino de la tarjeta rechazada era un
+callejón sin salida por construcción:** el mensaje del `402` dice literalmente *«prueba con otra
+tarjeta»*, y ese segundo intento estaba condenado. Ninguna tarjeta volvía a funcionar para ese slot.
+
+La corrección separa las dos, cada una con la semántica que le toca:
+
+| Llamada | Clave | Por qué |
+|---|---|---|
+| `CreateOrder` | `lead_id + event_id + priceCents` | El cuerpo de la orden se arma con esos mismos tres valores y **no varía entre intentos**: Square reproduce la orden original y los reintentos comparten slot en vez de abrir una segunda orden |
+| `CreatePayment` | lo anterior **+ `sourceId`** | El token es de un solo uso, así que la clave distingue lo que hay que distinguir: reenviar la MISMA petición reproduce el pago original (cero cobro doble); un intento genuinamente nuevo trae otro token y puede pasar |
+
+**El cobro doble no depende de esta clave, y es lo que hace segura la corrección.** La orden es la
+segunda barrera: un segundo pago contra una orden ya pagada lo rechaza Square sola.
+
+Verificado contra sandbox el 2026-08-06, los tres caminos:
+
+| Prueba | Antes | Ahora |
+|---|---|---|
+| Tarjeta rechazada → reintento con otra | `502` **siempre** | `201 paid` |
+| La misma petición reenviada | — | **Mismo `orderId` y mismo `paymentId`** |
+| Segundo pago contra una orden ya pagada | — | Square: `BAD_REQUEST · "The order is already paid"` |
 
 ### `POST /api/v1/webhooks/square`
 
@@ -607,6 +648,7 @@ es una opción.
 | Pago aprobado | Tarjeta de prueba de Square Sandbox (`4111 1111 1111 1111`, fecha futura, CVV `111`) |
 | Pago rechazado | Los valores de rechazo de la doc de Square Sandbox — **verificarlos ahí, cambian** |
 | Doble clic en «Pagar» | Dos veces seguidas: **un solo cobro** (`idempotencyKey`) |
+| **Rechazada y después otra tarjeta** | El `402` invita a reintentar: el segundo intento **tiene que cobrar**. Es el caso que rompía (§ *Las dos claves de idempotencia*) |
 | Replay del webhook | Reenviar el mismo evento desde el panel de Square: `200` y **cero** correos nuevos |
 | Firma inválida | `curl` con una firma cualquiera → `401` |
 | Slot borrado antes del pago | Borrar el evento a mano y confirmar: fila en `error`, no en `confirmado` |
@@ -662,6 +704,56 @@ guardando cero leads en silencio.
 | `SQUARE_WEBHOOK_SIGNATURE_KEY` | **no** | Webhooks → la suscripción |
 | `N8N_CONFIRM_WEBHOOK_URL` | **no** | Production URL del WF3 |
 | `N8N_PAYMENTS_WEBHOOK_URL` | **no** | Production URL del WF5 |
+
+### 🔴 El 401 de producción — diagnosticado el 2026-08-06, PENDIENTE de arreglar en Vercel
+
+Dos intentos de pago reales desde un iPhone (03:35:57 y 03:36:51 UTC del 2026-08-06) fallaron con
+`502`, y el log de Vercel dice lo mismo en los dos:
+
+```
+[pago] Square respondió 401       ← el log VIEJO: no dice cuál de los tres 401 posibles es
+```
+
+**No es la idempotencia** (eso es un `400` y solo aparece al reintentar). **Es que Square no acepta
+las credenciales.** Cerrado por eliminación, con cada firma comprobada contra la API real:
+
+| Hipótesis | Firma que produce | ¿Coincide con el log? |
+|---|---|---|
+| Falta una variable | `[pago] Square sin configurar` — `getSquareEnv()` devuelve `null` | ❌ no hubo esa línea |
+| Location de otra cuenta | **`403`** · `AUTHENTICATION_ERROR/FORBIDDEN` | ❌ el log dice 401 |
+| **Token que no corresponde al entorno llamado** | **`401`** · `AUTHENTICATION_ERROR/UNAUTHORIZED` | ✅ |
+
+Y el frente **ya está en producción**: el bundle desplegado sirve
+`NEXT_PUBLIC_SQUARE_APPLICATION_ID = sq0idp-Ny5NuCHxdDE78vhPBitpZw` y
+`NEXT_PUBLIC_SQUARE_LOCATION_ID = 7Z92KDMVTEGHQ` — ninguno es el de sandbox. El navegador carga
+`web.squarecdn.com` y emite tokens de producción; el servidor sigue sin un token de producción válido.
+
+> ⚠️ **`.env.vercel` del repo está desactualizado y es una trampa.** Dice `sandbox-sq0idb-…`,
+> `LB2XHFGDVRJZJ` y `SQUARE_ENVIRONMENT=sandbox`, que ya no es lo que corre. Quien resincronice Vercel
+> desde ese archivo devolvería el sitio a sandbox. **Las cuatro credenciales de producción son
+> distintas de las de sandbox** (§ Bloque B) y hay que traerlas todas juntas o ninguna.
+
+**Qué hay que hacer, y es en el panel de Vercel, no en el código:**
+
+1. Decidir el entorno y ponerlo entero, sin mezclar mitades:
+   - **producción** → `SQUARE_ACCESS_TOKEN` **de producción**, `SQUARE_ENVIRONMENT=production`,
+     `SQUARE_WEBHOOK_SIGNATURE_KEY` de la suscripción de producción, y el application/location que ya
+     están puestos. Exige la cuenta verificada con banco vinculado (§ Bloque A, la clienta);
+   - **sandbox** → los cuatro valores de sandbox, incluidos el application id y el location id, que
+     hoy están en producción.
+2. **Volver a desplegar.** Vercel no recoge variables nuevas en un despliegue ya hecho — la lección
+   que ya costó tener el CRM guardando cero leads en silencio.
+3. Comprobar con un pago real. Si vuelve a fallar, **ahora el log lo dice**: `401` es el token,
+   `403` es el location, `400 · IDEMPOTENCY_KEY_REUSED` sería la idempotencia.
+
+**Lo que sí se corrigió en el código:** los cuatro `console.error` de Square registran ahora
+`category/code` además del estado HTTP. Son identificadores, no PII ni contenido, así que caben en el
+log ([`../03-security.md`](../03-security.md) § *loguear ids, no contenido*). La línea equivalente
+hoy, reproducida en local con un token de sandbox y `SQUARE_ENVIRONMENT=production`:
+
+```
+[pago] Square rechazó el cobro (401 · AUTHENTICATION_ERROR/UNAUTHORIZED)
+```
 
 **Bloque D — la hoja.** Crear la pestaña `Pagos` con sus 11 encabezados. Manual, como las dos
 columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
@@ -734,6 +826,18 @@ columnas de la FASE 5, y por el mismo motivo: el código no crea columnas.
 - [ ] 🏷️ Renombrar el nodo `Cada 10 minutos` del WF4 —corre cada 30— y su `description`. Cosmético
 - [ ] 💤 **DEUDA ACEPTADA (2026-08-05): el `30` en la descripción que escribe el WF2** (nodo
       `Crear evento TENTATIVO`). Ver la tabla del § *El riesgo del limpiador* para el porqué
+- [x] **Bug de la clave de idempotencia corregido** (2026-08-06): la del pago incluye el `sourceId`,
+      la de la orden no. Sin esto, una tarjeta rechazada dejaba el slot impagable **con cualquier
+      tarjeta**, y el `402` invitaba a intentarlo. Verificado contra sandbox, incluido que reenviar la
+      misma petición sigue devolviendo un solo pago (§ *Las dos claves de idempotencia*)
+- [x] **Los logs de Square registran `category/code`** (2026-08-06), no solo el estado HTTP. Es lo que
+      hacía indistinguibles el `401` del token, el `403` del location y el `400` de la clave reusada
+- [ ] 🔴 **Credenciales de Square en Vercel — EL CHECKOUT ESTÁ CAÍDO POR ESTO.** El frente ya sirve
+      application id y location de **producción** (`sq0idp-…` / `7Z92KDMVTEGHQ`) y el servidor no tiene
+      un token de producción válido → `401` en cada pago. Poner las cuatro credenciales del mismo
+      entorno y **volver a desplegar** (§ *El 401 de producción*)
+- [ ] ⚠️ **`.env.vercel` del repo desactualizado**: dice sandbox y producción sirve producción.
+      Resincronizar Vercel desde ese archivo devolvería el sitio a sandbox
 - [ ] Probar de punta a punta **sobre el sitio desplegado** con la tarjeta de prueba de sandbox
       (`4111 1111 1111 1111`) — en local la firma no puede validar y es correcto
 - [ ] **Cuenta de producción de Square** verificada y con banco vinculado — la clienta

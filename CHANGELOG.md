@@ -6,6 +6,53 @@
 
 ---
 
+## [2026-08-06] — El pago fallaba por dos motivos distintos, y solo uno era el que se veía — v0.7.3
+
+### Request original
+> ayudame haciendo una auditoria para resolver este error al momento de hacer el pago
+> *(captura de `/agendar` con el 502)*, y después:
+> junto con la auditoria realizada y los errores contenidos en este archivo proveniente de vercel ve
+> si te funciona y corrije el error
+
+### Tipo de cambio
+- **FIX (`payment.service.ts`)**: la clave de idempotencia del **pago** ahora incluye el `sourceId`.
+  La de la **orden** no cambia. Eran una sola clave y no podían serlo
+- **FIX (`payment.service.ts`)**: los cuatro `console.error` de Square pasan a registrar
+  `category/code`, no solo el estado HTTP
+- **DOCS**: `payments.md` — el paso 4 de `/checkout` reescrito, § *Las dos claves de idempotencia*
+  nueva, § *Diagnóstico del 401 en producción* nueva, y el pendiente de producción corregido
+
+### Archivos modificados
+- `src/services/payment.service.ts`
+- `docs/features/payments.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅ (sin avisos)
+- **Contra el endpoint real y Square sandbox**, la secuencia que fallaba: tarjeta rechazada `402` →
+  **reintento con otra tarjeta `201 paid`** (antes `502`) → la misma petición reenviada devuelve el
+  **mismo `orderId` y el mismo `paymentId`**: cero cobro doble
+- Cobro doble descartado también por el lado de Square: un segundo pago contra una orden ya pagada
+  responde `BAD_REQUEST · "The order is already paid"`
+- **El 401 de producción reproducido en local** (token de sandbox con `SQUARE_ENVIRONMENT=production`)
+  para comprobar el log nuevo: `[pago] Square rechazó el cobro (401 · AUTHENTICATION_ERROR/UNAUTHORIZED)`
+
+### Notas
+- **Los dos fallos son independientes y el de producción NO era el de la idempotencia.** El log de
+  Vercel dice `401` en los dos intentos: Square no acepta las credenciales. El del `IDEMPOTENCY_KEY_REUSED`
+  es un `400` y solo aparece al reintentar; estaba latente esperando a que hubiera un cobro que
+  reintentar
+- **Lo que hacía indescifrable el 401 era nuestro propio log.** `[pago] Square respondió 401` no
+  distingue un token de otro entorno (`401`) de un location de otra cuenta (`403`) de una clave
+  reusada (`400`). Los tres códigos son identificadores, no PII: caben en el log
+- **El `.env.vercel` del repo está desactualizado** y es una trampa: dice `sandbox`, y el bundle
+  desplegado sirve `sq0idp-…` con location `7Z92KDMVTEGHQ` — producción. Quien resincronice desde ese
+  archivo devolvería el sitio a sandbox. No se tocó porque el token real no está aquí
+
+---
+
 ## [2026-08-06] — La evidencia de la política ya tiene dónde caer — v0.7.2
 
 ### Request original

@@ -39,22 +39,79 @@ const CURRENCY = "USD";
 const IDEMPOTENCY_KEY_LENGTH = 40;
 
 /**
- * The idempotency key of an ATTEMPT, not of a click.
+ * The idempotency key of the ORDER: one order per held slot.
  *
- * Derived from `leadId + eventId + priceCents` rather than a fresh UUID, and the
- * difference is the whole protection: a double click, a retried fetch or a
- * refreshed page sends the same key, and Square returns the original payment
- * instead of charging twice. A UUID per click would make every one of those a
- * new charge.
+ * Derived from `leadId + eventId + priceCents` rather than a fresh UUID, so a
+ * retried checkout reuses its order instead of opening a second one against the
+ * same held slot. It is safe to keep it stable because the order body is built
+ * from those same three values and never varies between attempts — Square
+ * replays the original order every time.
  *
  * The price is part of it on purpose: if the catalog price changes, a new
- * attempt is genuinely a different payment and must not collide with the old.
+ * attempt is genuinely a different order and must not collide with the old.
  */
-function idempotencyKeyFor(parts: { leadId: string; eventId: string; priceCents: number }): string {
+function orderKeyFor(parts: { leadId: string; eventId: string; priceCents: number }): string {
   return createHash("sha256")
     .update(`${parts.leadId}|${parts.eventId}|${parts.priceCents}`)
     .digest("hex")
     .slice(0, IDEMPOTENCY_KEY_LENGTH);
+}
+
+/**
+ * The idempotency key of the PAYMENT: one payment per card token.
+ *
+ * **The card token has to be in here, and leaving it out is what broke the
+ * checkout.** `card.tokenize()` mints a NEW single-use token on every click, so
+ * a key derived only from the slot is the same key with different parameters:
+ * Square answers `IDEMPOTENCY_KEY_REUSED` (an `INVALID_REQUEST_ERROR`, so it
+ * reaches the visitor as "our failure" and the firm's phone number), and anyone
+ * whose first card was declined could never pay for that slot again — with any
+ * card. The declined-card message invites exactly that retry.
+ *
+ * Including the token gives the semantics the slot-only key was reaching for,
+ * because the token is single-use by construction:
+ *
+ * - a retried fetch or a replayed request carries the SAME token → same key →
+ *   Square returns the original payment, not a second charge;
+ * - a genuinely new attempt carries a NEW token → new key → it is allowed to go
+ *   through.
+ *
+ * The order is the second guard and it does not depend on this key at all:
+ * Square refuses a second payment against an order it already considers paid
+ * (`BAD_REQUEST` · "The order is already paid").
+ */
+function paymentKeyFor(parts: {
+  leadId: string;
+  eventId: string;
+  priceCents: number;
+  sourceId: string;
+}): string {
+  return createHash("sha256")
+    .update(`${parts.leadId}|${parts.eventId}|${parts.priceCents}|${parts.sourceId}`)
+    .digest("hex")
+    .slice(0, IDEMPOTENCY_KEY_LENGTH);
+}
+
+/**
+ * A Square failure reduced to what a log may carry: the HTTP status and the
+ * `category/code` pairs. No card data, no tokens, no bodies — ids, not content
+ * (`docs/03-security.md`).
+ *
+ * It exists because the codes are the only actionable part. A bare
+ * `Square respondió 401` cannot be told apart from a wrong location (`403`), a
+ * reused key (`400`) or a revoked token, and that is the difference between
+ * reading a log line and reproducing a production payment.
+ */
+function describeSquareError(error: unknown): string {
+  if (!(error instanceof SquareError)) {
+    return error instanceof Error ? error.name : "unknown";
+  }
+
+  const codes = error.errors
+    .map((item) => `${item.category ?? "?"}/${item.code ?? "?"}`)
+    .join(", ");
+
+  return `${error.statusCode ?? "sin estado"}${codes ? ` · ${codes}` : ""}`;
 }
 
 /**
@@ -113,17 +170,17 @@ export async function chargeForAppointment(params: {
   }
 
   const priceCents = params.service.priceCents;
-  const idempotencyKey = idempotencyKeyFor({
-    leadId: params.leadId,
-    eventId: params.eventId,
-    priceCents,
-  });
+  const slot = { leadId: params.leadId, eventId: params.eventId, priceCents };
+
+  // Two keys, not one, and the difference is the whole retry story: the order is
+  // keyed by the slot so attempts share it, the payment by the card token so
+  // attempts do NOT collide. See both functions above.
+  const orderKey = orderKeyFor(slot);
+  const paymentKey = paymentKeyFor({ ...slot, sourceId: params.sourceId });
 
   try {
     const orderResponse = await client.orders.create({
-      // Same derived key: a retried checkout must reuse its order, not open a
-      // second one against the same held slot.
-      idempotencyKey: `order-${idempotencyKey}`,
+      idempotencyKey: `order-${orderKey}`,
       order: {
         locationId,
         // Visible in Claudia's Square dashboard, so a charge can be traced to a
@@ -158,7 +215,7 @@ export async function chargeForAppointment(params: {
 
     const paymentResponse = await client.payments.create({
       sourceId: params.sourceId,
-      idempotencyKey,
+      idempotencyKey: paymentKey,
       amountMoney: { amount: BigInt(priceCents), currency: CURRENCY },
       orderId,
       locationId,
@@ -194,8 +251,7 @@ export async function chargeForAppointment(params: {
  */
 function describeChargeFailure(error: unknown): ChargeResult {
   if (!(error instanceof SquareError)) {
-    const reason = error instanceof Error ? error.name : "unknown";
-    console.error(`[pago] fallo inesperado al cobrar (${reason})`);
+    console.error(`[pago] fallo inesperado al cobrar (${describeSquareError(error)})`);
     return { ok: false, reason: "upstream" };
   }
 
@@ -217,7 +273,19 @@ function describeChargeFailure(error: unknown): ChargeResult {
     };
   }
 
-  console.error(`[pago] Square respondió ${error.statusCode ?? "sin estado"}`);
+  /**
+   * Our failure, so the code goes in the log — it is the only thing that says
+   * WHICH failure, and the three that actually happen look identical without it:
+   *
+   * - `AUTHENTICATION_ERROR/UNAUTHORIZED` (401) — the access token does not
+   *   belong to the environment being called. A sandbox token with
+   *   `SQUARE_ENVIRONMENT=production` is exactly this.
+   * - `AUTHENTICATION_ERROR/FORBIDDEN` (403) — the token is valid but the
+   *   location id belongs to another account.
+   * - `INVALID_REQUEST_ERROR/IDEMPOTENCY_KEY_REUSED` (400) — same key, different
+   *   parameters. See `paymentKeyFor`.
+   */
+  console.error(`[pago] Square rechazó el cobro (${describeSquareError(error)})`);
   return { ok: false, reason: "upstream" };
 }
 
@@ -279,8 +347,7 @@ export async function readPayment(
       },
     };
   } catch (error) {
-    const reason = error instanceof SquareError ? String(error.statusCode) : "unknown";
-    console.error(`[pago] no pudimos leer el pago en Square (${reason})`);
+    console.error(`[pago] no pudimos leer el pago en Square (${describeSquareError(error)})`);
     return null;
   }
 }
@@ -311,8 +378,7 @@ export async function readOrderStatus(orderId: string): Promise<PaymentStatus | 
 
     return "pending";
   } catch (error) {
-    const reason = error instanceof SquareError ? String(error.statusCode) : "unknown";
-    console.error(`[pago] no pudimos leer el estado de la orden (${reason})`);
+    console.error(`[pago] no pudimos leer el estado de la orden (${describeSquareError(error)})`);
     return null;
   }
 }
@@ -346,8 +412,7 @@ export async function readOrderContext(orderId: string): Promise<OrderContext | 
       serviceSlug: metadata?.[ORDER_METADATA_KEYS.serviceSlug] ?? "",
     };
   } catch (error) {
-    const reason = error instanceof SquareError ? String(error.statusCode) : "unknown";
-    console.error(`[pago] no pudimos leer la orden en Square (${reason})`);
+    console.error(`[pago] no pudimos leer la orden en Square (${describeSquareError(error)})`);
     return null;
   }
 }
