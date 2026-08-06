@@ -55,7 +55,7 @@ usuario.
 | 4 | **Cobro universal + CRM en Google Sheets** | B · Back | Los 8 servicios con precio, `leads` → hoja vía n8n | ✅ **Completa** |
 | 5 | **Agendamiento: calendario propio** | B · Back | `/agendar`, disponibilidad real, reserva tentativa | 🔨 **En curso** — mitad Next.js lista |
 | 6 | Square: checkout + webhook | B · Back | Cobro real, confirmación de la cita, CRM `pagado` | 🔨 **En curso** — mitad Next.js lista |
-| 7 | Correos por n8n | B · Back | Confirmación, recordatorios 24 h / 1 h | ⬜ Pendiente |
+| 7 | Correos por n8n | B · Back | Confirmación, recordatorios 24 h / 1 h | 🔨 **En curso** — los 3 correos publicados; falta probarlos con una cita real |
 | 8 | Cierre de front end | A · Front | A11Y, SEO, 404/500, contenido pendiente | ⬜ Pendiente |
 | 9 | Gestión de la cita | B · Back | Ver, reprogramar y cancelar con token (política §8) | ⬜ Pendiente |
 | 10 | Referidos (30 min gratis) | B · Back | Cupón + enlace de calendario compartible | ⬜ Pendiente |
@@ -185,9 +185,25 @@ borra un slot que el código cree retenido. Ya no se puede cobrar sin poder entr
 - Confirmar que el **"De:"** del correo es la cuenta de la firma y no `api_gmail_aiinovate`
 - Copiar **ADR-013** y **ADR-014** a [`02-architecture.md`](./02-architecture.md)
 
-### FASE 7 — Correos por n8n ⬜
+### FASE 7 — Correos por n8n 🔨 EN CURSO
 Confirmación al cliente, copia a Claudia, recordatorios 24 h y 1 h antes. El scheduler es n8n, no
-Vercel Cron. **Doc esperado:** `features/notifications.md`
+Vercel Cron.
+**Doc:** [`features/notifications.md`](./features/notifications.md) — **ya escrito** (2026-08-06)
+**Decisión propuesta en el doc:** ADR-015 (la marca de «recordatorio enviado» vive en el propio
+evento de Calendar, y el correo se manda **antes** de marcar).
+
+**Los tres correos están publicados** (2026-08-06). La confirmación venía de la FASE 6 —la manda el
+WF3 y no se duplica, porque cuelga de la rama donde el `PATCH` con `If-Match` ganó la carrera— y ahora
+se le suman **WF6** `Recordatorio 24 h` (`6836anE95HmUiyDg`, activo) y **WF7** `Recordatorio 1 h`
+(`Edd15W7W2FS1Cagf`, activo).
+
+**Criterio de salida, todavía no alcanzado:** ningún recordatorio ha corrido sobre una cita real
+—solo miran eventos `confirmed`, y las tres reservas de la hoja quedaron sin pagar—, y siguen
+pendientes las tres correcciones al correo de confirmación: acentos, `CC` → `BCC` y el destinatario de
+la copia interna, que pasa a `claudia@leosfirm.com`.
+
+**Esta fase no toca el repositorio:** cero código nuevo, ningún endpoint, ninguna variable. Es
+enteramente n8n, porque el scheduler y las credenciales de Google viven ahí (ADR-010).
 
 ### FASE 8 — Cierre de front end ⬜
 A11Y (contraste, foco, teclado, lectores de pantalla), responsive verificado, SEO y metadata,

@@ -12,6 +12,7 @@ FASE 2.1) y se actualiza al terminar.
 | [`crm-sheets.md`](./crm-sheets.md) | CRM en Google Sheets vía n8n | ✅ **En producción** |
 | [`scheduling.md`](./scheduling.md) | Agendamiento con calendario propio sobre Google Calendar | 📐 Diseñado — FASE 5 |
 | [`payments.md`](./payments.md) | Checkout con Square, webhook y confirmación de la cita | 📐 Diseñado — FASE 6 |
+| [`notifications.md`](./notifications.md) | Correos: confirmación y recordatorios de 24 h y 1 h | 📐 Diseñado — FASE 7 |
 
 ## Ciclo de cada feature
 
@@ -71,7 +72,7 @@ FASE 2.1) y se actualiza al terminar.
 |------|---------|-----|
 | 5 | Agendamiento: calendario propio | ✅ `scheduling.md` (escrito) |
 | 6 | Checkout con Square + webhook | ✅ `payments.md` (escrito) |
-| 7 | Correos de confirmación y recordatorio por n8n | `notifications.md` |
+| 7 | Correos de confirmación y recordatorio por n8n | ✅ `notifications.md` (escrito) |
 | 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | `appointment-management.md` |
 | 10 | Enlace de calendario para referidos | `referrals.md` |
 | 11 | Resumen IA post-cita + propuestas | `post-meeting.md` |

@@ -6,6 +6,115 @@
 
 ---
 
+## [2026-08-06] — Los dos recordatorios revisados y publicados — v0.7.1
+
+### Request original
+> workflows de la fase 7 revisados y publicados
+
+### Tipo de cambio
+- **PRODUCCIÓN (n8n)**: **WF6 `Recordatorio 24 h` y WF7 `Recordatorio 1 h` publicados**, con sus
+  credenciales corregidas a mano — los cuatro nodos HTTP habían quedado sin credencial y los dos de
+  Gmail auto-asignados a `api_gmail_aiinovate`. **Verificado por MCP:** ambos con `active: true` y
+  `triggerCount: 1`
+- **DOCS**: estado actualizado en `notifications.md` y en el roadmap. Con esto **los tres correos del
+  embudo están publicados**: confirmación, recordatorio de 27 h y aviso del mismo día
+
+### Archivos modificados
+- `docs/features/notifications.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+- **Sin cambios de código.**
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `search_workflows` contra la instancia real para confirmar el estado activo de los dos, en vez de
+  darlo por hecho
+
+### Notas
+- **La fase no está cerrada.** Ningún recordatorio ha corrido todavía sobre una cita real: los dos
+  filtran por `status = confirmed` y las tres reservas que hay en la hoja quedaron en `agenda` sin
+  pagar —son justamente las que fallaron mientras el sitio cobraba en sandbox. **La primera cita
+  pagada de verdad es la que estrena los dos workflows**, y conviene mirar esa ejecución
+- Quedan las tres correcciones al correo de confirmación (acentos, `CC` → `BCC`, destinatario), que
+  van a mano: un `update` por MCP le borraría las credenciales a cuatro nodos del WF3
+
+---
+
+## [2026-08-06] — Square en producción, y arranca la FASE 7 con su doc — v0.7.0
+
+### Request original
+> ya puse las credenciales en vercel de square · ya hice el redeplyment, continuemos de una vez con
+> la fase 7
+
+### Tipo de cambio
+- **PRODUCCIÓN**: **Square pasó de sandbox a producción.** Las cinco variables actualizadas en Vercel
+  y redeploy hecho. **Verificado desde fuera**, no por confianza: se descargaron los 11 chunks de
+  JavaScript de `/agendar` en el sitio desplegado y el `NEXT_PUBLIC_SQUARE_APPLICATION_ID` incrustado
+  pasó de `sandbox-sq0idb-4u2D…` a `sq0idp-Ny5N…`. **El sitio ya cobra dinero real**
+- **FOUND**: la primera comprobación, hecha antes del redeploy, encontró el bundle **todavía en
+  sandbox** pese a que las variables ya estaban guardadas en Vercel. Es la tercera vez que este
+  proyecto tropieza con lo mismo y conviene fijar el porqué exacto: las `NEXT_PUBLIC_*` **se
+  incrustan en el bundle durante el build**, así que el JavaScript ya publicado lleva el valor viejo
+  compilado adentro. No es que Vercel «no recoja» la variable — es que hace falta **compilar de
+  nuevo**, no reiniciar
+- **DIAGNÓSTICO**: la causa de los fallos de pago que reportó el usuario era que **el sitio estaba
+  cobrando en sandbox**, donde ninguna tarjeta real funciona. Tres reservas reales de la hoja
+  (`agenda`, para el 7, 13 y 14 de agosto) intentaron pagar y no pudieron. Sus slots ya los liberó el
+  limpiador: **hay que llamarlas**
+- **DOCS**: creado [`docs/features/notifications.md`](docs/features/notifications.md) — la FASE 7
+  documentada antes de tocar nada, como manda el método. Incluye **ADR-015** (propuesta) y el
+  inventario verificado de lo que el correo de confirmación ya hace hoy
+- **ADDED (n8n)**: **WF6 `Leos Firm - Recordatorio 24 h`** (`6836anE95HmUiyDg`) y **WF7
+  `Leos Firm - Recordatorio 1 h`** (`Edd15W7W2FS1Cagf`), creados y **sin publicar**. Cada uno:
+  Schedule → leer la ventana en Calendar → filtrar en un Code → Gmail → `PATCH` que marca el evento
+- **DECIDED**: la copia interna de cada cita pasa a **`BCC` a `claudia@leosfirm.com`** (hoy es un `CC`
+  a `marco@leosfirm.com`, que además le muestra al cliente una dirección interna), y el recordatorio
+  «de 24 h» se manda a las **27 h**. Con 24 exactas el correo ofrecería reprogramar sin costo en el
+  preciso instante en que el plazo vence
+- **FOUND (API)**: el descarte de «ya recordado» **no se puede hacer en la API de Calendar**.
+  `privateExtendedProperty` solo empareja por igualdad; no existe un «que NO tenga esta propiedad».
+  El doc decía lo contrario antes de construirlo. Se trae la ventana entera y el filtro vive en el
+  Code
+- **DECIDED**: la ventana del WF6 empieza en **+2 h**, no en «ahora», para **no solaparse con la del
+  WF7**. Si Google reescribiera las `extendedProperties` en el `PATCH` en vez de fusionarlas, un
+  workflow borraría la marca del otro y el WF6 mandaría un segundo correo. Separar las ventanas hace
+  que esa duda deje de importar sin tener que resolverla
+- **FOUND (MCP)**: al crear los workflows, n8n **auto-asignó `api_gmail_aiinovate`** a los dos nodos
+  de Gmail —la cuenta del equipo de desarrollo, exactamente contra lo que advierte el WF3— y dejó los
+  cuatro nodos HTTP **sin credencial**. Anotado en las sticky notes de ambos workflows y en el
+  checklist del doc
+
+### Archivos modificados
+- `docs/features/notifications.md` — **nuevo**
+- `docs/00-roadmap.md` — FASE 7 en curso, con lo que ya está en producción
+- `docs/features/README.md` · `CHANGELOG.md`
+- **En n8n (no en el repo):** WF6 `6836anE95HmUiyDg` y WF7 `Edd15W7W2FS1Cagf` — creados, sin publicar
+  y sin credenciales asignadas
+- **Sin cambios de código.** La FASE 7 no toca el repositorio: el scheduler y las credenciales de
+  Google viven en n8n (ADR-010)
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `curl` de los chunks del sitio desplegado, antes y después del redeploy, buscando el prefijo del
+  application id — la única verificación de las cinco variables que se puede hacer desde fuera
+- Inspección del WF3 `Leos Firm - Confirmar cita` por MCP para documentar el correo real y no el
+  recordado
+
+### Notas
+- **ADR-015 invierte el orden respecto al WF3 a propósito:** el recordatorio se **manda primero** y se
+  **marca después**. En la confirmación el candado va antes porque un segundo correo es un desastre;
+  en un recordatorio, uno duplicado molesta y uno perdido produce un no-show que por la política
+  cuesta dinero y confianza. Queda escrito porque es justo el detalle que alguien «uniforma» dentro de
+  seis meses
+- **Falta el pago de prueba de punta a punta en producción.** Con Square en vivo ya no hay tarjeta de
+  sandbox: la verificación es un cobro real de $50 y su reembolso desde el dashboard
+- Sigue pendiente de la FASE 5 lo único que la bloquea: las columnas `Politica aceptada el` e
+  `IP de aceptacion` (Z y AA) y su mapeo en el WF1
+
+---
+
 ## [2026-08-05] — Las ADR de la FASE 6 al registro, y `payments.md` deja de describir un pasado — v0.6.6
 
 ### Request original
