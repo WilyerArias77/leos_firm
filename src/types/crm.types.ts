@@ -77,11 +77,10 @@ export type CrmRow = {
  * cannot erase the diagnosis answers and the browser does not have to remember
  * the full row (`docs/features/crm-sheets.md`).
  *
- * ⏳ `policy_accepted_at` and `policy_accepted_ip` have **no column in the
- * sheet yet**. They are sent anyway: n8n drops unmapped keys, so booking keeps
- * working and the only thing missing is the evidence. Creating the two columns
- * and refreshing the workflow schema (25 → 27) is a hand-off documented in
- * `crm-sheets.md` § Dos columnas nuevas.
+ * `policy_accepted_at` and `policy_accepted_ip` land in columns Z and AA, added
+ * to the sheet on 2026-08-06 along with the mapping in WF1. Both are stamped by
+ * the server (`crm.service.ts`), never by the browser: they are the evidence
+ * that the cancellation policy was accepted (`context.md` § 8).
  */
 export type CrmAppointmentRow = {
   lead_id: string;

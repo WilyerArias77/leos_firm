@@ -140,16 +140,20 @@ cerrado y documentado campo por campo en
 
 | Mitad | Quién | Estado |
 |-------|-------|--------|
-| Los 4 workflows de n8n + credencial de Calendar | Wilyer | 🔨 En curso |
+| Los 4 workflows de n8n + credencial de Calendar | Wilyer | ✅ **Listos y publicados** |
 | `/agendar`, los 2 endpoints y la aritmética de husos | Next.js | ✅ **Listo** (2026-08-05, contra el mock) |
 
 La mitad de Next.js **no espera** a que existan los webhooks: se construye contra el contrato con un
 mock local, y pasar a producción es poner `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL`
 — sin tocar código. **El mock no puede activarse en producción por diseño.**
 
-⏳ **Dos columnas nuevas en la hoja del CRM** (`Politica aceptada el`, `IP de aceptacion`) son
-requisito de esta fase y las crea quien mantiene el workflow, no el código:
-[`features/crm-sheets.md`](./features/crm-sheets.md) § *Dos columnas nuevas*.
+✅ **Las dos columnas del CRM** (`Politica aceptada el`, `IP de aceptacion`) quedaron creadas en la
+hoja y mapeadas en el WF1 el **2026-08-06** — el esquema de los tres nodos pasó de 25 a 27 columnas y
+la etapa `agenda` escribe las dos: [`features/crm-sheets.md`](./features/crm-sheets.md) § *Las dos
+columnas de la política*. Era el último bloqueante de la fase.
+
+**Lo único que le falta a la FASE 5 es la comprobación:** una reserva real en producción que llene Z
+y AA por primera vez. Es la misma prueba que cierra la FASE 6, así que se hace una sola vez.
 
 ### FASE 6 — Square: checkout + webhook 🔨 EN CURSO
 Web Payments SDK, `POST /checkout`, webhook con firma HMAC e idempotencia. Al confirmarse el pago:

@@ -682,14 +682,15 @@ entregable de esta fase y tiene que ocurrir en algún sitio. Ningún componente 
 
 | # | Pendiente | De quién depende |
 |---|-----------|------------------|
-| 1 | Los 4 workflows de n8n + credencial de Calendar | Equipo de n8n · § Manual de puesta en marcha |
-| 2 | `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL` en `.env.local` y en Vercel | — |
-| 3 | Las 2 columnas nuevas de la hoja del CRM | Equipo de n8n · [`crm-sheets.md`](./crm-sheets.md) |
-| 4 | Pago con Square: hoy la pantalla final ofrece el teléfono | FASE 6 |
+| 1 | ✅ Los 4 workflows de n8n + credencial de Calendar | Hecho — § Manual de puesta en marcha |
+| 2 | ✅ `N8N_AVAILABILITY_WEBHOOK_URL` y `N8N_BOOKING_WEBHOOK_URL` en `.env.local` y en Vercel | Hecho |
+| 3 | ✅ Las 2 columnas nuevas de la hoja del CRM | Hecho 2026-08-06 — [`crm-sheets.md`](./crm-sheets.md) |
+| 4 | ✅ Pago con Square | FASE 6 — en producción desde el 2026-08-05 |
 | 5 | Confirmar `bufferMinutes` con la clienta | § Bloque C, decisión 6 |
+| 6 | **Una reserva real en producción** que llene `Politica aceptada el` e `IP de aceptacion` | Prueba pendiente |
 
-**Nada de eso exige tocar el código de Next.js.** El punto 2 es poner dos variables y volver a
-desplegar; el mock deja de usarse solo.
+**Nada de eso exigió tocar el código de Next.js.** El punto 2 fue poner dos variables y volver a
+desplegar; el mock dejó de usarse solo.
 
 ## Restricciones
 

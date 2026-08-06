@@ -6,6 +6,41 @@
 
 ---
 
+## [2026-08-06] — La evidencia de la política ya tiene dónde caer — v0.7.2
+
+### Request original
+> ok, columnas creadas → workflow actualizado y publicado
+
+### Tipo de cambio
+- **PRODUCCIÓN (Google Sheets)**: columnas **Z `Politica aceptada el`** y **AA `IP de aceptacion`**
+  añadidas al final de la hoja `Leads`. Al final y no intercaladas, para no desplazar las filas que
+  ya existían
+- **PRODUCCIÓN (n8n)**: **WF1 `CRM de leads`** con el esquema refrescado en sus tres nodos de Google
+  Sheets (25 → 27 columnas) y las dos claves nuevas mapeadas en `Guardar cita elegida`. Publicado
+- **DOCS**: el pendiente pasa a hecho en `crm-sheets.md`, `scheduling.md` y el roadmap
+- **CÓDIGO**: se retira el comentario ⏳ de `CrmAppointmentRow`, que describía un estado que ya no es
+
+### Archivos modificados
+- `src/types/crm.types.ts` — solo el comentario del tipo; ningún campo cambia
+- `docs/features/crm-sheets.md` · `docs/features/scheduling.md` · `docs/00-roadmap.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno en Supabase (congelado, ADR-010). El CRM es la hoja: dos columnas nuevas, 27 en total.
+
+### Validación
+- `get_workflow_details` contra la instancia real: el `value` de `Guardar cita elegida` incluye las
+  dos claves, `matchingColumns: ["ID"]` sigue en los tres nodos y `versionId === activeVersionId`
+  —o sea, lo publicado es lo editado
+
+### Notas
+- **Refrescar el esquema no es mapear.** En el primer intento los pasos 1 y 2 estaban hechos y el 3
+  no: el nodo listaba las 27 columnas y las celdas seguían vacías. Se ve idéntico a estar bien. La
+  distinción quedó escrita en `crm-sheets.md` porque va a volver a pasar
+- Con esto **se cae el último bloqueante de la FASE 5**. Falta la comprobación: una reserva real en
+  producción que llene Z y AA por primera vez —la misma prueba que cierra la FASE 6
+
+---
+
 ## [2026-08-06] — Los dos recordatorios revisados y publicados — v0.7.1
 
 ### Request original

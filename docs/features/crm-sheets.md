@@ -86,40 +86,42 @@ mapea por nombre: **un encabezado mal escrito pierde ese dato en silencio**, Goo
 | `Pago (Square)` | `payment_id` | pagado |
 | `Monto pagado` | `amount_usd` | pagado |
 | `Pagado el` | `paid_at` | pagado |
-| `Politica aceptada el` | `policy_accepted_at` | agenda · ⏳ **falta crearla** |
-| `IP de aceptacion` | `policy_accepted_ip` | agenda · ⏳ **falta crearla** |
+| `Politica aceptada el` | `policy_accepted_at` | agenda |
+| `IP de aceptacion` | `policy_accepted_ip` | agenda |
 
 **Los encabezados van sin tildes a propósito.** Es el nombre de una clave, no un texto de UI: una
 tilde mal copiada entre la hoja y el workflow es un dato perdido que nadie nota.
 
-### ⏳ Dos columnas nuevas que hay que crear para la FASE 5
+### ✅ Las dos columnas de la política — hechas el 2026-08-06
 
-> **Esto le toca a quien mantiene el workflow del CRM, no al código.** Acordado el 2026-08-05 junto
+> **Le tocó a quien mantiene el workflow del CRM, no al código.** Acordado el 2026-08-05 junto
 > con el contrato de agendamiento ([`scheduling.md`](./scheduling.md) § Contrato exacto).
 
 La FASE 5 registra la **aceptación de la política de cancelación** con su fecha y su IP
 (`context.md` §8.9, y es entregable explícito de la fase en [`../00-roadmap.md`](../00-roadmap.md)).
-Hoy **no hay dónde guardarlas**: las 25 columnas actuales no contemplan ese dato. Las columnas
-`Autorizacion` e `IP` que ya existen son de otra cosa — son el consentimiento **para contactar** que
-se firma en el diagnóstico, y se escriben en la etapa `formulario`. Son dos consentimientos
-distintos, en dos momentos distintos, y meterlos en la misma celda perdería el primero.
+Las 25 columnas originales no contemplaban ese dato. Las columnas `Autorizacion` e `IP` que ya
+existían son de otra cosa — son el consentimiento **para contactar** que se firma en el diagnóstico,
+y se escriben en la etapa `formulario`. Son dos consentimientos distintos, en dos momentos
+distintos, y meterlos en la misma celda habría perdido el primero.
 
-**Los tres pasos, en este orden:**
+**Los tres pasos que se hicieron, en este orden:**
 
-1. **En la hoja:** añadir `Politica aceptada el` e `IP de aceptacion` **al final**, en las columnas
-   Z y AA. Al final y no intercaladas: insertar una columna en medio desplaza los datos de las filas
-   que ya existen.
-2. **En el workflow:** abrir los tres nodos de Google Sheets, **refrescar las columnas** y verificar
-   que `ID` sigue elegida en *Column to Match On*. El esquema pasa de **25 a 27 columnas**. Si no se
-   refresca, vuelve el error *"The 'Column to Match On' parameter is required"* que ya apareció una
-   vez (§ más abajo).
-3. **En el nodo de la etapa `agenda`:** mapear los dos campos nuevos, `policy_accepted_at` y
-   `policy_accepted_ip`.
+1. **En la hoja:** `Politica aceptada el` e `IP de aceptacion` se añadieron **al final**, en las
+   columnas Z y AA. Al final y no intercaladas: insertar una columna en medio desplaza los datos de
+   las filas que ya existen.
+2. **En el workflow:** en los tres nodos de Google Sheets se **refrescaron las columnas** y se
+   verificó que `ID` sigue elegida en *Column to Match On*. El esquema pasó de **25 a 27 columnas**.
+   Sin ese refresco vuelve el error *"The 'Column to Match On' parameter is required"* que ya
+   apareció una vez (§ más abajo).
+3. **En el nodo de la etapa `agenda`** (`Guardar cita elegida`): se mapearon los dos campos nuevos,
+   `policy_accepted_at` y `policy_accepted_ip`.
 
-**Qué pasa si no se hace:** nada visible. Next.js manda los dos campos igual, n8n descarta las claves
-que no tienen columna y el agendamiento sigue funcionando. Se pierde solo la evidencia de la
-aceptación — que es justo lo que se necesitaría el día que alguien reclame un reembolso. **Falla en
-silencio, como todo en esta hoja.**
+**Por qué el paso 3 es un paso aparte y no se puede saltar:** refrescar el esquema hace que n8n
+*vea* la columna, no que escriba en ella. Con los pasos 1 y 2 hechos y el 3 sin hacer, todo se ve
+bien — el nodo lista las 27 columnas — y las celdas siguen quedando vacías. Es exactamente el mismo
+fallo silencioso que se describe abajo: Next.js manda los dos campos igual, n8n descarta las claves
+sin mapeo y el agendamiento sigue funcionando. Lo único que se pierde es la evidencia de la
+aceptación — que es justo lo que se necesitaría el día que alguien reclame un reembolso.
 
 **De dónde salen los valores:** los pone el **servidor**, nunca el navegador. `policy_accepted_at` es
 la hora del servidor al recibir la reserva y `policy_accepted_ip` sale de la cabecera de la petición,
@@ -280,8 +282,8 @@ emparejar), `value` (qué escribir) y `schema` (qué columnas existen). **Declar
 con el `schema` vacío no basta**: n8n valida la primera contra el segundo, no la encuentra y vuelve a
 pedirla. Es lo que pasó al crear el workflow desde el SDK, donde el esquema no se descubre solo.
 
-Los tres nodos declaran ahora las **25 columnas** de la hoja, con `ID` marcada como `defaultMatch`.
-El `value` de cada uno sigue siendo un subconjunto: el esquema describe la hoja completa, el `value`
+Los tres nodos declaran ahora las **27 columnas** de la hoja, con `ID` en `matchingColumns`. El
+`value` de cada uno sigue siendo un subconjunto: el esquema describe la hoja completa, el `value`
 describe lo que esa etapa escribe.
 
 > Si el error reaparece tras editar la hoja, es que n8n perdió el esquema: abrir el nodo, refrescar
