@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { ButtonLink } from "@/components/ui/Button";
 import { Container } from "@/components/layout/Container";
 import { COMPANY } from "@/constants/business";
 import { ROUTES } from "@/constants/routes";
@@ -77,10 +76,6 @@ export function Header() {
             </ul>
           </nav>
 
-          <div className="hidden lg:block">
-            <ButtonLink href={ROUTES.services}>Agendar consultoría</ButtonLink>
-          </div>
-
           <button
             type="button"
             onClick={() => setIsMenuOpen((open) => !open)}
@@ -121,13 +116,6 @@ export function Header() {
                   </li>
                 ))}
               </ul>
-              <ButtonLink
-                href={ROUTES.services}
-                className="mt-4 w-full"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Agendar consultoría
-              </ButtonLink>
             </nav>
           </Container>
         </div>

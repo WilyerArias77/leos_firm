@@ -84,7 +84,7 @@ FASE 3:   componentes → service.service.ts → Supabase (tabla services)
 | `src/app/(public)/sobre-claudia/page.tsx` | Storytelling, foto profesional, video de presentación, misión, visión y valores |
 | `src/app/(public)/faq/page.tsx` | Preguntas frecuentes |
 | `src/app/(public)/politicas/page.tsx` | Política de cancelación y reprogramación |
-| `src/components/layout/Header` | Franja con el slogan en dorado + logo (64 px móvil / 88 px escritorio), navegación, CTA y menú móvil |
+| `src/components/layout/Header` | Franja con el slogan en dorado + logo (64 px móvil / 88 px escritorio), navegación y menú móvil. **Sin CTA desde el 2026-08-06** |
 | `src/components/layout/Footer` | Contacto, enlaces legales, husos |
 | `src/components/layout/Container` | Ancho máximo y padding horizontal |
 | `src/components/layout/Section` | Bloque vertical con variantes de fondo |
@@ -207,6 +207,24 @@ páginas de servicio— y un aviso nuevo en el catálogo. Ninguno toca lógica.
 | *(no existía)* | `DEPOSIT_NOTICE` arriba de la rejilla de tarjetas | `servicios/page.tsx` |
 
 **El título "¿Es este el servicio que necesitas?" se queda tal cual**, por pedido expreso.
+
+**Segunda pasada, el mismo día:**
+
+| Antes | Ahora | Dónde |
+|---|---|---|
+| CTA *"Agendar consultoría"* en el encabezado (escritorio y menú móvil) | **Eliminado** | `Header.tsx` — se fue también el import de `ButtonLink`, que ya no tenía lector |
+| Botón *"Hacer mi diagnóstico gratuito"* del atajo del catálogo | *"Agendar consultoría"* | `servicios/page.tsx` — hereda el texto del CTA que se quitó |
+| `DEPOSIT_NOTICE` en gris, `text-sm` | `text-accent`, negrita, `text-base` (`sm:text-lg` en el catálogo) | Las dos apariciones |
+
+**Por qué `text-accent` y no `gold` para el aviso.** El dorado es el acento premium de la marca y
+sería la elección obvia, pero `#C9A227` sobre `surface-muted` da **2.3:1** de contraste y la
+restricción de A11Y de este documento pide ≥ 4.5:1. `#2563EB` da **5.1:1**, ya es el color de los
+enlaces y los CTA, y destaca sin inventar un color fuera del `@theme` (Mandamiento VII).
+
+> **El encabezado se quedó sin ningún CTA.** La navegación sigue llevando a `/servicios`, que es
+> donde vive el botón que ahora lleva ese texto, pero desde cualquier otra página —FAQ, políticas,
+> sobre Claudia— ya no hay un botón de acción a la vista. Si la conversión baja, ese es el primer
+> sitio donde mirar.
 
 **Por qué el antetítulo y el teaser pasaron a `DIAGNOSTIC_COPY`.** Estaban escritos a mano en el JSX
 de dos páginas distintas, así que "cambiar el título en todos los formularios" eran dos ediciones que

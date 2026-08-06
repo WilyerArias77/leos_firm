@@ -6,6 +6,40 @@
 
 ---
 
+## [2026-08-06] — El encabezado se queda sin CTA y el aviso del abono se ve — v0.9.2
+
+### Request original
+> 1. Eliminar este botón de la página. 2. Cambiar el texto de este botón y poner "Agendar
+> consultoría". 3. Aumentar de tamaño el mensaje "El valor cancelado para la consulta será tomado
+> como abono para el servicio contratado" y usar un color de fuente que se diferencie sin afectar
+> demasiado el estilo de la página. 4. Ponerlo en negrita en cada formulario.
+
+### Tipo de cambio
+- **UI (`src/components/layout/Header/Header.tsx`)**: **fuera el CTA "Agendar consultoría"**, en
+  escritorio y en el menú móvil. Con él se va el import de `ButtonLink`. El encabezado queda con
+  slogan, logo, navegación y menú
+- **UI (`src/app/(public)/servicios/page.tsx`)**: el botón del atajo al diagnóstico pasa de *"Hacer
+  mi diagnóstico gratuito"* a **"Agendar consultoría"** — hereda el texto del CTA eliminado, y de
+  paso deja de decir "gratuito" como el resto de la tarjeta
+- **UI (las dos apariciones de `DEPOSIT_NOTICE`)**: `text-accent`, negrita y un punto más grande
+  (`text-base`, `sm:text-lg` en el catálogo). **No se usó `gold`**: sobre `surface-muted` da 2.3:1 de
+  contraste y la restricción de A11Y pide ≥ 4.5:1; `accent` da 5.1:1 y ya es el color de los enlaces
+
+### Archivos modificados
+- `src/components/layout/Header/Header.tsx` · `src/app/(public)/servicios/page.tsx` ·
+  `src/app/(public)/servicios/[slug]/page.tsx`
+- Docs: `docs/features/public-site.md` · `docs/features/lead-diagnostic.md` · `CHANGELOG.md`
+
+### Cambios en base de datos
+- Ninguno.
+
+### Validación
+- `npm run build` ✅ · `npm run lint` ✅
+- ⚠️ **Advertido:** ninguna página fuera de `/servicios` tiene ya un botón de acción visible en el
+  encabezado. Si la conversión cae, ese es el primer sitio donde mirar
+
+---
+
 ## [2026-08-06] — La tarjeta del diagnóstico deja de ofrecer el teléfono — v0.9.1
 
 ### Request original

@@ -150,7 +150,7 @@ export default async function ServiceDetailPage(props: PageProps<"/servicios/[sl
                 {/* Reemplaza al botón del teléfono, retirado por pedido de la
                     clienta el 2026-08-06: la tarjeta empuja al diagnóstico, no
                     a la llamada. */}
-                <p className="mt-3 rounded-card border border-border bg-surface-muted p-3 text-sm leading-relaxed text-ink-muted">
+                <p className="mt-3 rounded-card border border-border bg-surface-muted p-3 text-base leading-relaxed font-bold text-accent">
                   {DEPOSIT_NOTICE}
                 </p>
 

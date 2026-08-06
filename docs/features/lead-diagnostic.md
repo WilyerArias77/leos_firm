@@ -215,9 +215,10 @@ Desde el 2026-08-03 el modal cumple el patrón estándar y ya no necesita justif
 
 - [ ] **Dos textos siguen diciendo "gratuito" y siguen contando 3 preguntas**, y el cambio del
       2026-08-06 no los tocó porque la clienta los pidió palabra por palabra en su momento:
-      `DIAGNOSTIC_COPY.declineLabel` (*"No quiero mi diagnóstico gratuito, solo estoy viendo"*), el
-      `label` del `DiagnosticTrigger` de `/servicios` (*"Hacer mi diagnóstico gratuito"*) y los dos
-      `introBody*` del popup (*"Son 3 preguntas rápidas…"*). Decisión de la clienta
+      `DIAGNOSTIC_COPY.declineLabel` (*"No quiero mi diagnóstico gratuito, solo estoy viendo"*) y los
+      dos `introBody*` del popup (*"Son 3 preguntas rápidas…"*). Decisión de la clienta.
+      El tercero —el `label` del `DiagnosticTrigger` de `/servicios`— ya se resolvió: pasó a
+      **"Agendar consultoría"**, heredando el texto del CTA que se quitó del encabezado
 - [x] ~~Entregar el lead de verdad~~ — cerrado el 2026-08-04: va al CRM de Google Sheets vía n8n.
 - [ ] **FASE 5 — Conectar el botón "Agendar y pagar"** con `/agendar`. Hoy el resultado dice con
       todas sus letras que la agenda en línea todavía no está activa y ofrece el teléfono.

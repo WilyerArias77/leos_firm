@@ -47,14 +47,16 @@ export default async function ServicesPage() {
 
             <DiagnosticTrigger
               services={services}
-              label="Hacer mi diagnóstico gratuito"
+              label="Agendar consultoría"
               className="shrink-0"
             />
           </Card>
 
           {/* Aviso pedido por la clienta el 2026-08-06: va arriba de todas las
-              tarjetas, antes de que el visitante entre a un servicio. */}
-          <p className="mt-10 rounded-card border border-gold/40 bg-surface-muted p-4 text-center text-sm leading-relaxed text-ink">
+              tarjetas, antes de que el visitante entre a un servicio.
+              En `text-accent` y negrita por pedido suyo: destaca sin salirse
+              del design system, y sobre `surface-muted` da 5.1:1 de contraste. */}
+          <p className="mt-10 rounded-card border border-gold/40 bg-surface-muted p-5 text-center text-base leading-relaxed font-bold text-accent sm:text-lg">
             {DEPOSIT_NOTICE}
           </p>
 
