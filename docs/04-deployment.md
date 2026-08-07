@@ -1,7 +1,10 @@
 # Deployment — Leos Firm LLC
 
-> **Última actualización:** 2026-08-02
-> **Estado:** Plan definido. Aún **no** se ha hecho el primer deploy.
+> **Última actualización:** 2026-08-07
+> **Estado:** En producción sobre `www.leosfirm.com`.
+> ✅ **Incidente de correo resuelto el 2026-08-07.** El dominio se quedó sin `MX` al delegarlo a
+> Vercel y estuvo ~30 h sin poder recibir correo. `MX`, SPF y DMARC restaurados; **falta el DKIM**.
+> Ver § *DNS del dominio — y por qué se llevó por delante el correo*.
 
 ---
 
@@ -28,6 +31,126 @@
 | 4 | **Anthropic** | API key con límite de gasto configurado |
 | 5 | **Vercel** | Conectar repo, cargar variables de entorno, dominio `leosfirm.com` + DNS |
 | 6 | **Zoom** (opcional) | App Server-to-Server OAuth, solo si se activa como proveedor alternativo |
+
+---
+
+## DNS del dominio — y por qué se llevó por delante el correo
+
+> 🔴 **Incidente del 2026-08-06.** Detectado el 2026-08-07 a partir de un reporte de la clienta:
+> *«claudia@leosfirm.com está presentando problemas para recibir mensajes»*.
+
+### Qué pasó
+
+Al conectar `leosfirm.com` a Vercel se eligió **delegar los nameservers** (`ns1/ns2.vercel-dns.com`)
+en vez de dejar el DNS donde estaba y añadir solo el registro del sitio. Vercel ofrece los dos
+caminos y no advierte del costo del primero:
+
+> **Cambiar los nameservers abandona la zona anterior completa.** Vercel crea una zona nueva, vacía
+> salvo por los registros del sitio web. Los MX del correo, el SPF, el DKIM y el TXT de verificación
+> de Google **se van con la zona vieja**.
+
+Sin MX, el RFC 5321 obliga al emisor a intentar el registro `A` como «MX implícito» → cae en el edge
+de Vercel, que no habla SMTP → el mensaje se encola y **rebota a las 24–72 h**. De ahí el síntoma
+confuso: unos correos «nunca llegan» y otros rebotan días después.
+
+**Afecta a todo `@leosfirm.com`, no solo a Claudia.** `marco@leosfirm.com` estaba igual de caído.
+
+### Estado encontrado durante el incidente (2026-08-07)
+
+| Registro | Estado encontrado |
+|---|---|
+| `NS` | `ns1.vercel-dns.com`, `ns2.vercel-dns.com` — zona gestionada por Vercel |
+| `MX` | ❌ **ninguno** (confirmado contra los dos NS autoritativos, más 8.8.8.8 y 1.1.1.1) |
+| `TXT` (SPF) | ❌ ninguno |
+| `TXT google._domainkey` (DKIM) | ❌ ninguno |
+| `TXT _dmarc` | ❌ ninguno |
+| `TXT google-site-verification` | ❌ ninguno |
+| `A` apex / `www` | ✅ Vercel — el sitio responde `200` |
+| SMTP :25 en el `A` del apex | ❌ conexión rechazada |
+
+### Estado tras la corrección (2026-08-07, verificado contra `ns1.vercel-dns.com`)
+
+| Registro | Valor |
+|---|---|
+| `MX` | ✅ `smtp.google.com.` prioridad `1` — destino alcanzable en `:25` |
+| `TXT` apex (SPF) | ✅ `v=spf1 include:_spf.google.com ~all` |
+| `TXT _dmarc` | ✅ `v=DMARC1; p=none; rua=mailto:marco@leosfirm.com` |
+| `TXT google._domainkey` (DKIM) | ⏳ **pendiente** — lo genera Marco en el Admin de Google |
+| Verificación del dominio en Workspace | ⏳ **pendiente de revisar** en `admin.google.com` → *Dominios* |
+
+**La recepción quedó restaurada con el `MX` solo.** El resto no influye en que el correo entre.
+
+> 🧨 **El panel de DNS de Vercel mutila los valores de TXT.** Costó tres intentos y merece quedar
+> escrito, porque volverá a pasar con el DKIM:
+>
+> | Intento | Lo que se guardó | Qué se perdió |
+> |---|---|---|
+> | 1.º | el SPF quedó con `Name = _dmarc` | el campo *Name* arrastró el valor de la fila anterior |
+> | 2.º | `spf1 include:...` y `DMARC1` | **el prefijo `v=`** de los dos |
+> | 3.º | `v=DMARC1` | **todo lo posterior al `;`** |
+>
+> Lo que funcionó al final fue escribir el valor a mano y **reabrir el registro después de guardar
+> para comprobar qué quedó**. Un TXT que no empieza exactamente por `v=spf1` / `v=DMARC1` no es un
+> registro SPF/DMARC: se ignora en silencio, igual que si no existiera. Y en DMARC la etiqueta `p=`
+> es **obligatoria** — `v=DMARC1` a secas se descarta.
+
+### Los registros — referencia
+
+El correo es **Google Workspace** — confirmado porque Gmail responde *«Offline unavailable. Contact
+your administrator»*, que es una política de cuenta administrada. El administrador es **Marco**
+(ADR-012).
+
+Se añaden en Vercel → proyecto `leos-firm` → **Domains → leosfirm.com → DNS**. Para el apex, el
+campo *Name* va **vacío** (o `@`).
+
+| Tipo | Name | Prioridad | Valor |
+|------|------|-----------|-------|
+| `MX` | *(vacío)* | `1` | `smtp.google.com.` |
+| `TXT` | *(vacío)* | — | `v=spf1 include:_spf.google.com ~all` |
+| `TXT` | `_dmarc` | — | `v=DMARC1; p=none; rua=mailto:marco@leosfirm.com` |
+| `TXT` | `google._domainkey` | — | ⚠️ **generado en el Admin de Google** (ver abajo) |
+
+> **Alternativa al MX único.** El juego clásico de cinco registros sigue siendo válido y equivalente;
+> úsese uno **o** el otro, nunca los dos mezclados:
+> `1 ASPMX.L.GOOGLE.COM.` · `5 ALT1.ASPMX.L.GOOGLE.COM.` · `5 ALT2.ASPMX.L.GOOGLE.COM.` ·
+> `10 ALT3.ASPMX.L.GOOGLE.COM.` · `10 ALT4.ASPMX.L.GOOGLE.COM.`
+
+> ⚠️ **El DKIM no se puede inventar ni copiar de otro dominio.** Es una clave pública propia de este
+> Workspace. Se genera en `admin.google.com` → **Apps → Google Workspace → Gmail → Autenticar
+> correo** → *Generar registro nuevo* (2048 bits). Google devuelve el host (`google._domainkey`) y el
+> valor; se pega en Vercel y **después** se pulsa *Iniciar autenticación* en el Admin.
+
+### El orden importa
+
+1. **Primero el `MX`.** Es lo único que devuelve el correo entrante, y corre reloj: los mensajes de
+   las últimas horas siguen encolados en los servidores remitentes y **se entregan solos** si el MX
+   vuelve dentro de la ventana de reintentos. Los que ya rebotaron están perdidos.
+2. **Después la verificación del dominio.** En `admin.google.com` → *Dominios*, comprobar si
+   `leosfirm.com` aparece con advertencia. El mismo despliegue rompió **las tres** vías por las que
+   Google comprobaría la propiedad: el `TXT` se fue con la zona, y el archivo HTML / la etiqueta
+   `<meta>` desaparecieron porque el sitio nuevo reemplazó al anterior — verificado, no hay ninguna
+   en el HTML que sirve `www.leosfirm.com` ni nada en [`public/`](../public/).
+3. **Al final SPF, DKIM y DMARC.** No arreglan la recepción; arreglan que lo que *sale* del dominio
+   no acabe en spam. Aplica tanto al correo de Claudia como a los que manda n8n.
+
+### Cómo comprobar que quedó bien
+
+```bash
+nslookup -type=MX  leosfirm.com 8.8.8.8      # debe listar smtp.google.com
+nslookup -type=TXT leosfirm.com 8.8.8.8      # debe mostrar el v=spf1
+nslookup -type=TXT google._domainkey.leosfirm.com 8.8.8.8
+nslookup -type=TXT _dmarc.leosfirm.com 8.8.8.8
+```
+
+La zona tiene `TTL` de 600 s, así que propaga en minutos. La prueba real es mandar un correo desde
+una cuenta externa y que llegue.
+
+### La regla que deja este incidente
+
+> **Conectar un dominio a Vercel NO es una tarea de frontend.** Si el dominio tiene correo, cambiar
+> los nameservers lo apaga. El camino correcto con correo vivo es **dejar el DNS donde está** y
+> añadir allí solo los registros del sitio; si aun así se delega a Vercel, hay que **exportar la zona
+> anterior primero** y recrearla entera.
 
 ---
 
@@ -90,6 +213,18 @@ Ambos exigen `Authorization: Bearer ${CRON_SECRET}`.
 - [ ] Correo de confirmación llega al cliente y la copia al `ADMIN_NOTIFICATION_EMAIL`
 - [ ] Correos no caen en spam (SPF/DKIM del dominio en orden)
 - [ ] `BUSINESS_TIMEZONE` correcto y slots correctos también con horario de verano
+
+### DNS y correo del dominio
+> Añadido tras el incidente del 2026-08-06 (§ *DNS del dominio*). Se comprueba **antes** de tocar
+> nameservers y **otra vez** después.
+- [ ] **Zona anterior exportada** antes de delegar los nameservers a nadie
+- [x] `MX` de `leosfirm.com` resuelve y apunta al proveedor de correo real — `smtp.google.com`
+- [ ] Correo entrante probado de verdad: mandar desde una cuenta externa a `claudia@leosfirm.com`
+- [x] `TXT` de SPF presente
+- [ ] `TXT` de DKIM presente y *Autenticar correo* activado en el Admin de Google
+- [x] `TXT` de `_dmarc` presente
+- [ ] Verificación del dominio sana en `admin.google.com` → *Dominios*, sin advertencias
+- [ ] **Cada valor reabierto tras guardar** para comprobar que Vercel no lo cortó (§ *DNS del dominio*)
 
 ### Post-deploy
 - [ ] Flujo completo probado en producción: comprar → intake → agendar → recibir correo

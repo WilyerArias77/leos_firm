@@ -6,6 +6,100 @@
 
 ---
 
+## [2026-08-07] — ✅ El correo de la firma estuvo un día caído por nuestro despliegue, y ya volvió — v0.9.3
+
+### Request original
+> el correo claudia@leosfirm.com esta presentando problemas para recibir mensajes. haz un analisis
+> completo a ver si nosotros hicimos algo que este afectando el funcionamiento de este correo
+> electronico · *(después)* revisa este mensaje de error de su correo *(captura: Gmail → Ajustes →
+> Sin conexión → «Offline unavailable. Contact your administrator»)*
+
+### Tipo de cambio
+- **INCIDENTE (producción, sin código)**: `leosfirm.com` **no tiene registros MX**. Sin MX no existe
+  ruta de entrega, así que **ningún correo `@leosfirm.com` se puede recibir** — ni el de Claudia ni
+  el de Marco
+- **CAUSA**: al conectar el dominio a Vercel se **delegaron los nameservers** (`ns1/ns2.vercel-dns.com`)
+  en lugar de dejar el DNS donde estaba. Eso **abandona la zona anterior entera**: Vercel crea una
+  nueva con los registros del sitio y nada más. Se fueron con ella el `MX`, el SPF, el DKIM y el
+  `TXT` de verificación de Google
+- **DOCS (`docs/04-deployment.md`)**: sección nueva *DNS del dominio — y por qué se llevó por delante
+  el correo*, con el incidente, la tabla exacta de registros a restaurar, el orden de restauración y
+  los comandos de comprobación. Bloque nuevo *DNS y correo del dominio* en el checklist pre-deploy.
+  La cabecera deja de decir que no se ha desplegado
+- **SIN CAMBIOS EN PRODUCCIÓN**: no se tocó el DNS. El conector de Vercel **no está autenticado** en
+  esta sesión, y el DNS de la firma no se modifica sin confirmación (Ley 4)
+
+### Evidencia recogida
+| Comprobación | Resultado |
+|---|---|
+| `MX leosfirm.com` contra ns1/ns2.vercel-dns.com, 8.8.8.8 y 1.1.1.1 | ❌ **ninguno** (NODATA/SOA) |
+| `TXT` apex · `google._domainkey` · `_dmarc` | ❌ ninguno — sin SPF, DKIM, DMARC ni verificación |
+| `A` apex `64.29.17.65` · `www` `216.198.79.65` | ✅ Vercel; `HTTP 200`, `server: Vercel` |
+| SMTP `:25` en `64.29.17.65` (el «MX implícito» del RFC 5321) | ❌ conexión rechazada |
+| Serial SOA `1786070274` | 2026-08-07 02:37 UTC — zona modificada anoche |
+| `.vercel/project.json` creado | 2026-08-06 00:41, junto al commit `719419b` |
+
+### Descartado (no fue el código ni n8n)
+- **La app no manda ni recibe correo.** Cero coincidencias de `gmail|smtp|resend|nodemailer` en
+  `src/` fuera de dos comentarios. Next.js nunca tiene credenciales de Google (ADR-010)
+- **n8n solo envía.** Revisados nodo a nodo el WF3 y el WF6 (el WF7 es su gemelo): operación
+  *message: send* y nada más. **No hay Gmail Trigger, ni lectura, ni borrado, ni etiquetas, ni
+  filtros.** Nada del proyecto toca la bandeja de Claudia
+- **El volumen tampoco.** Los recordatorios no han corrido nunca sobre una cita real
+- **«Offline unavailable» es ruido.** Es la política de *Gmail sin conexión* del Admin de Workspace:
+  guarda en el navegador correo **ya recibido**, no interviene en la entrega. Muy probablemente lleva
+  así desde siempre. **Su valor fue otro:** el *«contacta a tu administrador»* prueba que la cuenta es
+  **Google Workspace administrado**, lo que confirma qué `MX` corresponde
+
+### Segundo hallazgo, del mismo origen
+La **verificación del dominio ante Google está rota por las tres vías** a la vez: el `TXT` se fue con
+la zona, y el archivo HTML / la etiqueta `<meta>` desaparecieron porque el sitio nuevo reemplazó al
+anterior — comprobado que no hay ninguna en el HTML que sirve `www.leosfirm.com` ni nada en `public/`.
+No se puede ver desde fuera si Google ya marcó el dominio como no verificado: eso solo está en
+`admin.google.com`.
+
+### Archivos modificados
+- Docs: `docs/04-deployment.md` · `CHANGELOG.md`
+- **Cero archivos de código.**
+
+### Cambios en base de datos
+- Ninguno.
+
+### Resolución — el mismo día
+Wilyer aplicó los registros en el panel de Vercel; verificado desde aquí contra `ns1.vercel-dns.com`:
+
+| Registro | Valor final |
+|---|---|
+| `MX` | ✅ `smtp.google.com.` prioridad `1`, destino alcanzable en `:25` |
+| `TXT` apex | ✅ `v=spf1 include:_spf.google.com ~all` |
+| `TXT _dmarc` | ✅ `v=DMARC1; p=none; rua=mailto:marco@leosfirm.com` |
+
+**El `MX` solo restauró la recepción**; SPF y DMARC no influyen en que el correo entre. Caída total
+≈ 30 h.
+
+- 🧨 **El panel de DNS de Vercel mutila los valores de TXT — tres intentos hicieron falta.** El 1.º
+  guardó el SPF con `Name = _dmarc` (el campo arrastró la fila anterior); el 2.º se comió **el
+  prefijo `v=`** de ambos; el 3.º cortó **todo lo posterior al `;`**, dejando un `v=DMARC1` sin `p=`
+  que se descarta igual que si no existiera. Lo que funcionó: escribir a mano y **reabrir el registro
+  tras guardar**. Documentado en `04-deployment.md` porque volverá a pasar con el DKIM
+
+### Validación
+- Sin build: el cambio es solo documental
+- ✅ `MX`, SPF y DMARC verificados contra el NS autoritativo, no contra un resolutor con caché
+- ⏳ **Falta el DKIM**, y lo tiene que hacer Marco en `admin.google.com` (Apps → Gmail → *Autenticar
+  correo*). Es lo único que queda con efecto real: sin él, el correo que **sale** del dominio —el de
+  Claudia y el de los workflows de n8n— tiene más probabilidad de caer en spam
+- ⏳ **Falta revisar la verificación del dominio** en Workspace. Las tres vías siguen caídas
+- ⏳ **Falta la prueba de recepción de verdad**: mandar un correo desde una cuenta externa a
+  `claudia@leosfirm.com`. El DNS está bien, pero eso es lo que lo cierra
+- ⚠️ **Lo perdido no se recupera.** Lo encolado se entregó al volver el `MX`; lo que ya había rebotado
+  está perdido y el remitente cree que Claudia lo ignoró. Se le avisó de que pida reenvíos
+- ⚠️ **Sigue sin corregir, aparte de esto:** el nodo Gmail del WF3 lleva `CC: marco@leosfirm.com`
+  **y** `BCC: claudia@leosfirm.com` a la vez. `notifications.md` pedía eliminar el `CC`; hoy cada
+  cliente ve una dirección interna de la firma
+
+---
+
 ## [2026-08-06] — El encabezado se queda sin CTA y el aviso del abono se ve — v0.9.2
 
 ### Request original
