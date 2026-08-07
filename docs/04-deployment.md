@@ -3,7 +3,8 @@
 > **Última actualización:** 2026-08-07
 > **Estado:** En producción sobre `www.leosfirm.com`.
 > ✅ **Incidente de correo resuelto el 2026-08-07.** El dominio se quedó sin `MX` al delegarlo a
-> Vercel y estuvo ~30 h sin poder recibir correo. `MX`, SPF y DMARC restaurados; **falta el DKIM**.
+> Vercel y estuvo ~30 h sin poder recibir correo. Los **cuatro registros están publicados** (`MX`,
+> SPF, DMARC, DKIM); falta que Marco pulse *Iniciar autenticación* en el Admin de Google.
 > Ver § *DNS del dominio — y por qué se llevó por delante el correo*.
 
 ---
@@ -75,7 +76,8 @@ confuso: unos correos «nunca llegan» y otros rebotan días después.
 | `MX` | ✅ `smtp.google.com.` prioridad `1` — destino alcanzable en `:25` |
 | `TXT` apex (SPF) | ✅ `v=spf1 include:_spf.google.com ~all` |
 | `TXT _dmarc` | ✅ `v=DMARC1; p=none; rua=mailto:marco@leosfirm.com` |
-| `TXT google._domainkey` (DKIM) | ⏳ **pendiente** — lo genera Marco en el Admin de Google |
+| `TXT google._domainkey` (DKIM) | ✅ `v=DKIM1; k=rsa; p=…` — **clave RSA de 2048 bits validada decodificándola**, no solo a ojo |
+| Activación del DKIM | ⏳ **pendiente** — Marco tiene que pulsar *Iniciar autenticación* en el Admin |
 | Verificación del dominio en Workspace | ⏳ **pendiente de revisar** en `admin.google.com` → *Dominios* |
 
 **La recepción quedó restaurada con el `MX` solo.** El resto no influye en que el correo entre.
@@ -116,9 +118,53 @@ campo *Name* va **vacío** (o `@`).
 > `10 ALT3.ASPMX.L.GOOGLE.COM.` · `10 ALT4.ASPMX.L.GOOGLE.COM.`
 
 > ⚠️ **El DKIM no se puede inventar ni copiar de otro dominio.** Es una clave pública propia de este
-> Workspace. Se genera en `admin.google.com` → **Apps → Google Workspace → Gmail → Autenticar
-> correo** → *Generar registro nuevo* (2048 bits). Google devuelve el host (`google._domainkey`) y el
-> valor; se pega en Vercel y **después** se pulsa *Iniciar autenticación* en el Admin.
+> Workspace, y el procedimiento va abajo.
+
+### DKIM — el procedimiento, que se reparte entre dos personas
+
+Tres tramos, y el orden no es negociable: si se activa antes de publicar el registro, Google falla la
+comprobación.
+
+**1 · Marco, en `admin.google.com`** (hace falta ser superadministrador)
+
+1. Buscar **«Autenticar correo»** en la barra de arriba — más rápido que el menú
+   (*Aplicaciones → Google Workspace → Gmail → Autenticar correo electrónico*)
+2. Elegir el dominio `leosfirm.com`
+3. **Generar registro nuevo** → longitud **2048 bits**, prefijo del selector **`google`** (no tocar)
+4. Google devuelve el host (`google._domainkey`) y un valor larguísimo que empieza por `v=DKIM1;`
+5. Copiarlo y pasarlo a quien administre Vercel. **No cerrar la pantalla:** hay que volver en el paso 3
+
+> El valor DKIM es una **clave pública**: no es un secreto y se puede mandar por cualquier canal. La
+> privada se queda en Google.
+
+**2 · Quien administre Vercel**
+
+6. `TXT` con Name `google._domainkey` y el valor completo
+7. **Reabrir el registro tras guardar** — el valor empieza por `v=` y lleva varios `;`, que son
+   justo las dos cosas que este panel ya se comió antes
+8. Verificar con `nslookup` (§ *Cómo comprobar*) **antes** de avisar a Marco
+
+> ⚠️ **El límite de 255 caracteres.** Una clave de 2048 bits ocupa ~392 caracteres en base64 y no
+> cabe en una sola cadena TXT. Vercel/NS1 la parte en dos y los resolutores las concatenan — así
+> quedó publicada el 2026-08-07, verificada **decodificando la clave**, que es la única forma de
+> saber que no se perdió un trozo: si falta algo, el base64 deja de formar una clave RSA válida.
+> **Si el panel la rechaza por longitud**, el plan B es generarla de **1024 bits**, que sí cabe.
+
+**3 · Marco otra vez**
+
+9. Volver a *Autenticar correo* → **Iniciar autenticación**
+10. El estado pasa a *«Autenticando el correo electrónico con DKIM»*
+
+**Y la prueba de verdad**, que el DNS correcto no sustituye: mandar un correo desde
+`claudia@leosfirm.com` a un Gmail, abrirlo → *Mostrar original*, y comprobar que salen los tres:
+
+```
+DKIM: 'PASS' with domain leosfirm.com
+SPF:  'PASS' with domain leosfirm.com
+DMARC: 'PASS'
+```
+
+> **No regenerar la clave** una vez activada: invalida la anterior y obliga a repetir los tres tramos.
 
 ### El orden importa
 
@@ -221,7 +267,9 @@ Ambos exigen `Authorization: Bearer ${CRON_SECRET}`.
 - [x] `MX` de `leosfirm.com` resuelve y apunta al proveedor de correo real — `smtp.google.com`
 - [ ] Correo entrante probado de verdad: mandar desde una cuenta externa a `claudia@leosfirm.com`
 - [x] `TXT` de SPF presente
-- [ ] `TXT` de DKIM presente y *Autenticar correo* activado en el Admin de Google
+- [x] `TXT` de DKIM presente y **validado decodificando la clave**, no solo a ojo
+- [ ] *Autenticar correo* activado en el Admin de Google (§ *DKIM — el procedimiento*)
+- [ ] Cabeceras `DKIM/SPF/DMARC` en `PASS` en un correo real, vía *Mostrar original*
 - [x] `TXT` de `_dmarc` presente
 - [ ] Verificación del dominio sana en `admin.google.com` → *Dominios*, sin advertencias
 - [ ] **Cada valor reabierto tras guardar** para comprobar que Vercel no lo cortó (§ *DNS del dominio*)

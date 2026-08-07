@@ -73,9 +73,18 @@ Wilyer aplicó los registros en el panel de Vercel; verificado desde aquí contr
 | `MX` | ✅ `smtp.google.com.` prioridad `1`, destino alcanzable en `:25` |
 | `TXT` apex | ✅ `v=spf1 include:_spf.google.com ~all` |
 | `TXT _dmarc` | ✅ `v=DMARC1; p=none; rua=mailto:marco@leosfirm.com` |
+| `TXT google._domainkey` | ✅ `v=DKIM1; k=rsa; p=…` — publicado el mismo día |
 
-**El `MX` solo restauró la recepción**; SPF y DMARC no influyen en que el correo entre. Caída total
-≈ 30 h.
+**El `MX` solo restauró la recepción**; SPF, DMARC y DKIM no influyen en que el correo entre. Caída
+total ≈ 30 h.
+
+- ✅ **El DKIM se validó decodificando la clave**, no mirándola: RSA de **2048 bits**, exponente
+  65537, 392 caracteres de base64. Vercel tuvo que partirla en dos cadenas TXT —el límite por cadena
+  es de 255— y los resolutores las concatenan. **Que decodifique a una clave RSA válida es la prueba
+  de que no se perdió ningún trozo**; a ojo, una clave truncada es indistinguible de una entera
+- **DOCS**: el procedimiento completo del DKIM queda escrito en `04-deployment.md`, repartido en los
+  tres tramos reales (Marco genera → Vercel publica → Marco activa) con el plan B de 1024 bits si el
+  panel rechaza la cadena por longitud
 
 - 🧨 **El panel de DNS de Vercel mutila los valores de TXT — tres intentos hicieron falta.** El 1.º
   guardó el SPF con `Name = _dmarc` (el campo arrastró la fila anterior); el 2.º se comió **el
@@ -86,9 +95,10 @@ Wilyer aplicó los registros en el panel de Vercel; verificado desde aquí contr
 ### Validación
 - Sin build: el cambio es solo documental
 - ✅ `MX`, SPF y DMARC verificados contra el NS autoritativo, no contra un resolutor con caché
-- ⏳ **Falta el DKIM**, y lo tiene que hacer Marco en `admin.google.com` (Apps → Gmail → *Autenticar
-  correo*). Es lo único que queda con efecto real: sin él, el correo que **sale** del dominio —el de
-  Claudia y el de los workflows de n8n— tiene más probabilidad de caer en spam
+- ⏳ **Falta activar el DKIM.** El registro ya está publicado y validado; lo que queda es que Marco
+  pulse *Iniciar autenticación* en `admin.google.com`. Es lo único pendiente con efecto real: sin
+  DKIM, el correo que **sale** del dominio —el de Claudia y el de los workflows de n8n— tiene más
+  probabilidad de caer en spam, y ahí lo que se pierde es el enlace de Meet de un cliente que ya pagó
 - ⏳ **Falta revisar la verificación del dominio** en Workspace. Las tres vías siguen caídas
 - ⏳ **Falta la prueba de recepción de verdad**: mandar un correo desde una cuenta externa a
   `claudia@leosfirm.com`. El DNS está bien, pero eso es lo que lo cierra
