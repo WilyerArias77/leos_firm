@@ -49,13 +49,21 @@ ninguna regla de negocio que decidir en tiempo de request.
 
 El nodo `Enviar confirmacion al cliente` del WF3 manda esto hoy:
 
-| Campo | Valor actual |
-|---|---|
-| Para | el correo del cliente, leído de la descripción del evento |
-| CC | `marco@leosfirm.com` |
-| Remitente | `Leos Firm LLC` (`appendAttribution: false`) |
-| Asunto | `Tu cita con Leos Firm quedo confirmada — <hora del cliente>` |
-| Cuerpo | hora en el huso del cliente **y** en `America/Chicago`, enlace de Meet, tolerancia de 15 min, reprogramación libre con 24 h |
+| Campo | Valor actual | Al que debe pasar (2026-08-07, ADR-017) |
+|---|---|---|
+| Para | el correo del cliente, leído de la descripción del evento | igual |
+| CC | `marco@leosfirm.com` | **eliminado** |
+| BCC | `claudia@leosfirm.com` | igual |
+| **Remitente real** | la cuenta de la credencial Gmail del nodo — hoy `marco@leosfirm.com` | **`claudia@leosfirm.com`** |
+| Nombre visible | `Leos Firm LLC` (`appendAttribution: false`) | igual |
+| Asunto | `Tu cita con Leos Firm quedo confirmada — <hora del cliente>` | con acentos |
+| Cuerpo | hora en el huso del cliente **y** en `America/Chicago`, enlace de Meet, tolerancia de 15 min, reprogramación libre con 24 h | igual + enlace de gestión (FASE 9) |
+
+> 🔑 **El remitente no es un campo del nodo.** El nodo Gmail de n8n (v2.2, `message:send`) expone
+> `sendTo`, `ccList`, `bccList`, `replyTo` y `senderName` — y **ningún `from`**. El «De:» real es
+> siempre la cuenta autenticada de la credencial. Verificado contra la definición del nodo el
+> 2026-08-07. Por eso cambiar el remitente **no se puede hacer editando el workflow**: exige una
+> credencial OAuth nueva, y eso es un consentimiento de Google que alguien tiene que dar a mano.
 
 **Y ya tiene resuelto lo más difícil de un sistema de correos: no manda dos.** El correo cuelga de la
 rama en la que el `PATCH` con `If-Match` ganó la carrera. Si otra ejecución confirmó el evento en el
@@ -68,7 +76,8 @@ Está probado con ejecuciones reales.
 |---|---------|-----------------|
 | 1 | **Sin acentos** — «quedo confirmada», «reunion», «sesion» | Va a clientes hispanohablantes y es el primer correo que reciben de la firma. Se escribió así porque el workflow se creó por MCP evitando caracteres no ASCII; en la UI de n8n se escriben con normalidad |
 | 2 | **La copia interna va en `CC`** | Un `CC` le muestra al cliente una dirección interna de la firma. Debe ser `BCC` o un correo aparte |
-| 3 | **La copia va a `marco@leosfirm.com`** | Marco es el dueño de la cuenta de Google (ADR-012), no quien atiende las citas. **Decidido el 2026-08-06:** pasa a `BCC` a `claudia@leosfirm.com` (§ Decisiones tomadas) |
+| 3 | **La copia va a `marco@leosfirm.com`** | Marco es el dueño de la cuenta de Google (ADR-012), no quien atiende las citas. **Decidido el 2026-08-06:** pasa a `BCC` a `claudia@leosfirm.com`. El `BCC` ya está puesto; lo que falta es **quitar el `CC`**, que sigue ahí (§ Decisiones tomadas) |
+| 4 | **El «De:» es la cuenta de Marco** | Descubierto el 2026-08-07 al buscar de dónde salía el remitente: no es un campo del workflow, es la credencial. El cliente recibe su confirmación desde el administrador de sistemas de la firma, no desde quien lo va a atender → **ADR-017** |
 
 ---
 
@@ -254,10 +263,16 @@ Casi nada, y conviene decirlo explícitamente para que nadie busque dónde está
 ## Pendiente
 
 - [ ] Decidir los tres puntos de § *Decisiones abiertas* — la clienta
-- [ ] Confirmar que el **«De:»** del correo actual es la cuenta de la firma y no `api_gmail_aiinovate`
-      (arrastrado de la FASE 6; se ve en cualquier correo de confirmación ya enviado)
+- [ ] 🔴 **Credencial Gmail nueva autenticada como `claudia@leosfirm.com`** y aplicada a los **seis**
+      nodos de Gmail: WF3 (confirmación), WF6 (24 h), WF7 (1 h), WF9 (×2, cancelación) y WF10 (otro
+      horario). Es un consentimiento OAuth: **no se puede hacer por MCP ni por API** — ADR-017
+- [x] ~~Confirmar que el «De:» del correo actual es la cuenta de la firma~~ — **resuelto el
+      2026-08-07:** es `marco@leosfirm.com` (la credencial `Gmail - Leos Firm`), no
+      `api_gmail_aiinovate`. Correcto en su momento, pero la clienta pidió que sea Claudia
 - [ ] **Acentos** en el correo de confirmación del WF3 — editar a mano en la UI de n8n
-- [ ] `CC` → `BCC` en el WF3, con el destinatario que se decida
+- [ ] **Quitar el `CC: marco@leosfirm.com`** del WF3. El `BCC` a Claudia ya está puesto; hoy salen
+      los dos a la vez. A mano en la UI, **no por MCP** — actualizar un workflow le borra las
+      credenciales a sus nodos y el WF3 está activo en producción
 - [x] **WF6 creado** (`6836anE95HmUiyDg`, 2026-08-06) — sin publicar
 - [x] **WF7 creado** (`Edd15W7W2FS1Cagf`, 2026-08-06) — sin publicar
 - [x] 🔑 **Credenciales asignadas a mano en los dos workflows** (2026-08-06). n8n había dejado los

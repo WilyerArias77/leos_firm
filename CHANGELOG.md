@@ -6,6 +6,84 @@
 
 ---
 
+## [2026-08-07] — Las citas bajan a 30 minutos y la firma deja de hablarle al cliente con la voz de Marco — v0.9.4
+
+### Request original
+> Necesito que hagamos unos cambios visuales en la página: 1. **Cambiar texto:** reemplazar la
+> palabra **"cancelado"** por la palabra **"pagado"**. 2. **Retirar botón:** retirar el botón que
+> contiene el número de esta parte del formulario. 3. **Duración de las citas:** las citas reservadas
+> son de **30 minutos**. Cambiar todo lo que diga **"60 minutos"** y poner únicamente **"30
+> minutos"**. Implementar este cambio a la hora de programar las citas en google calendar. 4.
+> **Correo de confirmación:** el correo electrónico de confirmación de la cita debe enviarse desde la
+> cuenta de claudia@leosfirm.com. 5. **Calendario:** el calendario debe hospedarse en el HUB del
+> correo de claudia@leosfirm.com. Nota: *Retirar del proceso el correo de marco@leosfirm.com. *Haz un
+> análisis de los cambios solicitados y pideme todo lo que requieras para cumplir con la tarea.
+> *(dos capturas: el aviso del abono y la pantalla de resultado del diagnóstico con el botón del
+> teléfono recuadrado)*
+
+### Tipo de cambio
+- **COPY (`src/constants/content/services.ts`)**: `DEPOSIT_NOTICE` — «El valor **pagado** para la
+  consulta será tomado como abono para el servicio contratado». En varios países de la región
+  «cancelar una factura» sí significa pagarla, pero el mercado de la firma lee «cancelado» como
+  *anulado* primero — justo la idea contraria al lado de un cobro
+- **UI (`DiagnosticResult.tsx`)**: fuera el botón azul de ancho completo con el teléfono. La pantalla
+  de resultado se queda con **una sola llamada a la acción**: *Elegir día y hora*
+- **UX (`src/constants/content/diagnostic.ts`)**: el número **no desaparece del todo**, se muda al
+  texto de `deliveryFailed`. Ese aviso ya decía «Llámanos» y su único camino de vuelta era el botón
+  que se acaba de quitar: dejarlo sin número convertía un lead perdido en un lead irrecuperable.
+  `callLabel` se elimina
+- **NEGOCIO (`src/constants/business.ts`)**: la sesión pasa de **60 a 30 minutos**
+  (`INITIAL_CONSULTATION.durationMinutes`), y los dos servicios de precio cerrado con su literal
+  propio en el catálogo. **La rejilla baja también a 30** (`slotIntervalMinutes`): el día de Claudia
+  pasa de 8 a **16 huecos**, de 9:00 a 16:30, pegados
+- **DOCS**: **ADR-017** en `02-architecture.md` — supera parcialmente a ADR-012, que declaraba la
+  cuenta de Marco «✅ Definitivo». `features/scheduling.md` § Bloque C reescrito (decisiones 4 y 6),
+  `features/notifications.md` con la tabla del remitente y los pendientes reales, `API_DOCS.md`
+
+### Lo que NO hizo falta tocar, y por qué importa
+✅ **Google Calendar recibió los 30 minutos gratis.** El WF2 «Reservar slot» nunca supo cuánto dura
+una consulta: recibe `start_utc` y `end_utc` ya calculados por `POST /api/v1/appointments`, que
+multiplica `service.durationMinutes`. **La duración vive en un solo sitio y el calendario la
+hereda.** Es exactamente lo contrario de `SLOT_HOLD_MINUTES`, que sí está duplicado dentro del nodo
+Code del WF4 y ya provocó un cobro sin cita.
+
+Tampoco hizo falta tocar ni un texto de la UI: los cuatro sitios que muestran la duración
+(`/agendar`, detalle de servicio, `ServiceCard`, `DiagnosticIntro`) leen `service.durationMinutes`.
+No había ningún «60 minutos» escrito a mano.
+
+### Hallazgo que cambia el plan del punto 4
+🔑 **El nodo Gmail de n8n no tiene campo «From».** Verificado contra la definición del nodo (v2.2,
+`message:send`): expone `sendTo`, `ccList`, `bccList`, `replyTo` y `senderName`, y nada más. El «De:»
+real es **siempre la cuenta autenticada de la credencial**, que hoy es `marco@leosfirm.com`.
+
+Consecuencia: mandar desde Claudia **no es editar un workflow**, es crear una credencial OAuth nueva
+en n8n autenticada como ella. Es un consentimiento de Google — **no se puede hacer por MCP ni por
+API**, y por eso el punto 4 queda entregado como procedimiento y no como cambio.
+
+### Decisiones de la clienta tomadas en esta sesión
+| Pregunta | Elegido |
+|---|---|
+| ¿La rejilla sigue siendo horaria o baja a 30 min? | **30 min — 16 citas al día**, sobre mantener 8 con media hora de aire |
+| ¿Qué pasa con el «Llámanos» si el CRM falla? | **El número, como texto**, dentro del propio aviso |
+| ¿Calendario nuevo bajo Claudia o el mismo con su credencial? | **El mismo** — el ID no cambia y ninguna cita se rompe |
+| ¿La credencial de Claudia a qué correos? | **A los seis**, no solo al de confirmación |
+
+### Lo que queda pendiente, y ninguno es código
+- 🔴 **Credencial Gmail de `claudia@leosfirm.com`** en n8n → aplicarla a los 6 nodos de Gmail
+- 🔴 **Compartir el calendario** con Claudia como *Hacer cambios y gestionar el uso compartido* y
+  reponer con su cuenta la credencial de Calendar
+- 🔴 **Quitar el `CC: marco@leosfirm.com`** del WF3 — **a mano en la UI**: actualizar por MCP le borra
+  las credenciales a los nodos y el WF3 está activo en producción
+- ⚠️ **La tolerancia de 15 min es ahora la mitad de la sesión** (`context.md` §8). No se tocó: es una
+  regla de negocio de la clienta, pero conviene que lo sepa
+- ⚠️ **Marco sigue siendo superadministrador del Workspace** y el DKIM pendiente depende de él.
+  Retirarlo del proceso no lo retira de ese rol
+
+### Validación
+`npm run build` ✅ · `npm run lint` ✅ (sin warnings) · 21 páginas generadas
+
+---
+
 ## [2026-08-07] — ✅ El correo de la firma estuvo un día caído por nuestro despliegue, y ya volvió — v0.9.3
 
 ### Request original

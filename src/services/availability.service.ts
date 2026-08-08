@@ -275,14 +275,16 @@ export function isSlotBookable(input: {
  * ⚠️ `BUSINESS_HOURS.bufferMinutes` is declared but NOT used here, and that is
  * a decision, not an oversight (`scheduling.md` § Bloque C, decisión 6).
  *
- * It says "gap between appointments" and is set to 15, while
- * `slotIntervalMinutes` is 60 and every service lasts 60 minutes. The two do
- * not fit: hourly appointments an hour long leave no gap to put it in.
- * Applying it literally would make a 9:00 booking invalidate the 10:00 one and
- * cut Claudia's day from 8 openings to 4 — a large business change hiding
- * inside an arithmetic detail.
+ * It says "gap between appointments" and is set to 15, while the grid and the
+ * session are both 30 minutes since 2026-08-07 — so consultations run back to
+ * back and there is nowhere to put the gap. Applying it literally would make a
+ * 9:00 booking invalidate the 9:30 one and halve Claudia's day: a large
+ * business change hiding inside an arithmetic detail.
  *
- * If the firm does want a real break between consultations, the fix is to
- * shorten the session to 45 minutes inside the 60-minute slot (one number in
- * the catalog), not to subtract time here. Pending the client's answer.
+ * The client was asked this exact question when the session was shortened and
+ * chose the denser grid — sixteen openings a day, no breathing room — over
+ * keeping the hourly one. So the buffer stays unapplied ON PURPOSE, not for
+ * lack of an answer. If she later wants a real break, the fix is to raise
+ * `slotIntervalMinutes` back to 60 (one number in `business.ts`), never to
+ * subtract time here.
  */

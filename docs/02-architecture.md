@@ -504,7 +504,8 @@ Modelado con `Service.pricingModel`:
 - `DiagnosticOutcome` (`checkout` | `contact`) se elimina, junto con `getOutcome()` y la pantalla de
   "Claudia revisa tu caso". Todo visitante que termina el diagnóstico va a agendar y pagar.
 - `Service.requiresAppointment` se elimina: ahora es siempre `true`. `Elecciones fiscales`, que era
-  un trámite sin cita, pasa a empezar con una sesión de 60 minutos como el resto.
+  un trámite sin cita, pasa a empezar con una sesión como el resto — de 60 minutos entonces, de
+  **30 desde el 2026-08-07** ([`features/scheduling.md`](./features/scheduling.md) § Bloque C).
 - `durationMinutes` deja de ser opcional.
 - El precio de la consulta inicial vive en `INITIAL_CONSULTATION` (`src/constants/business.ts`):
   cambiarlo es un número en un archivo, no seis ediciones en el catálogo.
@@ -602,7 +603,12 @@ detalle olvidado:
 | Integración | Cuenta dueña | Motivo | Estado |
 |-------------|--------------|--------|--------|
 | Google Sheets — hoja del CRM | `wilyerernestoarias@gmail.com` (desarrollo) | Impuesto por `drive.file` | ⚠️ **Provisional** — migrar a la firma |
-| Google Calendar — agenda | `marco@leosfirm.com` (Google Console del cliente) | Correcto desde el día uno | ✅ Definitivo |
+| Google Calendar — agenda | `marco@leosfirm.com` (Google Console del cliente) | Correcto desde el día uno | ~~✅ Definitivo~~ → **superado por ADR-017** |
+
+> ⚠️ **La fila del calendario ya no vale.** Decía «✅ Definitivo» y dejó de serlo el **2026-08-07**,
+> cuando la clienta pidió que el calendario y el remitente de los correos pasen a
+> `claudia@leosfirm.com`. Lo que sigue vigente de este ADR es todo lo demás: la asimetría de la hoja
+> del CRM, el riesgo de la cuenta personal y la ruta de salida. Ver **ADR-017**.
 
 **Consecuencias.**
 - **PII de terceros bajo una cuenta personal.** Cada fila de la hoja contiene nombre, correo,
@@ -744,3 +750,46 @@ datos y sin una llamada de red para saber si un enlace es legítimo.
 - `getAppointmentTokenSecret()` **sí lanza** cuando falta la variable, al revés que `getN8nEnv()`. La
   excepción de aquel («un 500 en el diagnóstico pierde el lead y la persona») no aplica: sin secreto
   no hay nada que servir en esa página, y servir algo sería peor.
+
+### ADR-017: la cara visible del sistema es `claudia@leosfirm.com`, no `marco@leosfirm.com`
+
+**Fecha:** 2026-08-07 · **Supera parcialmente a ADR-012**
+
+**Contexto.** ADR-012 puso la agenda en el Google Console de `marco@leosfirm.com` y lo declaró
+definitivo. Era correcto para lo que resolvía entonces —sacar las credenciales de Google de una
+cuenta personal del equipo de desarrollo y llevarlas al dominio de la firma— pero resolvió
+*propiedad técnica* y nunca se preguntó por *quién opera el negocio*. Marco administra el Workspace;
+**Claudia es quien atiende las citas y con quien el cliente cree que habla.** El resultado es que el
+cliente recibe la confirmación de su consulta desde la cuenta del administrador de sistemas, ve una
+dirección interna en el `CC`, y Claudia no tiene la agenda en su propio calendario.
+
+**Decisión.** Las dos superficies que el cliente toca pasan a `claudia@leosfirm.com`:
+
+| Superficie | Cómo | Coste |
+|---|---|---|
+| **Remitente de los 6 correos** | Credencial Gmail OAuth2 nueva en n8n, autenticada como Claudia. El nodo Gmail de n8n **no tiene campo «From»**: el remitente es siempre la cuenta de la credencial, así que una credencial nueva es la única vía | Un consentimiento OAuth manual |
+| **Calendario de consultas** | El **mismo** calendario (`c_4a1fcc0c…cbabfaf@group.calendar.google.com`), compartido con Claudia como *Hacer cambios y gestionar el uso compartido*, y la credencial de Calendar de n8n repuesta con su cuenta | **Cero** — el ID no cambia |
+| **`CC: marco@leosfirm.com`** del WF3 | Se elimina. La copia interna se queda en el `BCC` a Claudia | Una edición a mano |
+
+**Por qué NO se crea un calendario nuevo bajo Claudia**, que sería lo «limpio»: el `eventId` de Google
+es la identidad de cada cita en todo el sistema —lo lleva dentro el token firmado de ADR-016, lo usa
+el WF3 para confirmar y el WF4 para limpiar— y **esos ids son locales al calendario**. Un calendario
+nuevo rompe toda cita ya agendada y todo enlace de gestión ya enviado, además de obligar a editar el
+ID en ~8 nodos de 6 workflows y republicar 4 webhooks de producción. Se prefiere que el objeto
+calendario siga habiendo nacido en la cuenta de Marco antes que romper citas pagadas.
+
+**Consecuencias.**
+- **Marco sale del flujo operativo, no del proyecto.** Sigue siendo **superadministrador del Google
+  Workspace** de la firma, y el paso pendiente de activación del DKIM
+  ([`04-deployment.md`](./04-deployment.md)) depende de él. «Retirar a marco del proceso» es retirar
+  su dirección de los correos y su cuenta de las credenciales; el rol de administrador no se delega
+  por esta vía.
+- **Queda una dependencia declarada:** el calendario vive dentro de la cuenta de Marco aunque Claudia
+  lo gestione. Google no permite transferir el dueño de un calendario secundario. Si algún día Marco
+  deja el proyecto hay que hacer la migración cara (calendario nuevo + los ~8 nodos), y el momento
+  barato para hacerla es **cuando no haya ninguna cita futura agendada**.
+- **El `rua=` del DMARC sigue apuntando a Marco.** Es una dirección de reportes técnicos, no de
+  negocio, y ahí está bien: los informes de fallo de autenticación los lee el administrador del
+  dominio.
+- Cambiar la credencial de un workflow **no** es cambiar el workflow: se hace en la UI de n8n sin
+  tocar su definición, así que no dispara el borrado de credenciales que provoca actualizar por MCP.

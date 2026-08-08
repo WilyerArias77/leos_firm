@@ -1,3 +1,4 @@
+import { COMPANY } from "@/constants/business";
 import type { DiagnosticQuestion, DiagnosticQuestionId } from "@/types/diagnostic.types";
 
 /**
@@ -61,11 +62,15 @@ export const DIAGNOSTIC_COPY = {
  * branch — "Claudia revisa tu caso y te cotiza por correo" — no longer exists,
  * because no service is left without a price.
  *
- * `deliveryFailed` only shows when the CRM did not take the lead, and then the
- * phone number is the recovery path.
- *
  * The "próximamente" placeholders are gone: the scheduling screen shipped in
  * FASE 5, so the button leads to a real calendar (`features/scheduling.md`).
+ *
+ * **The call button was removed on 2026-08-07** at the client's request: the
+ * result screen should push one action, and a second full-width blue button
+ * competed with "Elegir día y hora". The phone number moved INTO
+ * `deliveryFailed`, which is the one place that actually needed it — that text
+ * only shows when the CRM did not take the lead, and telling someone to call
+ * without giving them the number would leave a lost lead with no way back.
  */
 export const DIAGNOSTIC_RESULT_COPY = {
   leadIn: "Según lo que nos contaste, esto es lo que tu caso necesita:",
@@ -76,8 +81,8 @@ export const DIAGNOSTIC_RESULT_COPY = {
   scheduleNote:
     "Apartamos tu horario mientras completas el pago. Puedes reprogramar sin costo con 24 horas de anticipación.",
   deliveryFailed:
-    "Tus datos quedaron registrados en este dispositivo, pero no pudimos enviarlos a Leos Firm. Llámanos y te atendemos con tu diagnóstico en la mano.",
-  callLabel: "Llamar a Leos Firm",
+    "Tus datos quedaron registrados en este dispositivo, pero no pudimos enviarlos a Leos Firm. " +
+    `Llámanos al ${COMPANY.phone} y te atendemos con tu diagnóstico en la mano.`,
   closeLabel: "Seguir explorando el sitio",
 } as const;
 

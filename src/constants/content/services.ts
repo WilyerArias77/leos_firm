@@ -29,9 +29,14 @@ export const PRICING_COPY: Record<PricingModel, { label: string | null; note: st
  * Shown above the catalog and inside the diagnosis card of every service page.
  * It says the same thing as `PRICING_COPY.deposit.note` in one line, and the
  * client wants it visible before the visitor opens any service.
+ *
+ * "cancelado" → "pagado" on 2026-08-07, at the client's request. In several
+ * Latin American countries "cancelar una factura" does mean paying it, but the
+ * firm's own market reads the word as "annulled" first — exactly the wrong idea
+ * next to a charge.
  */
 export const DEPOSIT_NOTICE =
-  "El valor cancelado para la consulta será tomado como abono para el servicio contratado.";
+  "El valor pagado para la consulta será tomado como abono para el servicio contratado.";
 
 /**
  * Service catalog — source: `context.md` §5.
@@ -63,7 +68,7 @@ export const SERVICES: readonly Service[] = [
       "Una consultoría enfocada en empresarios e inversionistas extranjeros que necesitan entender sus obligaciones fiscales en Estados Unidos. Revisamos tu caso concreto, las implicaciones entre tu país de residencia y EE. UU., y salimos con una recomendación clara sobre cómo estructurar o regularizar tu operación.",
     priceCents: 15_000,
     pricingModel: "full-service",
-    durationMinutes: 60,
+    durationMinutes: 30,
     isSubscription: false,
     includes: [
       "Revisión de tu situación actual",
@@ -82,7 +87,7 @@ export const SERVICES: readonly Service[] = [
       "Preparación y presentación de las elecciones fiscales aplicables a tu empresa en Estados Unidos. Es un trámite puntual: se ejecuta sobre una estructura que ya existe y cuyas necesidades ya están definidas. Empieza con una sesión en la que se confirma qué elecciones corresponden a tu caso antes de presentar nada.",
     priceCents: 25_000,
     pricingModel: "full-service",
-    durationMinutes: 60,
+    durationMinutes: 30,
     isSubscription: false,
     includes: ["Preparación del trámite", "Presentación ante la autoridad correspondiente"],
     displayOrder: 2,

@@ -186,7 +186,7 @@ UTC, agrupados por **el día del huso del visitante**. Los eventos **tentativos 
 |-----------|-------------|-------|
 | `from`, `to` | sí | `YYYY-MM-DD`. Rango recortado a 31 días si se pide más |
 | `tz` | no | Huso IANA del visitante. Sin él, todo se calcula y muestra en Central |
-| `servicio` | no | Slug del catálogo; fija la duración del slot. Sin él, 60 min |
+| `servicio` | no | Slug del catálogo; fija la duración del slot. Sin él, `INITIAL_CONSULTATION.durationMinutes` — **30 min** desde el 2026-08-07 |
 
 **Response 200**
 ```json

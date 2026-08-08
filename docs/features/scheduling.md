@@ -838,28 +838,48 @@ Es el correo (`marco@leosfirm.com`) si es el calendario principal de esa cuenta,
 | 1 | Horario de atención | Lunes a viernes, 9:00–17:00 `America/Chicago` (`BUSINESS_HOURS`) |
 | 2 | Anticipación mínima para agendar | 24 h |
 | 3 | Ventana máxima hacia adelante | 60 días |
-| 4 | Duración de la sesión | 60 min para los 8 servicios |
+| 4 | Duración de la sesión | **30 min** para los 8 servicios (**2026-08-07**, antes 60) |
 | 5 | Días u horas bloqueados fijos | Ninguno |
 | 6 | ¿Se respeta `bufferMinutes` entre citas? | **No** — ver abajo |
 
-#### ⚠️ Decisión 6: `bufferMinutes` está en conflicto consigo mismo
+#### La sesión pasó de 60 a 30 minutos — 2026-08-07
 
-`BUSINESS_HOURS` (`src/constants/business.ts`) declara `bufferMinutes: 15` y lo describe como
-*"gap between appointments"*, pero también declara `slotIntervalMinutes: 60` con sesiones de 60
-minutos. **Los dos no caben:** si las citas empiezan cada hora y duran una hora, no queda hueco
-donde meter 15 minutos.
+Pedido de la clienta: *«las citas reservadas son de 30 minutos»*. Se cambiaron dos números en
+`src/constants/business.ts` y dos literales en el catálogo:
 
-Aplicar el buffer literalmente tendría un costo de negocio grande y nada evidente: una cita a las
-9:00 invalidaría la de las 10:00, y la agenda de Claudia pasaría de **8 huecos al día a 4**.
+| Constante | Antes | Ahora | Efecto |
+|---|---|---|---|
+| `INITIAL_CONSULTATION.durationMinutes` | 60 | **30** | los seis servicios de abono |
+| `services.ts` → los dos `full-service` | 60 | **30** | Consultoría fiscal · Elecciones fiscales |
+| `BUSINESS_HOURS.slotIntervalMinutes` | 60 | **30** | la rejilla: 9:00, 9:30 … 16:30 |
+| — | 8 huecos/día | **16 huecos/día** | el día de Claudia dobla su capacidad |
 
-**Lo que hace el código mientras tanto:** calcula solape estricto — un slot está libre si no se pisa
-con ningún evento. `bufferMinutes` queda declarado pero **sin usar**, y anotado como tal en el
-código para que nadie crea que se olvidó.
+> ✅ **Google Calendar no necesitó ni un cambio, y conviene entender por qué.** El WF2 «Reservar slot»
+> nunca supo cuánto dura una consulta: recibe `start_utc` y `end_utc` ya calculados por
+> `POST /api/v1/appointments`, que multiplica `service.durationMinutes`. La duración vive en **un solo
+> sitio** y el evento del calendario la hereda. Es lo contrario de `SLOT_HOLD_MINUTES`, que sí está
+> duplicado dentro del nodo Code del WF4 y por eso da problemas.
 
-**Lo que hay que preguntarle a la clienta:** ¿quiere un descanso real entre consultas? Si la
-respuesta es sí, lo correcto **no** es aplicar el buffer al cálculo, sino acortar la sesión a 45
-minutos dentro del hueco de 60 — se conservan los 8 huecos diarios y el descanso es real. Es un
-cambio de `durationMinutes` en el catálogo, no de la aritmética.
+La rejilla de 30 min fue una decisión explícita de la clienta el mismo día, elegida sobre la
+alternativa de dejar la rejilla en 60 y quedarse con 8 citas de media hora separadas por media hora
+libre. Escogió densidad.
+
+#### ⚠️ Decisión 6: `bufferMinutes` sigue declarado y sin usar
+
+`BUSINESS_HOURS` declara `bufferMinutes: 15` y lo describe como *"gap between appointments"*, pero
+la rejilla y la sesión miden ambas 30 minutos desde el 2026-08-07: **las consultas van pegadas y no
+queda hueco donde meter los 15 minutos.** Aplicar el buffer literalmente haría que una cita a las
+9:00 invalidara la de las 9:30 y **partiría la agenda por la mitad** — un cambio de negocio grande
+escondido en un detalle aritmético.
+
+**Lo que hace el código:** solape estricto — un slot está libre si no se pisa con ningún evento.
+`bufferMinutes` queda declarado pero **sin usar**, y anotado como tal en `availability.service.ts`
+para que nadie crea que se olvidó.
+
+**Esto ya no es una pregunta abierta.** A la clienta se le planteó exactamente esta disyuntiva al
+acortar la sesión y eligió la rejilla densa. Si más adelante quiere un descanso real entre
+consultas, lo correcto **no** es aplicar el buffer al cálculo, sino subir `slotIntervalMinutes` a 60
+otra vez: un número en un archivo, y vuelven los 8 huecos con media hora de aire entre cada uno.
 
 ### Verificación antes de codear
 

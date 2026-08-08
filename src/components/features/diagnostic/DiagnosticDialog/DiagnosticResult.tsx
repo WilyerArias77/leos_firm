@@ -1,14 +1,11 @@
-import { ArrowRight, Check, CircleCheckBig, Info, Phone } from "lucide-react";
+import { ArrowRight, Check, CircleCheckBig, Info } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
-import { COMPANY } from "@/constants/business";
 import { DIAGNOSTIC_COPY, DIAGNOSTIC_RESULT_COPY } from "@/constants/content/diagnostic";
 import { PRICING_COPY } from "@/constants/content/services";
 import { ROUTES } from "@/constants/routes";
 import { formatPrice } from "@/lib/utils/formatCurrency";
 import type { DiagnosticResultProps } from "./DiagnosticDialog.types";
-
-const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
 
 /**
  * The diagnosis and the single next step: agendar y pagar.
@@ -17,8 +14,10 @@ const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
  * every service is priced, so every visitor gets the same path.
  *
  * The scheduling button is live since FASE 5 and carries the deduced service
- * to `/agendar`. If the CRM did not take the lead, the visitor is told and
- * given the phone number — that fallback is permanent.
+ * to `/agendar`. It is now the ONLY button on the screen: the call button was
+ * removed on 2026-08-07 (client request). If the CRM did not take the lead the
+ * visitor still gets the phone number, but as part of that message and not as a
+ * standing second call to action — that fallback is permanent.
  */
 export function DiagnosticResult({ titleId, service, delivery, onClose }: DiagnosticResultProps) {
   const pricing = PRICING_COPY[service.pricingModel];
@@ -94,15 +93,7 @@ export function DiagnosticResult({ titleId, service, delivery, onClose }: Diagno
         </p>
       ) : null}
 
-      <div className="mt-6 flex flex-col gap-3">
-        <a
-          href={PHONE_HREF}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-card bg-accent px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-        >
-          <Phone className="h-4 w-4" aria-hidden="true" />
-          {DIAGNOSTIC_RESULT_COPY.callLabel} · {COMPANY.phone}
-        </a>
-
+      <div className="mt-6">
         <button
           type="button"
           onClick={onClose}

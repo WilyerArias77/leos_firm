@@ -33,8 +33,14 @@ export const BUSINESS_HOURS = {
   workingDays: [1, 2, 3, 4, 5],
   startHour: 9,
   endHour: 17,
-  /** Slots start on the hour; gap between appointments. */
-  slotIntervalMinutes: 60,
+  /**
+   * How often a slot starts. Halved to 30 on 2026-08-07, together with the
+   * session length, at the client's request: sessions are 30 minutes now and
+   * she wants the day to hold twice as many, not the same eight with a gap.
+   * The grid runs 9:00, 9:30 … 16:30 — sixteen openings, back to back.
+   */
+  slotIntervalMinutes: 30,
+  /** Declared, never applied. See the note at the end of `availability.service.ts`. */
   bufferMinutes: 15,
 } as const;
 
@@ -54,10 +60,17 @@ export const BUSINESS_HOURS = {
  *
  * It lives here — not spread across the catalog — so changing it is one number
  * in one file.
+ *
+ * ⏱️ **The session went from 60 to 30 minutes on 2026-08-07** (client request).
+ * Nothing else had to change for Google Calendar to follow: the tentative event
+ * is created from the `end_utc` that `POST /api/v1/appointments` computes off
+ * this number, so the workflow never had a duration of its own to keep in sync.
+ * The two `full-service` entries of the catalog carry their own literal `30` —
+ * they do not read this constant, only the six `deposit` ones do.
  */
 export const INITIAL_CONSULTATION = {
   priceCents: 5_000,
-  durationMinutes: 60,
+  durationMinutes: 30,
 } as const;
 
 /**
