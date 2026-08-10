@@ -73,44 +73,52 @@ que no existe.
 
 | # | Lo que dice el repo | Lo que hace producción | Consecuencia |
 |---|---|---|---|
-| 1 | `SLOT_HOLD_MINUTES = 15` ([`business.ts`](../src/constants/business.ts)) | El nodo Code del WF4 tiene `30`, y su trigger corre **cada 30 min** pese a llamarse «Cada 10 minutos» | Un hueco impago se libera entre los **30 y los 60 minutos**. La decisión de la clienta no está viva |
-| 2 | `crm.service.ts` manda `service_status` | Los 3 nodos de Sheets del WF1 conservan el esquema de 27 columnas, **sin `Estado de atencion`** | Google Sheets mapea **por nombre**: el campo llega y **se descarta en silencio**. La máquina de estados existe en el código y en cero filas |
-| 3 | `POST /api/v1/appointments/release` + WF11 «Liberar hueco» | El WF11 está **creado y sin publicar**, y los 3 commits **no están desplegados** (`origin/main` = `b25269c`) | El endpoint no existe en producción. El hueco sigue expirando solo, que era el respaldo por diseño |
+| 1 | `SLOT_HOLD_MINUTES = 15` ([`business.ts`](../src/constants/business.ts)) | El nodo Code de **«Limpiar reservas vencidas»** tiene `30`, y su trigger corre **cada 30 min** pese a llamarse «Cada 10 minutos» | Un hueco impago se libera entre los **30 y los 60 minutos**. La decisión de la clienta no está viva |
+| 2 | `crm.service.ts` manda `service_status` | Los 3 nodos de Sheets de **«CRM de leads»** conservan el esquema de 27 columnas, **sin `Estado de atencion`** | Google Sheets mapea **por nombre**: el campo llega y **se descarta en silencio**. La máquina de estados existe en el código y en cero filas |
+| 3 | `POST /api/v1/appointments/release` + **«Liberar hueco»** | El workflow está **creado y sin publicar**, y los 3 commits **no están desplegados** (`origin/main` = `b25269c`) | El endpoint no existe en producción. El hueco sigue expirando solo, que era el respaldo por diseño |
 
-### ⚠️ El borrador del WF4 apunta a otro calendario — NO publicarlo tal cual
+### ⚠️ El borrador de «Limpiar reservas vencidas» apunta a otro calendario — NO publicarlo tal cual
 
-El WF4 «Limpiar reservas vencidas» tiene `versionId ≠ activeVersionId`: hay un borrador guardado que
-**no es lo que corre**. Y el borrador usa un calendar ID distinto del que corre:
+**«Leos Firm - Limpiar reservas vencidas»** (`hLWyt2vHv3CrCVBt`) tiene `versionId ≠ activeVersionId`:
+hay un borrador guardado que **no es lo que corre**. Y usa un calendar ID distinto:
 
-| Versión del WF4 | Calendar ID |
+| Versión | Calendar ID |
 |---|---|
 | La que corre (`activeVersion`) | `c_4a1fcc0c1c44…cbabfaf` ✅ |
 | El borrador guardado | `c_0686985cc720…e349744` ❌ |
 
-**El bueno es `c_4a1fcc0c…`**: es el que usa el WF2 «Reservar slot» para crear los eventos, y el WF2
-no tiene divergencia entre borrador y activo. Publicar el borrador del WF4 dejaría al limpiador
+**El bueno es `c_4a1fcc0c…`**: es el que usa **«Leos Firm - Reservar slot»** para crear los eventos, y
+ese workflow no tiene divergencia entre borrador y activo. Publicar el borrador dejaría al limpiador
 mirando un calendario donde no hay nada que limpiar — y las reservas impagas bloquearían la agenda
 para siempre, que es exactamente lo que ese workflow existe para impedir.
 
 ### Lote pendiente de n8n — **a mano en la UI, nunca por MCP**
 
 Actualizar por MCP **borra las credenciales de los nodos** (probado dos veces; está en las notas
-adhesivas del WF2 y del WF4). Los workflows de esta lista están **activos en producción**, así que
-cada cambio se hace en la interfaz:
+adhesivas de «Reservar slot» y de «Limpiar reservas vencidas»). Los workflows de esta lista están
+**activos en producción**, así que cada cambio se hace en la interfaz.
 
-- [ ] **WF4** · nodo Code → `const SLOT_HOLD_MINUTES = 15;` · y el trigger de 30 a 10 min, para que
-      el nombre del nodo deje de mentir. Antes: resolver el borrador divergente de arriba
-- [ ] **WF1** · añadir la columna `Estado de atencion` a la hoja **y** al esquema de los **tres**
-      nodos de Sheets. Mapeo en [`features/crm-sheets.md`](./features/crm-sheets.md)
-- [ ] **WF3** · añadir el enlace de gestión al correo. El payload ya lleva `access_token` y
-      `appointment_url`: **sin esto nadie recibe el enlace** aunque la FASE 9 se publique entera
-- [ ] **WF3** · `CC: marco@leosfirm.com` → `BCC: claudia@leosfirm.com` · arreglar los acentos
-- [ ] **WF2** · la descripción del evento dice «si el pago no llega en **10 minutos**». Es texto que
-      lee Claudia en su calendario y hoy es falso en dos sentidos
+> 📌 **Los workflows se nombran por su nombre, no por número.** La numeración WF1…WF11 solo existe en
+> estos documentos, está incompleta —«Disponibilidad» nunca recibió número— y no coincide con lo que
+> se ve en la pantalla de n8n, que es donde se ejecutan estos cambios.
+
+- [ ] **«Limpiar reservas vencidas»** (`hLWyt2vHv3CrCVBt`) · nodo Code → `const SLOT_HOLD_MINUTES =
+      15;` · y el trigger de 30 a 10 min, para que el nombre del nodo deje de mentir. Antes:
+      resolver el borrador divergente de arriba
+- [ ] **«CRM de leads»** (`NYy88hBunUSkrcZk`) · añadir la columna `Estado de atencion` a la hoja **y**
+      al esquema de los **tres** nodos de Sheets. Mapeo en
+      [`features/crm-sheets.md`](./features/crm-sheets.md)
+- [ ] **«Confirmar cita»** (`5Tx6yxAmPBMghDBS`) · añadir el enlace de gestión al correo. El payload ya
+      lleva `access_token` y `appointment_url`: **sin esto nadie recibe el enlace** aunque la FASE 9
+      se publique entera
+- [ ] **«Confirmar cita»** · `CC: marco@leosfirm.com` → `BCC: claudia@leosfirm.com` · arreglar los
+      acentos
+- [ ] **«Reservar slot»** (`5MnPI0yaiahvOybZ`) · la descripción del evento dice «si el pago no llega
+      en **10 minutos**». Es texto que lee Claudia en su calendario y hoy es falso en dos sentidos
 - [ ] Credencial Gmail de `claudia@leosfirm.com` → aplicarla a los **6** nodos de Gmail (ADR-017)
-- [ ] Publicar los **4** workflows inactivos: `Consultar cita`, `Cancelar cita`,
-      `Pedir otro horario`, `Liberar hueco` → pone 4 webhooks en producción, **requiere autorización
-      explícita** (4 Leyes de Operación)
+- [ ] Publicar los **4** workflows inactivos: **«Consultar cita»**, **«Cancelar cita»**,
+      **«Pedir otro horario»**, **«Liberar hueco»** → pone 4 webhooks en producción, **requiere
+      autorización explícita** (4 Leyes de Operación)
 - [ ] Después de publicar: `APPOINTMENT_TOKEN_SECRET` y las 4 URLs de webhook en Vercel + redespliegue
 
 ### Qué se cayó de la lista y por qué
