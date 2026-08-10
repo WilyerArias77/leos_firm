@@ -6,6 +6,47 @@
 
 ---
 
+## [2026-08-10] — Los estados de entrega y la liberación del hueco — v0.11.0
+
+### Request original
+> *(Continuación del «Flujo de Procesos – LEOS FIRM»: §8 estados de atención, §4 qué pasa cuando el
+> pago falla.)*
+
+Dos commits que se quedaron sin entrada por el Mandamiento IV y se registran aquí:
+`694366d` y `5647441`.
+
+### Tipo de cambio
+- **CRM (`src/types/crm.types.ts`, `src/services/crm.service.ts`)**: `ServiceStatus`,
+  `SERVICE_STATUS_ORDER` y `serviceStatusForStage()`. Los estados
+  `Pendiente de Atención → Atendido → Finalizado` entran como **segundo eje**, en la columna nueva
+  `Estado de atencion`, sin tocar la columna `Estado` del embudo. Fundirlos rompería el upsert
+  monótono, que es lo único que impide que un webhook de Square atrasado degrade una fila ya pagada.
+  El valor se **deriva** del stage; no se pasa por parámetro, así que ninguna parte del código puede
+  escribir una combinación incoherente. `cancelado` no escribe nada: la columna `Estado` ya lo dice
+- **AGENDA (`src/app/api/v1/appointments/release/route.ts`, `useSlotRelease.ts`,
+  `scheduling.service.ts`, `BookingFlow.tsx`)**: el hueco se libera cuando el visitante **se va**, no
+  cuando le rechazan la tarjeta. Una tarjeta rechazada es un evento ordinario y borrar el hueco ahí
+  deja el reintento sin nada contra qué reintentar. Escucha `pagehide` (no `beforeunload`: móvil lo
+  mata sin dispararlo) y manda la petición con `sendBeacon`. Botón explícito
+  *«Prefiero no continuar y liberar este horario»*
+- **ENV (`src/lib/env.ts`, `.env.example`)**: `N8N_RELEASE_WEBHOOK_URL`, **opcional** — sin ella el
+  hueco expira igual, solo que más tarde
+- **DOCS**: `features/crm-sheets.md`, `features/scheduling.md`, `API_DOCS.md`, `02-architecture.md`
+
+### 🔴 Nada de esto está aplicado donde se ejecuta
+Verificado contra la instancia real de n8n el 2026-08-10. Ver
+[`00-roadmap.md`](./docs/00-roadmap.md) § *Deriva entre el repo y producción*:
+- El WF1 no tiene la columna `Estado de atencion` → Sheets mapea por nombre y **descarta el dato en
+  silencio**
+- El WF4 sigue con `SLOT_HOLD_MINUTES = 30`; el repo dice 15
+- El WF11 «Liberar hueco» está creado y **sin publicar**
+- Los tres commits **no están desplegados**: `origin/main` va por `b25269c`
+
+### Validación
+`npm run build` ✅ (21 páginas) · `npm run lint` ✅ · rama `feat/asistente-virtual-y-flujo-v2`
+
+---
+
 ## [2026-08-07] — El flujo v2: vuelve el agente de IA, pero con las manos atadas — v0.10.0
 
 ### Request original

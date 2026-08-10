@@ -1,9 +1,9 @@
 # Leos Firm LLC — Plataforma Web de Captación y Agendamiento
 
-> **Última actualización:** 2026-08-05
-> **Versión:** 0.4.3
+> **Última actualización:** 2026-08-10
+> **Versión:** 0.11.0
 > **Método:** AInnovate v2.1 (Documentation-Driven Development)
-> **Orden de trabajo:** [`00-roadmap.md`](./00-roadmap.md) — 12 fases
+> **Orden de trabajo:** [`00-roadmap.md`](./00-roadmap.md) — 10 fases
 
 ---
 
@@ -29,7 +29,8 @@ La documentación menciona nombres constantemente. Esto es a qué se refieren:
 | Pieza | Cuenta / plataforma | ¿Es el estado final? |
 |-------|--------------------|----------------------|
 | Hoja del CRM (Google Sheets) | Drive de `wilyerernestoarias@gmail.com` | ⚠️ No — migrar a la firma después de la FASE 5 |
-| Calendario de consultas (Google Calendar) | Google Console de `marco@leosfirm.com` | ✅ Sí |
+| Calendario de consultas (Google Calendar) | `c_4a1fcc0c…`, Google Console de `marco@leosfirm.com` | ⚠️ El calendario sí; la **credencial** pasa a Claudia (ADR-017) |
+| Correo saliente (Gmail) | Credencial de `marco@leosfirm.com` en n8n | ⚠️ No — debe ser `claudia@leosfirm.com` en los 6 nodos (ADR-017) |
 | Workflows y credenciales | Instancia de n8n del equipo de desarrollo | ✅ Sí (ADR-010) |
 | Sitio y variables de entorno | Vercel | ✅ Sí |
 
@@ -60,10 +61,10 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
    **antes** del pago, para que un visitante que no compra siga siendo un contacto recuperable (ADR-008).
 1. **Vender sin fricción** — catálogo de servicios con compra directa vía Square (pago antes de confirmar cita).
 2. **Cero doble-agenda** — sincronización real con Google Calendar; cada cita bloquea el slot.
-3. **Intake de calidad** — formulario inteligente y condicional que llega completo y validado antes de la consultoría.
+3. **Intake de calidad** — lo cubre el propio diagnóstico: sus 3 preguntas llegan al CRM antes del pago. El formulario de intake completo se eliminó el 2026-08-04.
 4. **Automatizar el post-pago** — cita + sala virtual + CRM + correos en un solo flujo, sin pasos manuales.
-5. **Trazabilidad operativa** — cada cita con estado (`pendiente_atencion` → `atendido`) y panel de administración.
-6. **Canal para referidos** — enlace de calendario compartible por abogados de inmigración, con los primeros 30 minutos sin costo.
+5. **Trazabilidad operativa** — cada fila del CRM con su etapa del embudo y su estado de atención (`Pendiente de Atención` → `Atendido` → `Finalizado`). **La hoja es el panel**; no hay panel admin (ADR-010).
+6. ~~**Canal para referidos**~~ — 🧊 fuera del alcance desde el 2026-08-06. El diseño sigue en `context.md`.
 
 ---
 
@@ -75,13 +76,15 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
 | UI | React | 19.2.4 | — |
 | Lenguaje | TypeScript | ^5 | Mandamiento IX (tipado estricto) |
 | Estilos | TailwindCSS | v4 (`@theme`) | Design system por tokens, sin CSS-in-JS |
-| Base de datos | Supabase (PostgreSQL) | — | Postgres administrado + RLS + Storage para adjuntos del intake |
-| Auth | Supabase Auth | — | Solo para el panel admin (el cliente NO necesita cuenta) |
-| Pagos | Square (Web Payments SDK + Node SDK) | `square` ^latest | Requisito explícito del flujo operativo |
-| Calendario | Google Calendar API | vía `googleapis` | Disponibilidad, creación de citas, sincronización |
+| **Integraciones** | **n8n** | — | **La capa que tiene las credenciales de Google (ADR-010).** Next.js le habla por webhook; ninguna clave de Google entra a la app |
+| CRM | Google Sheets | vía n8n | La hoja **es** el panel de administración de Claudia (ADR-010) |
+| ~~Base de datos~~ | ~~Supabase (PostgreSQL)~~ | — | 🧊 **CONGELADO** (ADR-010). Las 13 tablas están diseñadas en `DB_SCHEMA.md` y **no aplicadas**. No hay proyecto de Supabase |
+| ~~Auth~~ | ~~Supabase Auth~~ | — | 🧊 Congelado con lo anterior. No hay panel admin: la hoja lo sustituye |
+| Pagos | Square (Web Payments SDK + Node SDK) | `square` ^latest | Requisito explícito del flujo operativo. **Integrado directo**, no por n8n |
+| Calendario | Google Calendar API | vía **n8n** | Disponibilidad, reserva tentativa, confirmación y limpieza |
 | Sala virtual | Google Meet (`conferenceData`) | — | **Solo Meet** desde el 2026-08-07 (ADR-004). Zoom retirado del alcance |
-| Correo | Gmail API | vía `googleapis` | Confirmaciones, recordatorios y copia al administrador |
-| Agente IA | Claude (Anthropic API) | `@anthropic-ai/sdk` | Formulario inteligente, validación semántica y resumen post-cita |
+| Correo | Gmail | vía **n8n** | Confirmación, copia interna y recordatorios de 24 h y 1 h |
+| Agente IA | Claude | dentro de **n8n** | Asistente virtual: **conversa, no decide** (ADR-018). Diseñado, sin implementar |
 | Validación | Zod + React Hook Form | — | Validación compartida cliente/servidor |
 | Fechas / TZ | date-fns + @date-fns/tz | — | Clientes en 5+ husos horarios; la firma opera en `America/Chicago` |
 | Deploy | Vercel | — | Nativo para Next.js; cron jobs para recordatorios |
@@ -92,40 +95,44 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
 
 ```
 Sitio web → Catálogo → Servicio → DIAGNÓSTICO GRATUITO (popup, 3 preguntas)
-   └─ datos del cliente capturados  →  tabla leads + correo a Claudia
+   └─ datos del cliente capturados  →  CRM en Sheets (stage=formulario)   ← ADR-008
         │
-        ├─ servicio CON cobro automático (precio fijo)
-        │     └─ Checkout Square → pago aprobado (webhook)
-        │          └─ Intake completo (§7) + Agente IA → Validación
-        │               └─ Google Calendar → Cita + Google Meet/Zoom
-        │                    └─ CRM → Correo al cliente + copia al admin
-        │                         └─ Estado: pendiente_atencion → atendido
-        │
-        └─ servicio SIN cobro automático (precio variable)
-              └─ Correo a Claudia con los datos del posible cliente y el servicio solicitado
-                   └─ Seguimiento manual (cotización)
+        └─ UN SOLO CAMINO PARA LOS OCHO SERVICIOS                          ← ADR-009
+              └─ /agendar → calendario propio → reserva TENTATIVA          ← ADR-011
+                   │            (slot bloqueado en Calendar, stage=agenda)
+                   └─ Checkout Square → pago aprobado (webhook)
+                        └─ el evento pasa a confirmado + Google Meet       ← ADR-002
+                             └─ CRM stage=pagado + correo al cliente y copia interna
+                                  └─ recordatorios 24 h y 1 h (n8n)
+                                       └─ Estado de atención: Pendiente → Atendido → Finalizado
 ```
 
-**Solo 2 de los 8 servicios tienen cobro automático hoy** — los que tienen precio cerrado:
-consultoría fiscal ($150) y elecciones fiscales ($250). Los otros 6 se cobran con una
-infraestructura distinta y con precios variables, así que caen en la rama del correo. La
-bifurcación se decide leyendo `services.price_cents`, no una lista fija (ADR-008).
+**Los ocho servicios se cobran** (ADR-009). Dos tienen precio cerrado —consultoría fiscal ($150) y
+elecciones fiscales ($250)— y los otros seis cobran **$50 para apartar la cita**, que se descuenta
+completo del costo real del servicio. **No es una «consulta inicial»**: es dinero a cuenta, y Claudia
+da el costo real durante la llamada porque cotiza por caso.
+
+> ⚠️ **La «rama del correo a Claudia» ya no existe.** Desapareció con ADR-009 el 2026-08-04. Si
+> aparece en algún documento o comentario, ese documento está desactualizado.
 
 ### Servicios del catálogo (fuente: `context.md`)
 
-| Servicio | Precio | Modalidad |
-|----------|--------|-----------|
-| Consultoría fiscal para empresarios extranjeros | $150.00 USD | Cita 1:1 |
-| Elecciones fiscales (trámite puntual) | $250.00 USD | Trámite |
-| Apertura y estructuración de LLC / Corporation (Soft Landing) | Cotización | Requiere consultoría previa |
-| Bookkeeping + reportes financieros | Suscripción + set-up | Recurrente |
-| Payroll (nómina) | Cotización | Recurrente |
-| Sales Tax y cumplimiento estatal | Cotización | Recurrente |
-| Regularización de empresas existentes | Cotización | Proyecto |
-| Expansión de empresas extranjeras a EE. UU. | Cotización | Proyecto |
+| Servicio | Se cobra | Modalidad |
+|----------|----------|-----------|
+| Consultoría fiscal para empresarios extranjeros | **$150.00 USD** (precio cerrado) | Cita 1:1 |
+| Elecciones fiscales (trámite puntual) | **$250.00 USD** (precio cerrado) | Trámite |
+| Apertura y estructuración de LLC / Corporation (Soft Landing) | $50 para apartar la cita | Requiere consultoría previa |
+| Bookkeeping + reportes financieros | $50 para apartar la cita | Recurrente |
+| Payroll (nómina) | $50 para apartar la cita | Recurrente |
+| Sales Tax y cumplimiento estatal | $50 para apartar la cita | Recurrente |
+| Regularización de empresas existentes | $50 para apartar la cita | Proyecto |
+| Expansión de empresas extranjeras a EE. UU. | $50 para apartar la cita | Proyecto |
 
-> Los servicios con precio fijo se compran directo. Los de cotización agendan primero una
-> consultoría de evaluación.
+> **Ninguno es «gratis» y ninguno se queda sin precio.** Los seis de `pricingModel: "deposit"` cobran
+> $50 **para apartar la cita**, y ese monto se descuenta completo del costo real. El identificador se
+> llamaba `"initial-consultation"` y ese nombre era justamente el error — corregido el 2026-08-06 a
+> instancias de la clienta. Los precios se leen **en el servidor, desde el catálogo, en centavos**
+> (ADR-006). La sesión dura **30 minutos** desde el 2026-08-07.
 
 ---
 
@@ -157,30 +164,32 @@ cuerpo. Nada de gradientes llamativos ni animaciones excesivas.
 | 2 | Sitio público: home, servicios, sobre Claudia, FAQ, políticas | [x] **Completo** |
 | 3 | Diagnóstico interactivo + captación de leads (popup) | [x] **Completo** |
 | 4 | **Cobro universal + CRM en Google Sheets** | [x] **Completo y en producción** |
-| 5 | **Agendamiento: calendario propio sobre Google Calendar** | [ ] **Siguiente** |
-| 6 | Checkout Square + webhook de confirmación de pago | [ ] Pendiente |
-| 7 | Correos por n8n: confirmación, copia admin, recordatorios | [ ] Pendiente |
-| 8 | Cierre de front end: A11Y, SEO, 404/500, contenido pendiente | [ ] Pendiente |
-| 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | [ ] Pendiente |
-| 10 | Enlace de calendario para referidos (30 min gratis / cupón) | [ ] Pendiente |
-| 11 | Post-cita: resumen IA + envío de propuestas | [ ] Pendiente |
-| 12 | Hardening, tests de flujos críticos + deploy | [ ] Pendiente |
+| 5 | **Agendamiento: calendario propio sobre Google Calendar** | [x] **Completo** (2026-08-06) |
+| 6 | Checkout Square + webhook de confirmación de pago | [x] **Completo — primer pago real** (2026-08-06) |
+| 7 | Correos por n8n: confirmación, copia admin, recordatorios | [~] Los 3 workflows activos; **ningún recordatorio ha corrido sobre una cita real** |
+| 8 | Cierre de front end: A11Y, SEO, 404/500, contenido pendiente | [~] Código entregado; lo abierto depende de la clienta |
+| 9 | Gestión de la cita con token (ver / reprogramar / cancelar) | [~] Next.js listo; **3 workflows sin publicar** |
+| — | Flujo v2: asistente virtual, estados de entrega, liberar hueco | [~] En curso desde el 2026-08-07 |
+| 10 | Hardening, tests de flujos críticos + deploy | [ ] Pendiente |
+| 🧊 | ~~Referidos~~ · ~~Post-cita~~ | Fuera del alcance (2026-08-06) |
 
-✅ **El bloqueante para publicar está resuelto** (2026-08-05). Los leads del diagnóstico llegan al
-CRM de verdad: verificado contra producción con `delivery: "delivered"`. El sitio ya no pierde
-contactos.
+✅ **El sitio cobra de verdad.** El 2026-08-06 a las 14:48 UTC entró el primer pago real: la cadena
+checkout → Square → webhook → n8n → Calendar → Meet → correo → CRM funcionó de punta a punta. Agendar
+y pagar **ya se puede hacer**.
 
-⚠️ **Lo que todavía NO se puede hacer en el sitio:** agendar y pagar. El resultado del diagnóstico
-lo dice con todas sus letras y ofrece el teléfono de la firma. Eso se cierra en las fases 5 y 6.
+🔴 **Lo que hay que mirar antes que nada:** tres decisiones ya commiteadas **no están aplicadas en
+n8n ni desplegadas**. Está auditado y con checklist en
+[`00-roadmap.md`](./00-roadmap.md) § *Deriva entre el repo y producción*.
 
 ---
 
 ## Principio Fundamental
 
 > **Ninguna cita existe sin pago confirmado y sin slot bloqueado en Google Calendar.**
-> El pago (o el cupón de referido) es la única puerta de entrada al agendamiento, y el calendario
-> de Google es la **única fuente de verdad** de disponibilidad. La base de datos refleja el
-> calendario, nunca al revés.
+> El pago es la única puerta de entrada al agendamiento, y el calendario de Google es la **única
+> fuente de verdad** de disponibilidad. El CRM refleja el calendario, nunca al revés — y sin base de
+> datos, **el evento de Calendar es el único registro de la cita** (por eso el token de ADR-016 se
+> firma en vez de guardarse).
 
 ---
 
@@ -208,8 +217,8 @@ Estas reglas provienen de `context.md` §8 y deben respetarse en TODA implementa
 | [`02-architecture.md`](./02-architecture.md) | Estructura de carpetas, flujo de datos, ADRs |
 | [`03-security.md`](./03-security.md) | Credenciales, RLS, validación, PII |
 | [`04-deployment.md`](./04-deployment.md) | Proceso de deploy y checklist |
-| [`DB_SCHEMA.md`](./DB_SCHEMA.md) | Esquema completo de base de datos |
+| [`DB_SCHEMA.md`](./DB_SCHEMA.md) | 🧊 **Congelado** (ADR-010) — diseño de referencia, no implementado |
 | [`API_DOCS.md`](./API_DOCS.md) | Endpoints |
-| [`SKILLS.md`](./SKILLS.md) | Skills y MCP servers disponibles |
-| [`features/`](./features/) | Un doc por funcionalidad (FASE 2) |
+| [`SKILLS.md`](./SKILLS.md) | Skills y MCP servers disponibles — el MCP de **n8n** es el central |
+| [`features/`](./features/) | Un doc por funcionalidad (9 documentos) |
 | [`../context.md`](../context.md) | Contexto de negocio original del cliente |
