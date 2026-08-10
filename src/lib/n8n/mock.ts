@@ -162,5 +162,12 @@ export function mockN8nResponse(webhook: string, payload: unknown): unknown {
   if (webhook === "cancel") return { cancelled: true };
   if (webhook === "reschedule") return { received: true };
 
+  // Releasing an unpaid hold destroys nothing that was not going to expire on
+  // its own, so the happy path is safe to simulate. It answers `released: true`
+  // unconditionally BECAUSE the real guard is in the workflow, not here — a
+  // mock that pretended to enforce "only tentative, only RESERVA SIN PAGAR"
+  // would be inventing a protection the caller must never rely on this side.
+  if (webhook === "release") return { released: true };
+
   return null;
 }

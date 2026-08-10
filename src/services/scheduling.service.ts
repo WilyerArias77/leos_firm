@@ -111,3 +111,43 @@ export async function holdSlot(request: SlotHoldRequest): Promise<string | null>
 
   return eventId;
 }
+
+/**
+ * Frees an unpaid hold the moment the visitor walks away (client request,
+ * 2026-08-07).
+ *
+ * **This is an optimisation, never a guarantee**, and the difference is the
+ * whole design. The slot ALREADY disappears on its own: the WF4 cleaner deletes
+ * it after `SLOT_HOLD_MINUTES`. This only makes it happen sooner, so every
+ * failure here is harmless — the worst case is the calendar we had yesterday.
+ * That is why it returns a boolean nobody has to act on.
+ *
+ * **A declined card must NOT call this.** The client's own process spec (§4)
+ * asks for a retry, and a decline is an ordinary event — bank checks, a wrong
+ * CVV, an expired 3-D Secure. Deleting the slot there would take the hour away
+ * from someone who is about to fix their card, and leave the retry with nothing
+ * to retry against. The trigger is the visitor LEAVING: closing the payment
+ * screen, saying no, or telling the assistant to drop it. Decided with the
+ * client on 2026-08-07 against the alternative of deleting on first decline.
+ *
+ * 🔒 **The guard lives in the workflow, not here.** `Leos Firm - Liberar hueco`
+ * refuses to delete anything that is not `status: tentative` AND titled
+ * `RESERVA SIN PAGAR…`. Without that check this endpoint would be a way to
+ * delete other people's PAID appointments by guessing an id. With it, the worst
+ * an attacker achieves is releasing a hold that was going to expire anyway.
+ */
+export async function releaseSlot(eventId: string): Promise<boolean> {
+  if (!eventId) return false;
+
+  const response = await requestFromN8n<Record<string, unknown>>("release", {
+    event_id: eventId,
+  });
+
+  if (!response) {
+    // Not an error worth surfacing: the cleaner is the backstop.
+    console.warn("[agenda] no se pudo liberar el hueco; el limpiador lo tomará");
+    return false;
+  }
+
+  return response.released === true || response.deleted === true;
+}

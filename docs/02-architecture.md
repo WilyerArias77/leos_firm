@@ -296,6 +296,7 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n, header `x-leosfirm-token` | secreta | SÍ |
 | `N8N_AVAILABILITY_WEBHOOK_URL` | Webhook de disponibilidad (FASE 5). Sin ella: mock fuera de producción, `502` en producción | secreta | NO |
 | `N8N_BOOKING_WEBHOOK_URL` | Webhook de reserva tentativa (FASE 5). Mismo comportamiento al faltar | secreta | NO |
+| `N8N_RELEASE_WEBHOOK_URL` | Libera el hueco cuando el visitante abandona el pago (2026-08-07). Sin ella el hueco expira igual, solo más tarde | secreta | NO |
 | `N8N_CONFIRM_WEBHOOK_URL` | Webhook de confirmación tras el pago (FASE 6) | secreta | NO |
 | `N8N_PAYMENTS_WEBHOOK_URL` | Webhook del registro de pagos, pestaña `Pagos` (FASE 6, ADR-013) | secreta | NO |
 | `N8N_APPOINTMENT_WEBHOOK_URL` | Webhook que lee la cita del calendario (FASE 9). Sin base de datos, es la única forma de mostrarla | secreta | NO |

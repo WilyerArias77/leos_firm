@@ -864,6 +864,53 @@ La rejilla de 30 min fue una decisión explícita de la clienta el mismo día, e
 alternativa de dejar la rejilla en 60 y quedarse con 8 citas de media hora separadas por media hora
 libre. Escogió densidad.
 
+### Liberar el hueco — 2026-08-07
+
+La clienta pidió que *«si el pago no es exitoso, se debe borrar inmediatamente la cita registrada con
+ese cliente»*. Eso **contradecía el §4 de su propio documento de proceso**, que pide informar del
+fallo y **permitir un reintento manteniendo la cita**. Se le planteó la contradicción y eligió:
+
+> **El rechazo de la tarjeta NO libera nada. Lo que libera es que el visitante se vaya.**
+
+Y es la elección correcta. Una tarjeta rechazada es un evento ordinario —saldo, verificación
+antifraude del banco, un CVV mal escrito, un 3-D Secure que expira— y borrar el hueco ahí le quita la
+hora a alguien que está a punto de corregir la tarjeta, además de dejar el reintento sin nada contra
+qué reintentar.
+
+| Qué pasa | Qué hacemos |
+|---|---|
+| Tarjeta rechazada | **Nada.** Se muestra el error y se permite reintentar. El hueco sigue apartado |
+| Cierra la pestaña, o pulsa *«Prefiero no continuar»* | **Se libera al instante** |
+| Desaparece sin decir nada | Lo toma el WF4 a los `SLOT_HOLD_MINUTES` |
+
+**Es una optimización, nunca una garantía**, y de ahí sale todo el diseño. El hueco ya expiraba solo;
+esto solo hace que la agenda se libere antes. Por eso ningún fallo de esta ruta importa: el peor caso
+es el calendario que teníamos ayer. El endpoint responde **siempre `200`**, y `N8N_RELEASE_WEBHOOK_URL`
+es opcional.
+
+**Cómo se detecta que se fue:** `pagehide`, no `beforeunload`. En móvil, Safari y Chrome congelan una
+pestaña en segundo plano y la matan sin disparar `beforeunload` nunca. Y **`visibilitychange` está
+descartado a propósito**: cambiar de app para copiar el número de la tarjeta desde el banco es lo más
+normal que hace quien paga, y liberar el hueco ahí sería exactamente lo contrario de lo que se busca.
+La petición sale por `navigator.sendBeacon`, que es lo único que el navegador garantiza entregar
+mientras la página se destruye — un `fetch` normal se cancela con ella.
+
+#### 🔒 El candado vive en el workflow, no en el endpoint
+
+`POST /api/v1/appointments/release` **no pide token firmado**: el `eventId` es lo único que el
+navegador tiene, y exigir el token de ADR-016 sería imposible —ese token solo se emite *después* del
+pago—. Lo que hace inofensivo al endpoint es que el WF `Leos Firm - Liberar hueco` solo borra si se
+cumplen **las tres condiciones a la vez**:
+
+1. el evento existe (`200`)
+2. `status === "tentative"` — nadie ha pagado por él
+3. el título empieza por `RESERVA SIN PAGAR`
+
+Una cita **pagada falla la 2 y la 3**: el WF3 le pone `confirmed` y le cambia el título a
+`Consulta — …`. Un evento que Claudia creó a mano falla la 3. Sin esas condiciones, este endpoint
+sería una forma de **borrar las citas pagadas de otros clientes adivinando ids**; con ellas, lo peor
+que consigue un atacante es liberar un hueco que iba a expirar solo en 15 minutos.
+
 #### ⚠️ Decisión 6: `bufferMinutes` sigue declarado y sin usar
 
 `BUSINESS_HOURS` declara `bufferMinutes: 15` y lo describe como *"gap between appointments"*, pero

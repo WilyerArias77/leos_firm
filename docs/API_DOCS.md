@@ -386,6 +386,35 @@ en ningún lado — verificarlo es recalcular el HMAC y compararlo en tiempo con
 
 ---
 
+**`POST /api/v1/appointments/release`** — Pública · rate limit 5 / 10 min por IP · **siempre `200`**
+
+Libera una reserva **sin pagar** en cuanto el visitante abandona la pantalla de pago, en vez de
+esperar al limpiador (`features/scheduling.md` § Liberar el hueco).
+
+```json
+{ "eventId": "jopd89gge2hud9jkddlr14s72k" }
+```
+
+```json
+{ "released": true }
+```
+
+**Responde `200` incluso cuando falla**, y no es dejadez: liberar es una optimización, no una
+garantía —el hueco expira solo a los `SLOT_HOLD_MINUTES` pase lo que pase aquí— y quien llama suele
+ser un `navigator.sendBeacon` de una pestaña que se está cerrando, cuya respuesta nadie va a leer.
+`{ "released": false }` significa «no se liberó ahora», nunca «algo se rompió».
+
+> 🔒 **No pide token firmado, y no es un descuido.** El token de ADR-016 solo se emite *después* del
+> pago, así que una reserva impaga no puede tener uno. Lo que protege este endpoint es el candado del
+> workflow: solo borra eventos `tentative` titulados `RESERVA SIN PAGAR…`. Una cita pagada falla las
+> dos condiciones, así que **es imposible borrar la cita de otro cliente por aquí** — lo peor que
+> consigue quien adivine un id es liberar un hueco que iba a expirar solo.
+
+> ⚠️ **Una tarjeta rechazada NO debe llamar a este endpoint.** El §4 del flujo de la clienta pide
+> reintento, y un rechazo es un evento normal. El disparador es que el visitante *se vaya*.
+
+---
+
 **`POST /api/v1/appointments/[token]/cancel`** — Token firmado · rate limit 5 / 10 min por IP
 
 Sin cuerpo. Libera el slot en Calendar, pone la fila del CRM en `cancelado` y manda dos correos
