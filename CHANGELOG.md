@@ -6,6 +6,67 @@
 
 ---
 
+## [2026-08-07] — El flujo v2: vuelve el agente de IA, pero con las manos atadas — v0.10.0
+
+### Request original
+> *(Documento «Flujo de Procesos – LEOS FIRM», 8 secciones, entregado por la clienta)* · seguido de
+> las respuestas a mis preguntas bloqueantes: **1.** El asistente: con las manos atadas al servidor
+> (pero que maneje una conversación natural). **2.** La cliente quiere ver en su página web un
+> asistente virtual y quiere más desarrollos futuros con AI. **3.** El estado "Finalizado" convive con
+> los estados nuevos. **4.** Un hueco sin pagar se debe retener máximo 15 minutos. **5.** El archivo
+> CRM "DIAGNOSTICO LEOS FIRM" ya existe y el calendario "Consultas Leos Firm" también. **6.** Deja
+> solo Meet porque convive con GMAIL, DRIVE etc. **7.** Ya existen las credenciales de
+> claudia@leosfirm.com en n8n.
+
+### Hallazgo que reordenó el trabajo
+🔴 **«Reescribe los workflows para actualizar las credenciales» no se puede hacer, y haría daño.**
+Consultada la referencia del SDK de n8n: el único mecanismo es `newCredential('Nombre')`, que **crea
+una credencial nueva y vacía**. No hay forma de apuntar a una existente, ni por nombre ni por ID, y el
+MCP no expone ninguna herramienta de credenciales. Reescribir por MCP no actualiza credenciales: **las
+borra** — en siete workflows activos en producción. Asignar una credencial es una operación de UI que
+no toca la definición, y es el único camino seguro.
+
+### Tipo de cambio
+- **NEGOCIO (`src/constants/business.ts`)**: `SLOT_HOLD_MINUTES` **30 → 15**. ⚠️ Este número fue 10 y
+  los 10 causaron un fallo real —el limpiador borraba el slot mientras el cobro estaba en curso:
+  *cobro hecho, cita imposible*—. El riesgo se puso por escrito y la clienta eligió 15 igualmente;
+  queda documentado en la constante como primer sospechoso si aparecen reembolsos por «pagué y no
+  tengo cita». **El cambio en el repo no hace nada por sí solo**: la constante es documentación, y la
+  única copia que se aplica está en el nodo Code del WF4
+- **DOCS (`features/virtual-assistant.md`)**: doc nuevo del asistente — las 5 herramientas, las 6
+  prohibiciones, los 3 niveles de degradación y la frontera del token firmado
+- **ADR-018** (`02-architecture.md`): el asistente conversa; el servidor decide. Se construye lo que
+  la clienta pidió **sin** darle escritura directa sobre Calendar, así que **ADR-005 sobrevive**
+- **ADR-004 cerrado**: solo Google Meet. Zoom sale del alcance — retirado de `.env.example`, de la
+  tabla de entorno, de `04-deployment.md` y de `01-project-overview.md`. No se borra código porque
+  nunca se implementó: se evita escribirlo
+
+### Hallazgos del WF4 «Limpiar reservas vencidas»
+- **El trigger se llama «Cada 10 minutos» y está configurado a 30.** El nombre miente desde el día
+  uno. Con retención de 15, un slot se borrará entre los 15 y los 45 minutos
+- **`SLOT_HOLD_MINUTES` en el repo nunca se lee**: solo aparece en un comentario de
+  `scheduling.service.ts`. La verdad operativa vive únicamente en n8n
+
+### Decisiones de la clienta registradas
+| Tema | Elegido | Nota |
+|---|---|---|
+| Autonomía del asistente | **Atado al servidor** | Recomendación aceptada; ADR-005 intacto |
+| Dónde vive | **n8n**, ventana emergente en la página | Sobre la alternativa de Next.js con `@anthropic-ai/sdk` |
+| Retención del slot | **15 min** | Riesgo advertido y asumido |
+| Sala virtual | **Solo Meet** | Zoom fuera |
+| Estado `Finalizado` | **Convive** con los nuevos | Necesita un disparador post-cita que hoy no existe |
+
+### Pendiente
+- Estados `Pendiente de Atención → Atendido → Finalizado` — reabre la fase *Post-cita*, que estaba
+  fuera de alcance desde el 2026-08-06
+- El lote único de cambios de n8n (WF4 a 15, asunto del WF3, hoja nueva, estados)
+- Decidir widget `@n8n/chat` (dependencia nueva) frente a UI propia
+
+### Validación
+`npm run build` ✅ · `npm run lint` ✅ · rama `feat/asistente-virtual-y-flujo-v2`
+
+---
+
 ## [2026-08-07] — Las citas bajan a 30 minutos y la firma deja de hablarle al cliente con la voz de Marco — v0.9.4
 
 ### Request original

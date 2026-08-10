@@ -318,7 +318,7 @@ Validadas al arrancar por `src/lib/env.ts` (Zod). Si falta una requerida, la app
 | `ADMIN_NOTIFICATION_EMAIL` | Correo que recibe la copia de cada cita | config | SÍ |
 | `BUSINESS_TIMEZONE` | Default `America/Chicago` | config | NO |
 | `CRON_SECRET` | Autenticación de los cron jobs | secreta | SÍ |
-| `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Proveedor alternativo a Meet | secreta | NO |
+| ~~`ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`~~ | **Retiradas el 2026-08-07** — solo Meet (ADR-004) | — | ❌ |
 
 > **⏸️ congelada** significa que la variable sigue documentada pero **no se usa** desde ADR-010.
 > Las `GOOGLE_*` quedan igual: las credenciales de Google viven en n8n, no en la app. Ninguna de las
@@ -393,13 +393,25 @@ horario de oficina configurado. `appointments` es un espejo local.
 **Consecuencias:** Dependencia dura de la API de Google. Se necesita manejo de errores y un
 bloqueo temporal del slot (`slot_holds`, TTL ~10 min) para evitar carreras entre dos clientes.
 
-### ADR-004: Google Meet por defecto, Zoom como adaptador
-**Fecha:** 2026-08-02
-**Contexto:** El flujo pide "Google Meet / Zoom". Meet se crea gratis en la misma llamada que crea
+### ADR-004: ~~Google Meet por defecto, Zoom como adaptador~~ → **solo Google Meet**
+**Fecha:** 2026-08-02 · **Cerrado el 2026-08-07**
+**Contexto:** El flujo pedía "Google Meet / Zoom". Meet se crea gratis en la misma llamada que crea
 el evento de Calendar (`conferenceData`); Zoom requiere OAuth server-to-server aparte.
-**Decisión:** Interfaz `MeetingProvider` en `src/lib/google/` con implementación `google-meet`
-(default) y `zoom` (opcional, activada por variables de entorno).
-**Consecuencias:** Cambiar de proveedor es un cambio de configuración, no de código de negocio.
+**Decisión original:** interfaz `MeetingProvider` en `src/lib/google/` con implementación
+`google-meet` (default) y `zoom` (opcional, activada por variables de entorno).
+
+> ✅ **Resuelto el 2026-08-07: solo Meet, y la abstracción no se construye.** La clienta eligió Meet
+> *«porque convive con Gmail, Drive, etc.»* — que es exactamente la razón por la que ya era el
+> default: nace del mismo `conferenceData` del evento y de la misma credencial de Google que ya está
+> conectada, sin una integración más que mantener.
+>
+> **Zoom sale del alcance.** Las tres variables `ZOOM_*` se retiran de la tabla de entorno y el
+> adaptador `MeetingProvider` no llega a existir. Ninguna de las dos partes se había implementado, así
+> que esto no borra código: evita escribirlo. Si algún día vuelve Zoom, el punto de extensión sigue
+> siendo el mismo — el paso del WF3 que crea el evento con `conferenceData`.
+
+**Consecuencias:** una integración menos, una familia de credenciales menos y un proveedor menos que
+pueda caerse. El enlace de la reunión lo genera Google al confirmar la cita y viaja en el correo.
 
 ### ADR-005: El agente IA asiste, no decide
 **Fecha:** 2026-08-02
@@ -793,3 +805,30 @@ calendario siga habiendo nacido en la cuenta de Marco antes que romper citas pag
   dominio.
 - Cambiar la credencial de un workflow **no** es cambiar el workflow: se hace en la UI de n8n sin
   tocar su definición, así que no dispara el borrado de credenciales que provoca actualizar por MCP.
+
+### ADR-018: el asistente virtual conversa; el servidor decide
+
+**Fecha:** 2026-08-07 · **Detalle:** [`features/virtual-assistant.md`](./features/virtual-assistant.md)
+
+**Contexto.** La clienta pidió un asistente virtual en el sitio con *«autonomía para registrar,
+modificar y cancelar todas las citas»*. Eso choca con **ADR-005**, que prohíbe que la IA decida
+disponibilidad o estado de pago — y revierte además su propia decisión anterior de no usar un agente
+de IA en el agendamiento.
+
+**Decisión.** Se construye el asistente, **sin darle las llaves**. Vive en n8n (elección de la
+clienta) y se muestra en una ventana emergente del sitio, pero **no toca Google Calendar ni la hoja
+del CRM**: sus cinco herramientas son llamadas a endpoints de Next.js que ya validan. El agente
+propone; el servidor decide y ejecuta.
+
+**Consecuencias.**
+- **ADR-005 sobrevive intacto.** La disponibilidad sigue siendo resta determinista: si el modelo
+  inventa un horario, `POST /api/v1/appointments` lo rechaza al revalidar contra el calendario real.
+- **Ningún permiso de Google nuevo**, y ninguna credencial nueva fuera de n8n.
+- **El calendario propio de la FASE 5 no se retira.** El asistente es una capa encima; quien no
+  quiera hablar con una máquina agenda como hasta ahora.
+- **El cobro no es una herramienta del agente.** Lleva al visitante hasta la pantalla de pago y suelta
+  el control ahí. Una IA no toca una tarjeta.
+- **Cancelar y reprogramar exigen el token firmado de ADR-016**, que solo está en el correo del
+  cliente. El agente no puede saltárselo porque quien verifica el HMAC es el endpoint.
+- **Nuevo modo de fallo visible:** si n8n cae, el chat cae. Se acepta con degradación en tres niveles
+  y el botón a `/agendar` siempre presente (ADR-007: el sitio no bloquea sobre servicios externos).

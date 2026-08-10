@@ -79,7 +79,7 @@ Miami, California, Texas) que necesitan constituir, regularizar o administrar em
 | Auth | Supabase Auth | — | Solo para el panel admin (el cliente NO necesita cuenta) |
 | Pagos | Square (Web Payments SDK + Node SDK) | `square` ^latest | Requisito explícito del flujo operativo |
 | Calendario | Google Calendar API | vía `googleapis` | Disponibilidad, creación de citas, sincronización |
-| Sala virtual | Google Meet (conferenceData) / Zoom | — | Meet como default; Zoom como proveedor alternativo |
+| Sala virtual | Google Meet (`conferenceData`) | — | **Solo Meet** desde el 2026-08-07 (ADR-004). Zoom retirado del alcance |
 | Correo | Gmail API | vía `googleapis` | Confirmaciones, recordatorios y copia al administrador |
 | Agente IA | Claude (Anthropic API) | `@anthropic-ai/sdk` | Formulario inteligente, validación semántica y resumen post-cita |
 | Validación | Zod + React Hook Form | — | Validación compartida cliente/servidor |
