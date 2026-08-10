@@ -51,6 +51,67 @@ export function canAdvanceStage(from: CrmStage, to: CrmStage): boolean {
 }
 
 /**
+ * Whether the service was actually delivered — `Flujo de Procesos` §8, added by
+ * the client on 2026-08-07.
+ *
+ * **This is a SECOND axis, not a replacement for `CrmStage`**, and keeping them
+ * apart is the whole design. `CrmStage` measures how far down the funnel the
+ * contact travelled and decides which columns a write may touch; this measures
+ * whether the firm has done its part. Collapsing them into one column would
+ * force the sheet to answer two different questions with one word, and would
+ * break the monotonic upsert that stops a late Square webhook from downgrading a
+ * paid row.
+ *
+ * Values are Spanish, capitalised, exactly as they must read in the sheet:
+ * Claudia's spreadsheet IS the admin panel (ADR-010), so these are UI strings
+ * even though they live in a type (Mandamiento XI).
+ *
+ * `Atendido` means "the confirmation email went out", which is the client's
+ * definition and not the obvious reading of the word — it does NOT mean the
+ * consultation happened. That is `Finalizado`.
+ */
+export type ServiceStatus = "Pendiente de Atención" | "Atendido" | "Finalizado";
+
+/** Same monotonic guarantee as `CRM_STAGE_ORDER`, on the other axis. */
+export const SERVICE_STATUS_ORDER: Record<ServiceStatus, number> = {
+  "Pendiente de Atención": 1,
+  Atendido: 2,
+  Finalizado: 3,
+};
+
+/**
+ * The delivery status implied by a funnel stage, or `null` when the stage must
+ * not touch this column.
+ *
+ * Derived rather than passed in: a caller that had to supply both could set them
+ * inconsistently, and there is exactly one correct mapping.
+ *
+ * - `formulario` / `agenda` → nothing is owed yet, or it is owed and unpaid.
+ * - `pagado` → **`Atendido`**. The same WF3 run that confirms the payment sends
+ *   the confirmation email, so by the time this row is written the email is out.
+ *   That is precisely the client's trigger for `Atendido`.
+ * - `cancelado` → **`null`**. A cancelled appointment was neither attended nor
+ *   finished, and the stage column already says so. Writing anything here would
+ *   overwrite a true value with a misleading one.
+ *
+ * ⚠️ **`Finalizado` is never returned.** Nothing in the request/response cycle
+ * knows that a consultation happened — it is true only once the clock passes the
+ * appointment's end. It has to be stamped by a scheduled workflow, which does
+ * not exist yet: see `docs/features/crm-sheets.md` § Estados de entrega.
+ */
+export function serviceStatusForStage(stage: CrmStage): ServiceStatus | null {
+  switch (stage) {
+    case "formulario":
+    case "agenda":
+      return "Pendiente de Atención";
+    case "pagado":
+      return "Atendido";
+    case "cancelado":
+      return null;
+  }
+}
+
+/**
  * Whether the row reached the sheet.
  *
  * `failed` is not an error the visitor caused, so it never blocks the flow — it
@@ -69,6 +130,8 @@ export type CrmDelivery = "delivered" | "failed";
 export type CrmRow = {
   lead_id: string;
   stage: CrmStage;
+  /** Second axis — see `ServiceStatus`. Always derived, never passed in. */
+  service_status: ServiceStatus;
   updated_at: string;
 
   full_name: string;
@@ -109,6 +172,7 @@ export type CrmRow = {
 export type CrmAppointmentRow = {
   lead_id: string;
   stage: CrmStage;
+  service_status: ServiceStatus;
   updated_at: string;
 
   /**
@@ -149,6 +213,7 @@ export type CrmAppointmentRow = {
 export type CrmPaymentRow = {
   lead_id: string;
   stage: CrmStage;
+  service_status: ServiceStatus;
   updated_at: string;
 
   /** Square's payment id. Kept for support and for FASE 9 refunds. */
