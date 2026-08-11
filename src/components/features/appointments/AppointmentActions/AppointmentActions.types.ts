@@ -16,6 +16,4 @@ export type AppointmentActionsProps = {
   clientTimezone: string;
   /** Sizes the slot grid from the catalog (ADR-019). May be empty. */
   serviceSlug: string;
-  /** The firm's phone, for when our side fails. */
-  phone: string;
 };

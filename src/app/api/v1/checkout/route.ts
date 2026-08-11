@@ -27,7 +27,7 @@ const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 /** Same fallback as the rest of the funnel: our failure, their phone call. */
 const UPSTREAM_MESSAGE =
   `No pudimos procesar el pago en este momento. Tu horario sigue apartado — ` +
-  `llámanos al ${COMPANY.phone} y lo completamos contigo.`;
+  `escríbenos a ${COMPANY.email} y lo completamos contigo.`;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request.headers);

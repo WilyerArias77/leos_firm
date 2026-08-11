@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { CalendarClock, CheckCircle2, Loader2, Mail, Phone, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, Loader2, Mail, X } from "lucide-react";
 import { RescheduleCalendar } from "@/components/features/appointments/RescheduleCalendar";
 import { Button } from "@/components/ui/Button";
+import { COMPANY } from "@/constants/business";
 import { RESCHEDULE_PREFERENCE_MAX } from "@/lib/validation/appointment-management.schema";
 import {
   cancelAppointmentByToken,
@@ -57,7 +58,6 @@ export function AppointmentActions({
   startUtc,
   clientTimezone,
   serviceSlug,
-  phone,
 }: AppointmentActionsProps) {
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
@@ -123,8 +123,8 @@ export function AppointmentActions({
     return (
       <Outcome title="Recibimos tu solicitud">
         <strong className="font-medium text-ink">Tu cita sigue en pie por ahora.</strong> Claudia
-        te va a escribir para acordar el nuevo horario. Si necesitas algo antes, llámanos al{" "}
-        {phone}.
+        te va a escribir para acordar el nuevo horario. Si necesitas algo antes, escríbele a{" "}
+        {COMPANY.email}.
       </Outcome>
     );
   }
@@ -137,7 +137,7 @@ export function AppointmentActions({
           {formatDayInZone(new Date(movedTo), clientTimezone)} a las{" "}
           {formatTimeInZone(new Date(movedTo), clientTimezone)}
         </strong>
-        . Te llega un correo con la hora nueva, y el enlace de la reunión sigue siendo el mismo de
+        {" "}Te llega un correo con la hora nueva, y el enlace de la reunión sigue siendo el mismo de
         antes. Claudia ya está avisada.
       </Outcome>
     );
@@ -283,7 +283,7 @@ export function AppointmentActions({
           role="alert"
           className="mt-4 flex flex-wrap items-center gap-2 rounded-card border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-ink"
         >
-          <Phone className="h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+          <Mail className="h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
           {error}
         </p>
       ) : null}

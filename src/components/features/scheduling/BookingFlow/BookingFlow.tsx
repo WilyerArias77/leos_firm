@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { CircleCheckBig, Clock, Mail, Phone, RotateCw } from "lucide-react";
+import { CircleCheckBig, Clock, Mail, RotateCw } from "lucide-react";
 import { PaymentPanel } from "@/components/features/payments/PaymentPanel";
 import { AvailabilityCalendar } from "@/components/features/scheduling/AvailabilityCalendar";
 import { BookingForm } from "@/components/features/scheduling/BookingForm";
@@ -22,7 +22,6 @@ import type { AppointmentHold } from "@/types/scheduling.types";
 import type { BookingFlowProps } from "./BookingFlow.types";
 import type { BookingFormValues } from "@/components/features/scheduling/BookingForm";
 
-const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
 
 /** Never fires: the snapshot is a constant, we only need server vs. client. */
 const subscribeToNothing = () => () => {};
@@ -165,11 +164,11 @@ export function BookingFlow({ service }: BookingFlowProps) {
             </Button>
 
             <a
-              href={PHONE_HREF}
+              href={`mailto:${COMPANY.email}`}
               className="inline-flex items-center gap-2 rounded-card px-4 py-2.5 text-sm text-accent underline underline-offset-4"
             >
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              Agendar por teléfono · {COMPANY.phone}
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              Agendar por correo · {COMPANY.email}
             </a>
           </div>
         </div>
@@ -365,10 +364,10 @@ function PaidAppointment({
       </p>
 
       <p className="mt-4 text-xs leading-relaxed text-ink-muted">
-        ¿Alguna duda? Llámanos al{" "}
-        <a href={PHONE_HREF} className="inline-flex items-center gap-1 text-accent underline underline-offset-4">
-          <Phone className="h-3 w-3" aria-hidden="true" />
-          {COMPANY.phone}
+        ¿Alguna duda? Escríbenos a{" "}
+        <a href={`mailto:${COMPANY.email}`} className="inline-flex items-center gap-1 text-accent underline underline-offset-4">
+          <Mail className="h-3 w-3" aria-hidden="true" />
+          {COMPANY.email}
         </a>
       </p>
     </div>

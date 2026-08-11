@@ -34,7 +34,7 @@ const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
  */
 const UPSTREAM_MESSAGE =
   `No pudimos cancelar tu cita en este momento, así que sigue en pie. ` +
-  `Llámanos al ${COMPANY.phone} y la cancelamos contigo.`;
+  `Escríbenos a ${COMPANY.email} y la cancelamos contigo.`;
 
 export async function POST(
   request: Request,
@@ -86,7 +86,7 @@ export async function POST(
           error: "APPOINTMENT_PAST",
           message:
             "Esa consulta ya empezó, así que no se puede cancelar desde aquí. " +
-            `Si necesitas hablar de tu caso, llámanos al ${COMPANY.phone}.`,
+            `Si necesitas hablar de tu caso, escríbenos a ${COMPANY.email}.`,
         },
         { status: 409, headers: NO_STORE },
       );

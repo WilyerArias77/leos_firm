@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CalendarX2, Clock, Mail, MapPin, Phone, Video } from "lucide-react";
+import { CalendarX2, Clock, Mail, MapPin, Video } from "lucide-react";
 import { AppointmentActions } from "@/components/features/appointments/AppointmentActions";
 import { AppointmentTime } from "@/components/features/appointments/AppointmentTime";
 import { Container } from "@/components/layout/Container";
@@ -42,8 +42,6 @@ export const metadata: Metadata = {
   // A private link must never end up in an index.
   robots: { index: false, follow: false },
 };
-
-const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
 
 const STATUS_COPY: Record<AppointmentStatus, { label: string; className: string }> = {
   confirmed: { label: "Confirmada", className: "border-success/30 bg-success/5 text-success" },
@@ -147,20 +145,19 @@ export default async function AppointmentPage(props: PageProps<"/agendar/cita/[t
             startUtc={view.startUtc}
             clientTimezone={view.bookedTimezone}
             serviceSlug={lookup.appointment.serviceSlug}
-            phone={COMPANY.phone}
           />
         ) : (
           <ClosedNotice status={view.status} />
         )}
 
         <p className="mt-10 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-          <Phone aria-hidden="true" className="h-4 w-4 text-navy-500" />
+          <Mail aria-hidden="true" className="h-4 w-4 text-navy-500" />
           <span>¿Prefieres hablarlo con nosotros?</span>
           <a
             className="font-medium text-accent underline underline-offset-4 hover:no-underline"
-            href={PHONE_HREF}
+            href={`mailto:${COMPANY.email}`}
           >
-            {COMPANY.phone}
+            {COMPANY.email}
           </a>
         </p>
       </Container>

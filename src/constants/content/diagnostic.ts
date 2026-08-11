@@ -82,7 +82,7 @@ export const DIAGNOSTIC_RESULT_COPY = {
     "Apartamos tu horario mientras completas el pago. Puedes reprogramar sin costo con 24 horas de anticipación.",
   deliveryFailed:
     "Tus datos quedaron registrados en este dispositivo, pero no pudimos enviarlos a Leos Firm. " +
-    `Llámanos al ${COMPANY.phone} y te atendemos con tu diagnóstico en la mano.`,
+    `Escríbenos a ${COMPANY.email} y te atendemos con tu diagnóstico en la mano.`,
   closeLabel: "Seguir explorando el sitio",
 } as const;
 

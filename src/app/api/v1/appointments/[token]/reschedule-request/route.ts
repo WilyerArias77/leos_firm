@@ -30,7 +30,7 @@ const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 
 const UPSTREAM_MESSAGE =
   `No pudimos enviar tu solicitud en este momento. ` +
-  `Llámanos al ${COMPANY.phone} y lo acordamos por teléfono.`;
+  `Escríbenos a ${COMPANY.email} y lo acordamos contigo.`;
 
 export async function POST(
   request: Request,
@@ -107,7 +107,7 @@ export async function POST(
           error: "APPOINTMENT_PAST",
           message:
             "Esa consulta ya empezó, así que no se puede mover desde aquí. " +
-            `Llámanos al ${COMPANY.phone} y vemos cómo seguir.`,
+            `Escríbenos a ${COMPANY.email} y vemos cómo seguir.`,
         },
         { status: 409, headers: NO_STORE },
       );

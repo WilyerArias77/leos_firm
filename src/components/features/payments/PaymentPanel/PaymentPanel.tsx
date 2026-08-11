@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CreditCard, Loader2, Lock, Phone } from "lucide-react";
+import { AlertCircle, CreditCard, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { COMPANY, PAYMENT_POLL } from "@/constants/business";
 import { getSquarePayments } from "@/lib/square/webPayments";
@@ -23,13 +23,12 @@ import type { PaymentPanelProps } from "./PaymentPanel.types";
  * (ADR-002), which is why closing this tab mid-payment loses nothing.
  */
 
-const PHONE_HREF = `tel:+1${COMPANY.phone.replace(/\D/g, "")}`;
 
 /** Square's own error copy is in English; these are the cases worth naming. */
 const TOKENIZE_FAILURE = "Revisa los datos de la tarjeta e inténtalo de nuevo.";
 const SDK_FAILURE =
   `No pudimos cargar el formulario de pago. Puede ser un bloqueador de anuncios o tu conexión. ` +
-  `Recarga la página o llámanos al ${COMPANY.phone}.`;
+  `Recarga la página o escríbenos a ${COMPANY.email}.`;
 
 type Phase = "loading" | "ready" | "paying" | "verifying";
 
@@ -218,11 +217,11 @@ export function PaymentPanel({ service, leadId, eventId, payer, onOutcome }: Pay
         </p>
 
         <a
-          href={PHONE_HREF}
+          href={`mailto:${COMPANY.email}`}
           className="mt-3 inline-flex items-center gap-2 text-sm text-accent underline underline-offset-4"
         >
-          <Phone className="h-4 w-4" aria-hidden="true" />
-          Llamar · {COMPANY.phone}
+          <Mail className="h-4 w-4" aria-hidden="true" />
+          Escribir · {COMPANY.email}
         </a>
       </div>
     );
