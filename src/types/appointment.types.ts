@@ -170,6 +170,13 @@ export type RescheduleRequestResult = {
  * `max_reschedules` travels instead of living in the workflow because the rule
  * belongs to the app and the counter belongs to the event. n8n owns neither
  * decision: it compares a number we send against a number it stores.
+ *
+ * ⚠️ **No `stage` here, unlike `CancelAppointmentPayload`.** Moving an
+ * appointment does not move the person through the funnel — they were `pagado`
+ * before and they are `pagado` after. Inventing a `reprogramado` stage would
+ * break the monotonic upsert that keeps a late Square webhook from downgrading
+ * a paid row (`crm-sheets.md`). The workflow rewrites the appointment's date
+ * and `Actualizado`, and nothing else.
  */
 export type MoveAppointmentPayload = {
   event_id: string;
@@ -184,7 +191,6 @@ export type MoveAppointmentPayload = {
   client_timezone: string;
   moved_at: string;
   max_reschedules: string;
-  stage: "reprogramado";
   updated_at: string;
 };
 

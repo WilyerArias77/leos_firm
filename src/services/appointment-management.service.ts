@@ -339,7 +339,6 @@ export async function moveAppointment(input: {
     client_timezone: appointment.clientTimezone,
     moved_at: now.toISOString(),
     max_reschedules: String(CANCELLATION_POLICY.maxSelfReschedules),
-    stage: "reprogramado",
     updated_at: now.toISOString(),
   };
 
