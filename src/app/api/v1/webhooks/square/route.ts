@@ -54,10 +54,12 @@ export const dynamic = "force-dynamic";
  * concurrent deliveries of 2026-08-10, and confirming the appointment takes ~3 s
  * more.
  *
- * When the budget runs out the process is killed mid-chain. That failure is
- * invisible by construction — no exception to catch, no log, and the `Pagos` row
- * frozen in `recibido` — which is exactly how two real payments (2026-08-07 and
- * 2026-08-10) took money and delivered nothing.
+ * When the budget runs out the process is killed mid-chain, and a killed process
+ * writes no row and logs no reason.
+ *
+ * This was NOT the cause of the 2026-08-07 and 2026-08-10 incidents — that was a
+ * missing `APPOINTMENT_TOKEN_SECRET`, see `fulfil` below. It is hardening for a
+ * failure that had not happened yet.
  */
 export const maxDuration = 60;
 
@@ -182,6 +184,36 @@ function safeJsonParse(raw: string): unknown {
  * able to tell it apart from a row nobody ever wrote.
  */
 async function fulfil(event: {
+  paymentId: string;
+  squareEventId: string;
+  orderId: string;
+}): Promise<void> {
+  try {
+    await deliver(event);
+  } catch (error) {
+    // An exception here is not a payment that failed: it is a payment whose
+    // fulfilment stopped without a word. `after()` swallows the rejection, so
+    // without this the row stays in `recibido` for ever and NOTHING anywhere
+    // says why — no log, no detail, no failed delivery in Square's dashboard.
+    //
+    // That is not hypothetical. It is how the payments of 2026-08-07 and
+    // 2026-08-10 were taken and never delivered: `confirmAppointment` mints the
+    // client's management link on its first line, `APPOINTMENT_TOKEN_SECRET` was
+    // not set in Vercel, and the throw travelled out through here in silence.
+    //
+    // A wrong `error` row is recoverable because a person reads that tab. A
+    // missing one is not, so this writes the row and lets the human decide.
+    const reason = error instanceof Error ? error.message.split("\n")[0] : "excepción desconocida";
+
+    await fail(event, `La entrega se interrumpió: ${reason}. Revisar a mano`);
+  }
+}
+
+/**
+ * The fulfilment itself. Separated from `fulfil` only so the `try` above needs
+ * no re-indentation of everything it guards.
+ */
+async function deliver(event: {
   paymentId: string;
   squareEventId: string;
   orderId: string;

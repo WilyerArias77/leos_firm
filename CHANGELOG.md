@@ -6,7 +6,7 @@
 
 ---
 
-## [2026-08-10] — El webhook de Square se quedaba sin tiempo a media cadena — v0.11.1
+## [2026-08-10] — Una variable de entorno que faltaba se comía los pagos en silencio — v0.11.1
 
 ### Request original
 > *«hizo el pago pero no envio correos, no actualizó el crm, no hizo la reserva del calendario»*
@@ -15,26 +15,38 @@ Incidente con dinero real. Pago `rLtRSJy3GCId0rcn6sYb0Tv38NVZY`, USD 50.00 `COMP
 2026-08-10T23:32:15Z. Ni correo, ni cita confirmada, ni CRM en `pagado`.
 
 ### Causa
-La ruta del webhook no declaraba `maxDuration`, así que corría con el default de Vercel (10 s), y el
-trabajo de `after()` —releer Square, confirmar la cita, avanzar el CRM y cerrar la fila— gasta **ese
-mismo presupuesto**. La cadena no cabe: solo reclamar la fila tardó 2,4–3,7 s bajo las cuatro
-entregas concurrentes de ese día, y confirmar la cita ~3 s más.
+`confirmAppointment()` acuña el enlace de gestión del cliente (FASE 9) en su **primera línea**, antes
+de hablar con n8n. `createAppointmentToken()` → `getAppointmentTokenSecret()` **lanza** si
+`APPOINTMENT_TOKEN_SECRET` falta o mide menos de 32 caracteres — y esa variable **nunca se puso en
+Vercel**.
 
-Al agotarse el presupuesto **el proceso se mata a media cadena**. No hay excepción que atrapar, así
-que ninguno de los `catch` de `payment.service.ts` se dispara, `fail()` nunca llega a escribir su
-motivo, y la fila de `Pagos` queda congelada en `recibido` — el estado que el propio código describe
-como *«money taken and nothing delivered»*.
+El `throw` salía de `fulfil()`, que es el callback de `after()`, y **`after()` se traga el rechazo**.
+Ni `fail()` llegaba a ejecutarse, ni quedaba error en los logs, ni entrega fallida en el panel de
+Square. La fila de `Pagos` se quedaba en `recibido` — *«money taken and nothing delivered»*, dicho por
+el propio código.
 
-Falla por lentitud, no por lógica: por eso el pago del 2026-08-06 (una sola entrega, reclamo rápido)
-sí se confirmó, y los del 2026-08-07 y 2026-08-10 no.
+El 2026-08-06 se confirmó con este mismo código porque el enlace de gestión todavía no existía.
 
 ### Tipo de cambio
-- **PAGOS (`src/app/api/v1/webhooks/square/route.ts`)**: `export const maxDuration = 60`
+- **PAGOS (`src/app/api/v1/webhooks/square/route.ts`)**: `fulfil()` envuelve la entrega en
+  `try/catch` y manda cualquier excepción a `fail()`, que escribe la fila con el motivo. Una variable
+  de entorno ausente no puede volver a comerse un cobro sin decirlo
+- **PAGOS (misma ruta)**: `export const maxDuration = 60`. **No era la causa** —el trabajo moría a los
+  milisegundos, no a los diez segundos— pero la cadena completa puede rozar el default de Vercel
+- **INFRA**: `APPOINTMENT_TOKEN_SECRET` en Vercel. Sin ella el arreglo de código solo consigue que el
+  fallo sea visible, no que desaparezca
+
+### Cómo se encontró
+Lo cerró una sonda: un webhook firmado con un `payment_id` inexistente, que recorre el camino corto
+—una llamada a Square que falla y una escritura— y **escribió** su fila en `error`. Eso probó que
+`after()` sí se ejecuta, y lo único que separa ese camino del real es la acuñación del token.
 
 ### Descartado durante el diagnóstico
 Queda escrito para no volver a recorrerlo: la URL de Square coincidía con `NEXT_PUBLIC_SITE_URL`; la
-clave de firma era correcta (verificado mandando una petición firmada a producción → 200); las
-credenciales de n8n estaban intactas; y el monto cobrado coincidía con el catálogo.
+clave de firma era correcta (verificado mandando una petición firmada a producción → 200); las seis
+ejecuciones de «Leos Firm - Registrar pago» del día 10 terminaron todas bien, así que n8n y sus
+credenciales estaban sanas; «Leos Firm - Confirmar cita» no registró **ninguna** ejecución, lo que
+situó el fallo antes de esa llamada; y el monto cobrado coincidía con el catálogo.
 
 ### Pendiente
 - La carrera del reclamo: cuatro entregas simultáneas leyeron la hoja antes de que ninguna escribiera
