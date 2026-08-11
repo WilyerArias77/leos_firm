@@ -52,7 +52,7 @@ Correo de confirmación
 | Fuera del alcance | Por qué |
 |---|---|
 | **Reembolsos automáticos** | Es la parte caramente compleja y la de menor volumen. Los hace Claudia desde el panel de Square, que es donde ya trabaja el dinero. `03-security.md` lo exige además: *«ningún reembolso desde un endpoint público»* |
-| **Reprogramación en vivo** con calendario y disponibilidad | Reagendar solo es agendar otra vez: exige revalidar el slot, mover el evento, no perder el Meet y no cobrar de nuevo. Un correo cubre el caso real con una fracción de la superficie |
+| ~~**Reprogramación en vivo** con calendario y disponibilidad~~ | ✅ **Construida el 2026-08-11** — ver **ADR-019** más abajo. El razonamiento original («un correo cubre el caso real con una fracción de la superficie») era correcto para la FASE 9 y dejó de serlo cuando la clienta pidió que el cliente pudiera cambiar su cita solo |
 | **Panel de administración** | La hoja **es** el panel (ADR-010) |
 
 ---
@@ -247,6 +247,90 @@ escape lo hace el nodo de n8n; el límite de 500 caracteres lo hace Zod aquí.
 
 > **Por qué 500 y no más:** es un horario preferido, no una carta. Un campo sin techo es una
 > invitación a pegar cualquier cosa dentro del correo de otra persona.
+
+---
+
+## ADR-019: el cliente mueve su propia cita, con el servidor decidiendo
+
+> **Fecha:** 2026-08-11 · **Estado:** aceptada · **Revierte:** el recorte de alcance de la FASE 9
+
+**Contexto.** El 2026-08-06 se decidió no construir la reprogramación en vivo y cubrirla con un
+correo a Claudia. Aquel razonamiento sigue siendo cierto en sus términos —reagendar exige revalidar
+el hueco, mover el evento, conservar el Meet y no volver a cobrar— pero partía de una premisa que
+dejó de valer: que el volumen no lo justificaba.
+
+El 2026-08-11 la clienta pidió que el cliente pudiera **modificar su cita desde el enlace del
+correo**. Su primera formulación fue que lo hiciera el asistente virtual. Planteado que el asistente
+diseñado (ADR-018) tampoco reprograma —su herramienta `pedir_otro_horario` manda el mismo correo que
+ya manda el botón—, eligió la funcionalidad real sin la capa conversacional.
+
+**Decisión.** Se construye la reprogramación en vivo **por encima de las piezas que ya existen**, no
+como un flujo nuevo:
+
+```
+/agendar/cita/[token]  ──▶  el MISMO calendario de /agendar
+                                (useAvailability + AvailabilityCalendar + SlotPicker)
+                                       │
+                                       ▼
+              POST /api/v1/appointments/[token]/reschedule
+                 1. verifica el HMAC del token          (ADR-016)
+                 2. re-aplica §8 con el reloj del servidor
+                 3. RELEE los bloques ocupados de Google (ADR-003)
+                 4. isSlotBookable — la MISMA función que usa reservar
+                       │
+                       ▼
+              n8n · «Leos Firm - Reprogramar cita»
+                 PATCH start/end con If-Match sobre el ETag
+                 NO toca conferenceData → el Meet sobrevive
+```
+
+**Las dos rutas conviven, y eso no es indecisión.** `reschedule-request` no se borra: pasa a ser el
+camino de lo que el autoservicio no cubre —menos de 24 h y haber agotado los cambios—, donde §8 dice
+que el cambio ya no es gratis y hace falta que decida una persona. Cada rechazo del endpoint nuevo
+nombra esa puerta, así que ningún cliente se queda sin salida.
+
+**Consecuencias.**
+
+- **No se cobra nunca en este camino.** No existe llamada a Square en él.
+- **El Meet se conserva**, y es la razón de que esto sea un *move* y no un cancelar-y-reservar. El
+  enlace que el cliente ya tiene en su correo sigue funcionando.
+- **La duración sale del evento, no del catálogo.** Las sesiones bajaron de 60 a 30 minutos el
+  2026-08-07: leer el catálogo aquí acortaría una cita vieja como efecto secundario de moverla.
+- **Un tope de dos cambios**, `CANCELLATION_POLICY.maxSelfReschedules`. No está en `context.md` —
+  se propuso al construir esto y la clienta lo aceptó. Existe porque cada movimiento quema una hora
+  de la agenda que nadie acaba usando.
+- **El contador vive en la descripción del evento**, que es el único registro que hay (ADR-010: no
+  hay base de datos). Lo incrementa el workflow, que es quien lo tiene delante; el **número máximo**
+  viaja en el payload desde `business.ts`, para que la regla siga siendo de la app y n8n solo
+  compare.
+
+> ⚠️ **La carrera es el riesgo real de esta feature.** Entre que se dibuja el calendario y se pulsa
+> confirmar, otro visitante puede llevarse la hora, y Google **no impide solapamientos por sí solo**:
+> el candado tiene que ser nuestro. Hay dos comprobaciones, y las dos son necesarias — el endpoint
+> revalida con bloques recién leídos, y el workflow vuelve a mirar dentro de la misma ejecución que
+> hace el PATCH, que es lo más cerca de la escritura a lo que se puede llegar. Si aun así se cuela
+> una, el `If-Match` evita el pisotón silencioso.
+
+---
+
+## `POST /api/v1/appointments/[token]/reschedule`
+
+El que **sí** mueve la cita (ADR-019). Hermano del anterior, no su reemplazo.
+
+| | |
+|---|---|
+| **Cuerpo** | `{ "newStartUtc": "2026-08-20T15:00:00.000Z" }` — **un solo campo** |
+| **200** | `{ movedTo, meetingUrl, rescheduleCount }` |
+| **409 `TOO_LATE`** | Menos de 24 h, o ya empezó. Deriva al correo |
+| **409 `RESCHEDULE_LIMIT`** | Agotó sus cambios. Deriva al correo |
+| **409 `SLOT_TAKEN`** | Se la llevaron mientras elegía. Devuelve ese día redibujado |
+| **409 `SAME_SLOT`** | Eligió la hora que ya tiene |
+| **502 `UPSTREAM_ERROR`** | n8n no respondió. **La cita sigue en pie** y el mensaje lo dice |
+
+**Por qué el cuerpo tiene un solo campo.** Ni el fin, ni la duración, ni el servicio, ni el huso: el
+fin es el inicio más lo que dura *ese* evento, y el huso ya está escrito en él. Un cuerpo que
+cargara su propia duración dejaría que cualquiera se agendase cuatro horas al precio de treinta
+minutos (ADR-006).
 
 ---
 

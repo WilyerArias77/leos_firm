@@ -7,6 +7,8 @@ import type {
   AppointmentView,
   CancelAppointmentPayload,
   CancelAppointmentResult,
+  MoveAppointmentPayload,
+  MoveAppointmentResult,
   RawAppointmentResponse,
   RefundWindow,
   RescheduleRequestPayload,
@@ -274,4 +276,107 @@ export async function requestReschedule(
   }
 
   return { ok: true };
+}
+
+export type MoveOutcome =
+  | { ok: true; meetingUrl: string; rescheduleCount: number }
+  /** Already started, or inside the 24 h window. §8: not self-service. */
+  | { ok: false; reason: "too-late" }
+  /** Used up `maxSelfReschedules`. The email path is still open. */
+  | { ok: false; reason: "limit"; limit: number }
+  /** Somebody took the hour between drawing the calendar and pressing move. */
+  | { ok: false; reason: "taken" }
+  /** They picked the hour they already have. */
+  | { ok: false; reason: "same-slot" }
+  | { ok: false; reason: "upstream" };
+
+/**
+ * Moves the appointment to a new hour (ADR-019). **This one really does it.**
+ *
+ * The 24 h rule is re-evaluated here with the server's clock and not with
+ * whatever the page computed when it rendered: someone can open the link at
+ * 24 h 10 min and press the button forty minutes later, and the verdict that
+ * counts is this one.
+ *
+ * Three things this function deliberately does NOT do:
+ *
+ * - **Revalidate availability.** That happens in the route, which has the busy
+ *   blocks and the catalog's duration. Doing it twice from two places is how
+ *   the two answers start to disagree.
+ * - **Charge anything.** It is the same appointment at another hour (§8: free
+ *   above 24 h). No Square call exists on this path at all.
+ * - **Touch the Meet.** The workflow patches start and end and leaves
+ *   `conferenceData` alone, so the link the client already has keeps working.
+ *   That is the whole reason this is a move and not a cancel-and-rebook.
+ */
+export async function moveAppointment(input: {
+  appointment: Appointment;
+  newStartUtc: string;
+  newEndUtc: string;
+  now: Date;
+}): Promise<MoveOutcome> {
+  const { appointment, newStartUtc, newEndUtc, now } = input;
+
+  const { refundWindow } = describeCancellationWindow(appointment.startUtc, now);
+
+  // `null` is "already started"; `menor-24h` is inside the window. Neither is
+  // self-service, and both land on the same door: write to Claudia.
+  if (refundWindow !== "mayor-24h") return { ok: false, reason: "too-late" };
+
+  if (Date.parse(newStartUtc) === Date.parse(appointment.startUtc)) {
+    return { ok: false, reason: "same-slot" };
+  }
+
+  const payload: MoveAppointmentPayload = {
+    event_id: appointment.eventId,
+    lead_id: appointment.leadId,
+    full_name: appointment.fullName,
+    email: appointment.email,
+    service_name: appointment.serviceName,
+    previous_start_utc: appointment.startUtc,
+    new_start_utc: newStartUtc,
+    new_end_utc: newEndUtc,
+    client_timezone: appointment.clientTimezone,
+    moved_at: now.toISOString(),
+    max_reschedules: String(CANCELLATION_POLICY.maxSelfReschedules),
+    stage: "reprogramado",
+    updated_at: now.toISOString(),
+  };
+
+  const result = await requestFromN8n<MoveAppointmentResult>("move", payload);
+
+  if (result === null) {
+    console.error("[cita] el workflow de mover la cita no respondió", {
+      eventId: appointment.eventId,
+      leadId: appointment.leadId,
+    });
+
+    return { ok: false, reason: "upstream" };
+  }
+
+  if (result.limitReached) {
+    return { ok: false, reason: "limit", limit: CANCELLATION_POLICY.maxSelfReschedules };
+  }
+
+  // The workflow re-checks the calendar immediately before patching, inside the
+  // same execution. It is the last line of defence against the race and it is
+  // closer to the write than we can ever be from here.
+  if (result.taken) return { ok: false, reason: "taken" };
+
+  if (!result.moved) {
+    console.error("[cita] el workflow respondió sin mover la cita", {
+      eventId: appointment.eventId,
+    });
+
+    return { ok: false, reason: "upstream" };
+  }
+
+  return {
+    ok: true,
+    // Empty is survivable: the appointment moved, and the client still has the
+    // original link in the confirmation email. Blocking on it would undo a
+    // successful move over a field we only use to redraw the page.
+    meetingUrl: result.meetingUrl ?? appointment.meetingUrl,
+    rescheduleCount: result.rescheduleCount ?? 0,
+  };
 }

@@ -83,6 +83,16 @@ const n8nSchema = z.object({
    * production a missing URL is a `502` with the firm's phone number.
    */
   N8N_APPOINTMENT_WEBHOOK_URL: z.string().url().optional(),
+
+  /**
+   * Self-service rescheduling — `Leos Firm - Reprogramar cita` (ADR-019).
+   *
+   * Optional like its siblings, and the degradation is graceful on purpose:
+   * without it the move fails and the page falls back to the email path, which
+   * is exactly what happens under 24 h anyway. Nobody is left unable to change
+   * an appointment — they just cannot do it themselves.
+   */
+  N8N_MOVE_WEBHOOK_URL: z.string().url().optional(),
   N8N_CANCEL_WEBHOOK_URL: z.string().url().optional(),
   N8N_RESCHEDULE_WEBHOOK_URL: z.string().url().optional(),
 });

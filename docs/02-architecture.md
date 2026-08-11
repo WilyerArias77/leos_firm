@@ -833,3 +833,34 @@ propone; el servidor decide y ejecuta.
   cliente. El agente no puede saltárselo porque quien verifica el HMAC es el endpoint.
 - **Nuevo modo de fallo visible:** si n8n cae, el chat cae. Se acepta con degradación en tres niveles
   y el botón a `/agendar` siempre presente (ADR-007: el sitio no bloquea sobre servicios externos).
+
+---
+
+### ADR-019: el cliente mueve su propia cita, con el servidor decidiendo
+
+**Fecha:** 2026-08-11 · **Detalle:** [`features/appointment-management.md`](./features/appointment-management.md)
+
+**Contexto.** La clienta pidió que el cliente pudiera modificar su cita desde el enlace del correo,
+y lo pidió *«por medio del asistente virtual»*. Dos problemas: el asistente no existe (ADR-018 está
+diseñado, no construido), y **aunque existiera tampoco reprogramaría** — su herramienta
+`pedir_otro_horario` manda el mismo correo a Claudia que ya manda el botón. Construir el asistente
+para esto habría añadido una capa conversacional encima de la misma limitación.
+
+**Decisión.** Se construye la **reprogramación en vivo**, sin asistente, revirtiendo el recorte de
+alcance de la FASE 9. Reutiliza el calendario de `/agendar` entero — mismo hook, mismos componentes,
+misma `isSlotBookable` — y el movimiento lo hace un workflow con `PATCH` + `If-Match` que **no toca
+`conferenceData`**, así que el Meet sobrevive.
+
+**Consecuencias.**
+- **Las dos rutas conviven.** `reschedule-request` pasa a ser el camino de menos de 24 h y del tope
+  agotado, donde §8 exige que decida una persona. Ningún rechazo deja al cliente sin salida.
+- **Nunca se cobra en este camino** y no existe llamada a Square en él (§8: gratis por encima de 24 h).
+- **La duración sale del evento, no del catálogo**, para que mover una cita vieja no la acorte de 60
+  a 30 minutos de rebote.
+- **Tope de dos cambios** (`CANCELLATION_POLICY.maxSelfReschedules`), con el contador en la
+  descripción del evento porque no hay base de datos (ADR-010) y el máximo viajando desde la app.
+- **Una superficie de carrera nueva**, mitigada en dos capas: revalidación en el endpoint con
+  bloques recién leídos y una segunda comprobación dentro de la misma ejecución que escribe. Google
+  no impide solapamientos por sí solo; el candado es nuestro.
+- **Una variable de entorno más**, `N8N_MOVE_WEBHOOK_URL`, opcional como sus hermanas: sin ella el
+  movimiento falla y la página cae al correo, que es lo que ya pasa por debajo de 24 h.

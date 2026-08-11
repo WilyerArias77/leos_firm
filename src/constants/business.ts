@@ -90,6 +90,18 @@ export const CANCELLATION_POLICY = {
   lateArrivalGraceMinutes: 15,
   /** Free minutes granted to clients referred by immigration lawyers. */
   referralFreeMinutes: 30,
+  /**
+   * How many times a client may move one appointment by themselves (ADR-019).
+   *
+   * Not in `context.md` — proposed on 2026-08-11 when self-service rescheduling
+   * was built, and accepted by the client. It exists because every move burns
+   * an hour of Claudia's calendar that nobody ends up using, and without a
+   * ceiling one appointment can quietly consume a whole week of openings.
+   *
+   * Reaching it is not a dead end: past this, the client falls back to the
+   * email path, where a person decides.
+   */
+  maxSelfReschedules: 2,
 } as const;
 
 /**

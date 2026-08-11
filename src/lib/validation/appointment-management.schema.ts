@@ -36,3 +36,27 @@ export const rescheduleRequestSchema = z.object({
 });
 
 export type RescheduleRequestBody = z.infer<typeof rescheduleRequestSchema>;
+
+/** ISO-8601 in UTC — the only form this API emits or accepts. */
+const UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+/**
+ * Body of `POST /api/v1/appointments/[token]/reschedule` (ADR-019).
+ *
+ * **One field.** Not the end, not the duration, not the service: the end is the
+ * start plus what the catalog says the service lasts, read on the server
+ * (ADR-006). A body that carried its own duration would let anyone book
+ * themselves a four-hour consultation for the price of thirty minutes.
+ *
+ * Not the timezone either — it is already written on the event, put there when
+ * the appointment was booked. Taking it from the request would let the second
+ * screen contradict the first.
+ */
+export const rescheduleMoveSchema = z.object({
+  newStartUtc: z
+    .string()
+    .regex(UTC_INSTANT, "La hora debe venir en UTC")
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Esa hora no existe"),
+});
+
+export type RescheduleMoveBody = z.infer<typeof rescheduleMoveSchema>;

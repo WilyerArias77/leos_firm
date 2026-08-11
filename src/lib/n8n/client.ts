@@ -27,7 +27,8 @@ export type N8nWebhook =
   | "payments"
   | "appointment"
   | "cancel"
-  | "reschedule";
+  | "reschedule"
+  | "move";
 
 type N8nEnvValue = NonNullable<ReturnType<typeof getN8nEnv>>;
 
@@ -41,6 +42,7 @@ const WEBHOOK_URLS: Record<N8nWebhook, (env: N8nEnvValue) => string | undefined>
   appointment: (env) => env.N8N_APPOINTMENT_WEBHOOK_URL,
   cancel: (env) => env.N8N_CANCEL_WEBHOOK_URL,
   reschedule: (env) => env.N8N_RESCHEDULE_WEBHOOK_URL,
+  move: (env) => env.N8N_MOVE_WEBHOOK_URL,
 };
 
 /** Reads the configured URL for a webhook, or `undefined` when it is not set. */

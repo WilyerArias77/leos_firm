@@ -1,6 +1,9 @@
 import { API_ROUTES } from "@/constants/routes";
 import { appointmentSchema } from "@/lib/validation/appointment.schema";
-import { rescheduleRequestSchema } from "@/lib/validation/appointment-management.schema";
+import {
+  rescheduleMoveSchema,
+  rescheduleRequestSchema,
+} from "@/lib/validation/appointment-management.schema";
 import { toFieldErrors } from "@/lib/validation/lead.schema";
 import type { AppointmentPayload } from "@/lib/validation/appointment.schema";
 import type { CalendarDay } from "@/lib/utils/timezone";
@@ -164,6 +167,59 @@ export async function requestRescheduleByToken(
   return postAction(API_ROUTES.rescheduleRequest(token), parsed.data, {
     fallback: "No pudimos enviar tu solicitud.",
   });
+}
+
+export type RescheduleMoveResult =
+  | { ok: true; movedTo: string; meetingUrl: string }
+  /** The hour went while they were choosing. `alternatives` is that day, redrawn. */
+  | { ok: false; message: string; alternatives?: Slot[] };
+
+/**
+ * Moves the appointment to another hour (ADR-019). **This one really does it**,
+ * unlike `requestRescheduleByToken` above.
+ *
+ * A refusal is never the end of the road: below 24 h, past the limit, or if the
+ * slot went, the caller still has the email path. The message says which.
+ */
+export async function rescheduleAppointmentByToken(
+  token: string,
+  newStartUtc: string,
+): Promise<RescheduleMoveResult> {
+  const parsed = rescheduleMoveSchema.safeParse({ newStartUtc });
+
+  if (!parsed.success) {
+    return { ok: false, message: "Elige un horario de la lista antes de continuar." };
+  }
+
+  try {
+    const response = await fetch(API_ROUTES.rescheduleAppointment(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+
+    const body: ApiEnvelope<{
+      movedTo?: string;
+      meetingUrl?: string;
+      alternatives?: { day: string; slots: Slot[] }[];
+    }> = await response.json().catch(() => ({}));
+
+    if (!response.ok || !body.data?.movedTo) {
+      return {
+        ok: false,
+        message: body.message ?? "No pudimos mover tu cita. Sigue en pie a la hora de siempre.",
+        alternatives: body.data?.alternatives?.[0]?.slots,
+      };
+    }
+
+    return {
+      ok: true,
+      movedTo: body.data.movedTo,
+      meetingUrl: body.data.meetingUrl ?? "",
+    };
+  } catch {
+    return { ok: false, message: "No pudimos conectar con el servidor." };
+  }
 }
 
 /** The shape both actions share: POST, read the envelope, never throw. */

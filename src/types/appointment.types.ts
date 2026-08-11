@@ -153,3 +153,57 @@ export type RescheduleRequestPayload = {
 export type RescheduleRequestResult = {
   received?: boolean;
 };
+
+/**
+ * Payload of `Leos Firm - Reprogramar cita` (ADR-019).
+ *
+ * Unlike `RescheduleRequestPayload` above, this one **does** move the event.
+ * The two coexist: this is the ≥24 h self-service path, that one is what is
+ * left for under 24 h, where §8 says the change is no longer free and a person
+ * has to decide.
+ *
+ * `new_start_utc` and `new_end_utc` are both computed on the server from the
+ * catalog's duration. The browser sends only a start, and it is revalidated
+ * against real availability before this payload is ever built (ADR-006: the
+ * client never decides how long a consultation lasts).
+ *
+ * `max_reschedules` travels instead of living in the workflow because the rule
+ * belongs to the app and the counter belongs to the event. n8n owns neither
+ * decision: it compares a number we send against a number it stores.
+ */
+export type MoveAppointmentPayload = {
+  event_id: string;
+  lead_id: string;
+  full_name: string;
+  email: string;
+  service_name: string;
+  /** Where it was. Goes in both emails so nobody has to remember. */
+  previous_start_utc: string;
+  new_start_utc: string;
+  new_end_utc: string;
+  client_timezone: string;
+  moved_at: string;
+  max_reschedules: string;
+  stage: "reprogramado";
+  updated_at: string;
+};
+
+/**
+ * What the move workflow answers.
+ *
+ * `limitReached` is not an error: it is the policy working. The endpoint turns
+ * it into a 409 with the number, and the page sends the client to the email
+ * path instead of leaving them at a dead end.
+ *
+ * `taken` covers the race this whole feature has to survive — somebody booked
+ * the hour between the calendar being drawn and the button being pressed.
+ */
+export type MoveAppointmentResult = {
+  moved?: boolean;
+  limitReached?: boolean;
+  taken?: boolean;
+  /** How many moves this appointment has used, after this one. */
+  rescheduleCount?: number;
+  /** Preserved across the move — the client keeps the same Meet link. */
+  meetingUrl?: string;
+};

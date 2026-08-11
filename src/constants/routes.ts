@@ -40,4 +40,11 @@ export const API_ROUTES = {
     `/api/v1/appointments/${encodeURIComponent(token)}/cancel`,
   rescheduleRequest: (token: string) =>
     `/api/v1/appointments/${encodeURIComponent(token)}/reschedule-request`,
+  /**
+   * Moves the appointment for real (ADR-019). Sibling of `rescheduleRequest`
+   * above and NOT its replacement: this one is the ≥24 h self-service path,
+   * that one is what remains under 24 h and past the reschedule limit.
+   */
+  rescheduleAppointment: (token: string) =>
+    `/api/v1/appointments/${encodeURIComponent(token)}/reschedule`,
 } as const;

@@ -9,6 +9,37 @@
 
 ---
 
+## 🔴 `NEXT_PUBLIC_SITE_URL` y la suscripción de Square se cambian A LA VEZ
+
+> Añadido el 2026-08-11, después de que costara un cobro real de USD 50.
+
+Square **no firma solo el cuerpo** de la notificación: firma **la URL de la suscripción más el
+cuerpo**. Y el servidor calcula el HMAC esperado a partir de la variable:
+
+```ts
+notificationUrl: squareNotificationUrl(env.NEXT_PUBLIC_SITE_URL)
+```
+
+En cuanto las dos dejan de coincidir —un `www` de más, un dominio de Vercel que se quedó atrás, una
+barra final— la verificación falla y el webhook se descarta con un **401 mudo**. No queda ejecución
+en n8n, ni fila en la pestaña `Pagos`, ni error en los logs de la aplicación. El dinero entra en
+Square, la cita se queda tentativa y el limpiador se la lleva. Desde fuera parece que «el sistema no
+mandó el correo».
+
+**El único sitio donde se ve es el log de entregas de Square** (Webhooks → *View logs*): la columna
+`Status code` marca 401 y la `Notification URL` enseña con qué dominio se firmó.
+
+| Al cambiar | Hay que cambiar también |
+|---|---|
+| `NEXT_PUBLIC_SITE_URL` en Vercel | La URL de la suscripción en Square → **editar, no recrear** |
+| El dominio del sitio | Las dos de arriba, y volver a desplegar |
+
+> ⚠️ **Editar la suscripción, nunca borrarla y crear otra.** Una suscripción nueva trae una
+> **clave de firma nueva**, y entonces hay que actualizar `SQUARE_WEBHOOK_SIGNATURE_KEY` en Vercel y
+> redesplegar. Editando la URL, la clave se conserva.
+
+---
+
 ## Entornos
 
 | Entorno | Rama | URL | Square | Supabase |

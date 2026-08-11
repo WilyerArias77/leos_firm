@@ -144,6 +144,9 @@ export default async function AppointmentPage(props: PageProps<"/agendar/cita/[t
           <AppointmentActions
             token={token}
             refundWindow={view.refundWindow}
+            startUtc={view.startUtc}
+            clientTimezone={view.bookedTimezone}
+            serviceSlug={lookup.appointment.serviceSlug}
             phone={COMPANY.phone}
           />
         ) : (

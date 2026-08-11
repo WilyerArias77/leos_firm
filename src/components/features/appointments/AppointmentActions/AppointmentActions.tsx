@@ -1,13 +1,15 @@
 "use client";
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { CalendarClock, CheckCircle2, Loader2, Phone, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, Loader2, Mail, Phone, X } from "lucide-react";
+import { RescheduleCalendar } from "@/components/features/appointments/RescheduleCalendar";
 import { Button } from "@/components/ui/Button";
 import { RESCHEDULE_PREFERENCE_MAX } from "@/lib/validation/appointment-management.schema";
 import {
   cancelAppointmentByToken,
   requestRescheduleByToken,
 } from "@/services/appointment.service";
+import { formatDayInZone, formatTimeInZone } from "@/lib/utils/timezone";
 import { cn } from "@/lib/utils/cn";
 import type { AppointmentActionsProps } from "./AppointmentActions.types";
 
@@ -29,7 +31,16 @@ import type { AppointmentActionsProps } from "./AppointmentActions.types";
  *   was not. It says Claudia will write, which is what actually happens.
  */
 
-type Mode = "idle" | "confirming" | "cancelled" | "rescheduling" | "requested";
+type Mode =
+  | "idle"
+  | "confirming"
+  | "cancelled"
+  /** The ≥24 h path: pick a real hour and move the appointment (ADR-019). */
+  | "moving"
+  | "moved"
+  /** The fallback: free text to Claudia. Under 24 h, or past the move limit. */
+  | "rescheduling"
+  | "requested";
 
 const REFUND_COPY = {
   "mayor-24h":
@@ -40,14 +51,27 @@ const REFUND_COPY = {
     "Aun así puedes cancelar para liberar el horario.",
 } as const;
 
-export function AppointmentActions({ token, refundWindow, phone }: AppointmentActionsProps) {
+export function AppointmentActions({
+  token,
+  refundWindow,
+  startUtc,
+  clientTimezone,
+  serviceSlug,
+  phone,
+}: AppointmentActionsProps) {
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preference, setPreference] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [movedTo, setMovedTo] = useState<string | null>(null);
 
   const preferenceId = useId();
+
+  // Above 24 h the client moves the appointment themselves; below it, §8 says
+  // the change is no longer free and a person has to decide, so the only door
+  // left is the email. The server re-checks this either way.
+  const canMoveAlone = refundWindow === "mayor-24h";
 
   async function handleCancel() {
     setBusy(true);
@@ -105,18 +129,61 @@ export function AppointmentActions({ token, refundWindow, phone }: AppointmentAc
     );
   }
 
+  if (mode === "moved" && movedTo) {
+    return (
+      <Outcome title="Tu cita quedó movida">
+        Ahora es el{" "}
+        <strong className="font-medium text-ink">
+          {formatDayInZone(new Date(movedTo), clientTimezone)} a las{" "}
+          {formatTimeInZone(new Date(movedTo), clientTimezone)}
+        </strong>
+        . Te llega un correo con la hora nueva, y el enlace de la reunión sigue siendo el mismo de
+        antes. Claudia ya está avisada.
+      </Outcome>
+    );
+  }
+
+  if (mode === "moving") {
+    return (
+      <RescheduleCalendar
+        token={token}
+        currentStartUtc={startUtc}
+        clientTimezone={clientTimezone}
+        serviceSlug={serviceSlug}
+        onMoved={(next) => {
+          setMovedTo(next);
+          setMode("moved");
+        }}
+        onCancel={() => setMode("idle")}
+      />
+    );
+  }
+
   return (
     <div className="mt-8">
       {mode === "idle" ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Button variant="secondary" onClick={() => setMode("confirming")}>
             <X className="h-4 w-4" aria-hidden="true" />
             Cancelar la cita
           </Button>
 
-          <Button variant="primary" onClick={() => setMode("rescheduling")}>
-            <CalendarClock className="h-4 w-4" aria-hidden="true" />
-            Pedir otro horario
+          {/* Above 24 h this is the main action and it does the whole job, so it
+              takes the primary slot and the plainest wording. Below it, the only
+              thing on offer is the email, which then becomes primary itself. */}
+          {canMoveAlone ? (
+            <Button variant="primary" onClick={() => setMode("moving")}>
+              <CalendarClock className="h-4 w-4" aria-hidden="true" />
+              Cambiar mi horario
+            </Button>
+          ) : null}
+
+          <Button
+            variant={canMoveAlone ? "secondary" : "primary"}
+            onClick={() => setMode("rescheduling")}
+          >
+            <Mail className="h-4 w-4" aria-hidden="true" />
+            {canMoveAlone ? "Prefiero escribirle a Claudia" : "Pedir otro horario"}
           </Button>
         </div>
       ) : null}

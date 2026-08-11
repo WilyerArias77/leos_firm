@@ -162,6 +162,16 @@ export function mockN8nResponse(webhook: string, payload: unknown): unknown {
   if (webhook === "cancel") return { cancelled: true };
   if (webhook === "reschedule") return { received: true };
 
+  // Moving an appointment answers the happy path and keeps the Meet, which is
+  // the property the real workflow guarantees by not touching `conferenceData`.
+  // It does NOT simulate the limit or the race: both are enforced with state
+  // this side has no access to — the counter written on the event and the
+  // calendar as it is at that instant. A mock that faked either would let a
+  // developer believe a guard was tested when it never ran.
+  if (webhook === "move") {
+    return { moved: true, rescheduleCount: 1, meetingUrl: "https://meet.google.com/mock-mock-mock" };
+  }
+
   // Releasing an unpaid hold destroys nothing that was not going to expire on
   // its own, so the happy path is safe to simulate. It answers `released: true`
   // unconditionally BECAUSE the real guard is in the workflow, not here — a

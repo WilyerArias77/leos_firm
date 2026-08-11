@@ -6,6 +6,69 @@
 
 ---
 
+## [2026-08-11] — El cliente ya puede mover su cita solo, y una firma que se comió otro pago — v0.12.0
+
+### Request original
+> *«necesito que cuando le de modificar cita desde el mensaje del correo electronico que recibi, me
+> permita hacerlo… En este momento no esta funcionando»* · *«quita el numero relacionado en este
+> mensaje, pon el correo de claudia@leosfirm.com en lugar de este»*
+
+La petición llegó como *«por medio del asistente virtual»*. Planteado que el asistente no existe y
+que **aunque existiera tampoco reprogramaría** —su herramienta `pedir_otro_horario` manda el mismo
+correo que ya manda el botón—, la clienta eligió la funcionalidad real sin la capa conversacional.
+
+### Incidente que precedió al cambio
+
+Un pago real de USD 50 (`LVgatdwOROeP5vZoD8Od7ZZXn8fZY`) no confirmó la cita ni mandó correo.
+
+**Causa: `NEXT_PUBLIC_SITE_URL` cambió de `leos-firm.vercel.app` a `www.leosfirm.com` y la
+suscripción de Square se quedó apuntando al dominio viejo.** Square firma **la URL de la notificación
+más el cuerpo**, y el servidor calcula el HMAC esperado con `squareNotificationUrl(NEXT_PUBLIC_SITE_URL)`.
+En cuanto dejan de coincidir, la verificación falla con un **401 mudo**: sin ejecución en n8n, sin
+fila en `Pagos`, sin log. El log de Square lo mostró — 401 al dominio viejo, 200 tras corregirlo.
+
+Se rescató reenviando la notificación, sin cobrar de nuevo. Queda escrito en `04-deployment.md`:
+esa variable y la suscripción de Square **se cambian a la vez o no se cambian**.
+
+### Tipo de cambio
+
+- **CITAS (ADR-019)** — reprogramación en vivo. `POST /api/v1/appointments/[token]/reschedule`,
+  `moveAppointment()`, `RescheduleCalendar`, canal `move` y `N8N_MOVE_WEBHOOK_URL`. Reutiliza el
+  calendario de `/agendar` entero: mismo hook, mismos componentes, misma `isSlotBookable`
+- **CITAS** — `reschedule-request` **no se borra**: pasa a ser el camino de menos de 24 h y del tope
+  agotado. Cada rechazo del endpoint nuevo nombra esa puerta
+- **NEGOCIO** — `CANCELLATION_POLICY.maxSelfReschedules = 2`. Propuesto al construir esto y aceptado
+  por la clienta; no está en `context.md`
+- **UI** — la pantalla de fallo de la cita ofrece `claudia@leosfirm.com` en vez del teléfono, y
+  `COMPANY.email` entra en `business.ts`
+
+### Decisiones que merecen quedar escritas
+
+**El Meet sobrevive** porque el `PATCH` no toca `conferenceData`. Es la razón de que esto sea un
+movimiento y no un cancelar-y-reservar: el enlace que el cliente ya tiene sigue sirviendo.
+
+**La duración sale del evento, no del catálogo.** Las sesiones bajaron de 60 a 30 minutos el
+2026-08-07; leer el catálogo aquí acortaría una cita vieja como efecto secundario de moverla.
+
+**El contador de cambios vive en la descripción del evento** —no hay base de datos (ADR-010)— pero
+el número máximo viaja en el payload desde `business.ts`, para que la regla siga siendo de la app.
+
+### Pendiente
+
+- El workflow **«Leos Firm - Reprogramar cita» no existe todavía**. Sin él el endpoint responde 502
+  y la página cae al correo, que es degradación correcta pero no es la feature
+- `N8N_APPOINTMENT_WEBHOOK_URL`, `N8N_CANCEL_WEBHOOK_URL` y `N8N_RESCHEDULE_WEBHOOK_URL` **nunca se
+  pusieron en Vercel**: por eso la página de la cita mostraba «No pudimos abrir tu cita»
+- **El limpiador no limpia.** Un evento tentativo sobrevivió horas cuando debía morir a los 15
+  minutos. Hoy salvó una cita pagada; mañana bloquea la agenda con checkouts abandonados
+- El limpiador decide por el **título** del evento y no consulta si hay pago acreditado. Tercer
+  incidente del mismo patrón
+
+### Validación
+`npm run build` ✅ · `npm run lint` ✅ · prueba de pago real end-to-end en producción ✅
+
+---
+
 ## [2026-08-10] — Una variable de entorno que faltaba se comía los pagos en silencio — v0.11.1
 
 ### Request original
