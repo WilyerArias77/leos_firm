@@ -47,6 +47,20 @@ import type { ConfirmedPayment, OrderContext } from "@/types/payment.types";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The `after()` block below spends the SAME budget as the request that
+ * scheduled it. Without this, that budget is Vercel's default of 10 s, and the
+ * chain does not fit in it: claiming the row alone took 2.4–3.7 s under the four
+ * concurrent deliveries of 2026-08-10, and confirming the appointment takes ~3 s
+ * more.
+ *
+ * When the budget runs out the process is killed mid-chain. That failure is
+ * invisible by construction — no exception to catch, no log, and the `Pagos` row
+ * frozen in `recibido` — which is exactly how two real payments (2026-08-07 and
+ * 2026-08-10) took money and delivered nothing.
+ */
+export const maxDuration = 60;
+
 const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 
 /**

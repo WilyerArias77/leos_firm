@@ -637,6 +637,35 @@ El criterio es el mismo que en `/leads` y `/appointments`: **un fallo nuestro nu
 un fallo del visitante** — con una excepción explícita, la de arriba: cuando ya cobramos, callarse no
 es una opción.
 
+### El fallo que no está en esa tabla: quedarse sin tiempo
+
+Esa tabla asume que el código llega a ejecutarse. El 2026-08-07 y el 2026-08-10 no llegó, y por eso
+dos pagos reales acabaron **congelados en `recibido`**, sin correo, sin cita y sin CRM.
+
+La ruta no declaraba `maxDuration`, así que corría con el default de Vercel (**10 s**) — y el trabajo
+de `after()` gasta **el mismo presupuesto** que la petición que lo programó. La cadena no cabe:
+
+```
+reclamar la fila        2,4–3,7 s   (medido con cuatro entregas concurrentes)
+releer pago + orden     ~1–2 s
+confirmar la cita       ~3 s        (1,87 s y 3,02 s el 2026-08-06)
+CRM + cerrar la fila    ~2 s
+```
+
+Al agotarse el presupuesto **el proceso se mata a media cadena**, y ese fallo es invisible por
+construcción: no hay excepción, así que ningún `catch` de `payment.service.ts` se dispara, `fail()`
+nunca escribe su motivo y no queda ni una línea en los logs. El único rastro es la fila en `recibido`
+— que es exactamente por lo que esa pestaña existe.
+
+**Falla por lentitud, no por lógica.** El pago del 2026-08-06 —una sola entrega, reclamo rápido— sí
+se confirmó con el mismo código. Por eso no se reprodujo en pruebas.
+
+Corregido con `export const maxDuration = 60` en la ruta. Requiere **Fluid Compute activo** en el
+proyecto de Vercel: sin él la instancia se congela al responder y `after()` no corre en absoluto.
+
+> ⚠️ Toda ruta que use `after()` para trabajo que dure más de unos segundos necesita su propio
+> `maxDuration`. El default de la plataforma no se anuncia y no avisa cuando se agota.
+
 ---
 
 ## Pruebas
