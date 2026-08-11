@@ -10,6 +10,12 @@ export const COMPANY = {
   ceo: "Claudia Leos",
   address: "18830 Stone Oak Pkwy, Suite 106, San Antonio, Texas 78258",
   phone: "(210) 630 7878",
+  /**
+   * The address the firm answers from, and the one shown when something on our
+   * side fails. Client's decision, 2026-08-11: a broken screen should point to
+   * the inbox she reads, not to a phone that may ring with nobody near it.
+   */
+  email: "claudia@leosfirm.com",
   website: "https://www.leosfirm.com",
   tagline:
     "No abrimos empresas. Construimos el puente para que los empresarios conviertan sus proyectos en negocios exitosos en Estados Unidos.",

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CalendarX2, Clock, MapPin, Phone, Video } from "lucide-react";
+import { CalendarX2, Clock, Mail, MapPin, Phone, Video } from "lucide-react";
 import { AppointmentActions } from "@/components/features/appointments/AppointmentActions";
 import { AppointmentTime } from "@/components/features/appointments/AppointmentTime";
 import { Container } from "@/components/layout/Container";
@@ -229,7 +229,11 @@ function ClosedNotice({ status }: { status: AppointmentStatus }) {
 
 /**
  * n8n did not answer. Same treatment as everywhere else in this funnel: our
- * failure never becomes the visitor's, and the way out is the firm's phone.
+ * failure never becomes the visitor's, and the way out is the firm's inbox.
+ *
+ * Email rather than the phone here, by the client's decision (2026-08-11): this
+ * screen appears when our own integration is down, and she would rather receive
+ * a written message she can act on than a call that may ring unanswered.
  */
 function UpstreamFailure() {
   return (
@@ -239,16 +243,16 @@ function UpstreamFailure() {
 
         <p className="mt-4 text-base leading-relaxed text-ink-muted">
           Tu cita sigue en pie: lo que falló fue nuestra conexión para mostrártela. Vuelve a
-          intentarlo en un momento, o llámanos y lo resolvemos contigo.
+          intentarlo en un momento, o escríbenos y lo resolvemos contigo.
         </p>
 
         <p className="mt-6 flex flex-wrap items-center gap-2 text-base">
-          <Phone aria-hidden="true" className="h-4 w-4 text-navy-500" />
+          <Mail aria-hidden="true" className="h-4 w-4 text-navy-500" />
           <a
             className="font-medium text-accent underline underline-offset-4 hover:no-underline"
-            href={PHONE_HREF}
+            href={`mailto:${COMPANY.email}`}
           >
-            {COMPANY.phone}
+            {COMPANY.email}
           </a>
         </p>
       </Container>
