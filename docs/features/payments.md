@@ -637,34 +637,51 @@ El criterio es el mismo que en `/leads` y `/appointments`: **un fallo nuestro nu
 un fallo del visitante** — con una excepción explícita, la de arriba: cuando ya cobramos, callarse no
 es una opción.
 
-### El fallo que no está en esa tabla: quedarse sin tiempo
+### El fallo que no está en esa tabla: una excepción dentro de `after()`
 
-Esa tabla asume que el código llega a ejecutarse. El 2026-08-07 y el 2026-08-10 no llegó, y por eso
-dos pagos reales acabaron **congelados en `recibido`**, sin correo, sin cita y sin CRM.
+Esa tabla asume que el código llega a decidir. El 2026-08-07 y el 2026-08-10 no llegó, y dos pagos
+reales acabaron **congelados en `recibido`**: sin correo, sin cita, sin CRM y **sin una sola línea de
+log**.
 
-La ruta no declaraba `maxDuration`, así que corría con el default de Vercel (**10 s**) — y el trabajo
-de `after()` gasta **el mismo presupuesto** que la petición que lo programó. La cadena no cabe:
+`confirmAppointment()` acuña el enlace de gestión del cliente (FASE 9) en su **primera línea**, antes
+de hablar con n8n:
 
+```ts
+const accessToken = createAppointmentToken(params.eventId);   // payment.service.ts
+  └─ getAppointmentTokenSecret()   → throw si APPOINTMENT_TOKEN_SECRET falta o mide < 32
 ```
-reclamar la fila        2,4–3,7 s   (medido con cuatro entregas concurrentes)
-releer pago + orden     ~1–2 s
-confirmar la cita       ~3 s        (1,87 s y 3,02 s el 2026-08-06)
-CRM + cerrar la fila    ~2 s
-```
 
-Al agotarse el presupuesto **el proceso se mata a media cadena**, y ese fallo es invisible por
-construcción: no hay excepción, así que ningún `catch` de `payment.service.ts` se dispara, `fail()`
-nunca escribe su motivo y no queda ni una línea en los logs. El único rastro es la fila en `recibido`
-— que es exactamente por lo que esa pestaña existe.
+`APPOINTMENT_TOKEN_SECRET` **nunca se puso en Vercel**. El `throw` salía de `fulfil()`, que es el
+callback de `after()`, y **`after()` se traga el rechazo**. Ni `fail()` se ejecutaba, ni había error
+que registrar, ni entrega fallida en el panel de Square. Silencio perfecto.
 
-**Falla por lentitud, no por lógica.** El pago del 2026-08-06 —una sola entrega, reclamo rápido— sí
-se confirmó con el mismo código. Por eso no se reprodujo en pruebas.
+Por qué el diagnóstico costó tanto, y qué lo cerró:
 
-Corregido con `export const maxDuration = 60` en la ruta. Requiere **Fluid Compute activo** en el
-proyecto de Vercel: sin él la instancia se congela al responder y `after()` no corre en absoluto.
+| Prueba | Resultado | Qué descartó |
+|---|---|---|
+| Petición firmada a producción | `200` | La firma, la clave y la URL |
+| Ejecuciones de «Registrar pago» del 10-08 | seis, todas OK | n8n y sus credenciales |
+| Ejecuciones de «Confirmar cita» del 10-08 | **ninguna** | El fallo es anterior a esa llamada |
+| Sonda con un pago inexistente | fila en `error` con motivo | **`after()` sí se ejecuta** |
 
-> ⚠️ Toda ruta que use `after()` para trabajo que dure más de unos segundos necesita su propio
-> `maxDuration`. El default de la plataforma no se anuncia y no avisa cuando se agota.
+Esa última fue la que lo resolvió: recorre el camino corto —una llamada a Square que falla y una
+escritura— y **escribe**. Lo único que hay entre ese camino y el real es la acuñación del token.
+
+El 2026-08-06 se confirmó con este mismo código porque el enlace de gestión aún no existía.
+
+**Dos correcciones, y las dos hacen falta:**
+
+1. `APPOINTMENT_TOKEN_SECRET` en Vercel, ≥ 32 caracteres (`openssl rand -base64 32`).
+2. `fulfil()` envuelve la entrega en `try/catch` y manda cualquier excepción a `fail()`. Una variable
+   de entorno que falta no puede volver a comerse un cobro sin decirlo.
+
+> ⚠️ **Toda excepción dentro de `after()` desaparece sin dejar rastro.** No hay stack, no hay log, no
+> hay reintento. Cualquier trabajo en segundo plano que toque dinero tiene que atrapar lo suyo y
+> dejarlo escrito donde una persona lo lea.
+
+También se añadió `export const maxDuration = 60` a la ruta. **No era la causa** —el trabajo moría a
+los pocos milisegundos, no a los diez segundos—, pero la cadena completa sí puede rozar el default de
+Vercel, así que se queda como refuerzo. Requiere **Fluid Compute activo**.
 
 ---
 
