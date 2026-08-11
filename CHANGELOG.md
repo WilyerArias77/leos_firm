@@ -6,6 +6,46 @@
 
 ---
 
+## [2026-08-10] — El webhook de Square se quedaba sin tiempo a media cadena — v0.11.1
+
+### Request original
+> *«hizo el pago pero no envio correos, no actualizó el crm, no hizo la reserva del calendario»*
+
+Incidente con dinero real. Pago `rLtRSJy3GCId0rcn6sYb0Tv38NVZY`, USD 50.00 `COMPLETED` el
+2026-08-10T23:32:15Z. Ni correo, ni cita confirmada, ni CRM en `pagado`.
+
+### Causa
+La ruta del webhook no declaraba `maxDuration`, así que corría con el default de Vercel (10 s), y el
+trabajo de `after()` —releer Square, confirmar la cita, avanzar el CRM y cerrar la fila— gasta **ese
+mismo presupuesto**. La cadena no cabe: solo reclamar la fila tardó 2,4–3,7 s bajo las cuatro
+entregas concurrentes de ese día, y confirmar la cita ~3 s más.
+
+Al agotarse el presupuesto **el proceso se mata a media cadena**. No hay excepción que atrapar, así
+que ninguno de los `catch` de `payment.service.ts` se dispara, `fail()` nunca llega a escribir su
+motivo, y la fila de `Pagos` queda congelada en `recibido` — el estado que el propio código describe
+como *«money taken and nothing delivered»*.
+
+Falla por lentitud, no por lógica: por eso el pago del 2026-08-06 (una sola entrega, reclamo rápido)
+sí se confirmó, y los del 2026-08-07 y 2026-08-10 no.
+
+### Tipo de cambio
+- **PAGOS (`src/app/api/v1/webhooks/square/route.ts`)**: `export const maxDuration = 60`
+
+### Descartado durante el diagnóstico
+Queda escrito para no volver a recorrerlo: la URL de Square coincidía con `NEXT_PUBLIC_SITE_URL`; la
+clave de firma era correcta (verificado mandando una petición firmada a producción → 200); las
+credenciales de n8n estaban intactas; y el monto cobrado coincidía con el catálogo.
+
+### Pendiente
+- La carrera del reclamo: cuatro entregas simultáneas leyeron la hoja antes de que ninguna escribiera
+  y las cuatro respondieron `duplicate: false`. El `If-Match` con ETag de «Leos Firm - Confirmar cita»
+  impide la doble confirmación y el segundo correo (ADR-013), así que no hay daño — pero el primer
+  candado no es atómico y conviene decidir si el trabajo debe pasar a ser síncrono
+- Los dos pagos huérfanos (`PHo4qclOAl4APCPYLhhkf2HPJWSZY` del 07-08 y `rLtRSJy3…` del 10-08) siguen
+  en `recibido` y sin cita. Ambos son pruebas propias, no de clientas
+
+---
+
 ## [2026-08-10] — Los estados de entrega y la liberación del hueco — v0.11.0
 
 ### Request original
