@@ -27,6 +27,12 @@ export const API_ROUTES = {
   availability: "/api/v1/availability",
   appointments: "/api/v1/appointments",
   /**
+   * Frees an unpaid hold when the visitor walks away, instead of waiting for the
+   * cleaner (2026-08-07). Takes the `eventId`, not a signed token: it can only
+   * ever delete an unpaid tentative hold, and the workflow enforces that.
+   */
+  releaseSlot: "/api/v1/appointments/release",
+  /**
    * The two actions behind the client's own appointment link (FASE 9).
    * `token` is the HMAC-signed token from the confirmation email (ADR-016).
    */

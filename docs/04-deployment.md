@@ -31,7 +31,7 @@
 | 3 | **Google Cloud** | Proyecto + service account, habilitar Calendar API y Gmail API, delegación de dominio con los scopes mínimos, compartir el calendario de Claudia con el service account |
 | 4 | **Anthropic** | API key con límite de gasto configurado |
 | 5 | **Vercel** | Conectar repo, cargar variables de entorno, dominio `leosfirm.com` + DNS |
-| 6 | **Zoom** (opcional) | App Server-to-Server OAuth, solo si se activa como proveedor alternativo |
+| ~~6~~ | ~~**Zoom** (opcional)~~ | **Retirado el 2026-08-07** — la sala virtual es solo Google Meet (ADR-004) |
 
 ---
 

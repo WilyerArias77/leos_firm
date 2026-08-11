@@ -9,6 +9,7 @@ import { SlotPicker } from "@/components/features/scheduling/SlotPicker";
 import { TimezoneNotice } from "@/components/features/scheduling/TimezoneNotice";
 import { Button } from "@/components/ui/Button";
 import { BUSINESS_TIMEZONE, COMPANY } from "@/constants/business";
+import { useSlotRelease } from "@/hooks/useSlotRelease";
 import { detectClientTimeZone, formatDayInZone, formatTimeInZone, todayIn } from "@/lib/utils/timezone";
 import { useAvailability } from "@/hooks/useAvailability";
 import { createAppointment } from "@/services/appointment.service";
@@ -239,6 +240,12 @@ function HeldSlot({
   const start = new Date(hold.startUtc);
   const showBothZones = hold.clientTimezone !== hold.businessTimezone;
 
+  // Frees the hour the moment they leave, instead of making the next visitor
+  // wait out `SLOT_HOLD_MINUTES`. `active` is true for the whole time this
+  // screen is up — including after a declined card, which deliberately does NOT
+  // release: the client's spec asks for a retry and a decline is normal.
+  const { release } = useSlotRelease({ eventId: hold.eventId, active: true });
+
   return (
     <div className="rounded-card border border-border bg-surface p-6">
       <p className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-accent uppercase">
@@ -282,6 +289,17 @@ function HeldSlot({
         payer={payer}
         onOutcome={onOutcome}
       />
+
+      {/* The explicit way out. Without it the only way to free the hour early
+          is closing the tab, and someone who has decided not to continue
+          deserves a button instead of a guess. */}
+      <button
+        type="button"
+        onClick={release}
+        className="mt-4 w-full rounded-card px-4 py-2.5 text-xs text-ink-muted underline underline-offset-4 transition-colors hover:text-ink"
+      >
+        Prefiero no continuar y liberar este horario
+      </button>
     </div>
   );
 }

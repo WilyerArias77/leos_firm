@@ -5,6 +5,7 @@ import { postToN8n } from "@/lib/n8n/client";
 import { describeSteps, hasUsEntity } from "@/services/diagnostic.service";
 import { getServiceBySlug } from "@/services/service.service";
 import type { LeadPayload } from "@/lib/validation/lead.schema";
+import { serviceStatusForStage } from "@/types/crm.types";
 import type {
   CrmAppointmentRow,
   CrmDelivery,
@@ -36,6 +37,7 @@ import type { DiagnosticStep } from "@/types/diagnostic.types";
 export const CRM_COLUMNS: readonly (keyof CrmRow)[] = [
   "lead_id",
   "stage",
+  "service_status",
   "updated_at",
   "full_name",
   "email",
@@ -96,6 +98,7 @@ export async function buildLeadRow(lead: LeadPayload, ip: string): Promise<CrmRo
   return {
     lead_id: lead.leadId,
     stage: "formulario" satisfies CrmStage,
+    service_status: serviceStatusForStage("formulario") ?? "Pendiente de Atención",
     updated_at: now,
 
     full_name: lead.fullName,
@@ -165,6 +168,7 @@ export async function syncAppointmentToCrm(appointment: {
   const row: CrmAppointmentRow = {
     lead_id: appointment.leadId,
     stage: "agenda" satisfies CrmStage,
+    service_status: serviceStatusForStage("agenda") ?? "Pendiente de Atención",
     updated_at: now,
 
     full_name: appointment.fullName,
@@ -208,6 +212,9 @@ export async function syncPaymentToCrm(payment: {
   const row: CrmPaymentRow = {
     lead_id: payment.leadId,
     stage: "pagado" satisfies CrmStage,
+    // `Atendido`: this row is written by the same WF3 run that sends the
+    // confirmation email, which is the client's trigger for that status.
+    service_status: serviceStatusForStage("pagado") ?? "Atendido",
     updated_at: new Date().toISOString(),
 
     payment_id: payment.paymentId,

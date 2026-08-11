@@ -89,22 +89,30 @@ export const CANCELLATION_POLICY = {
 /**
  * How long a slot stays held while the client pays.
  *
- * **Raised from 10 to 30 on 2026-08-05, when payment went in**
- * (`docs/features/payments.md` § El riesgo que hay que resolver antes de codear).
- * The clock starts when the tentative event is created — before the visitor has
- * even seen the card form. Ten minutes had to cover reading the cancellation
- * policy, finding a card, typing it and passing 3-D Secure; if they ran out, the
- * cleanup workflow deleted the slot while the charge was going through, and the
- * webhook arrived to confirm an event that no longer existed: **money taken,
- * slot gone.** The cost of 30 is more abandoned holds in the calendar, which is
- * cheap by comparison.
+ * **Lowered from 30 to 15 on 2026-08-07, by the client's decision**, so an
+ * abandoned checkout frees the slot sooner.
  *
- * ⚠️ **This number exists TWICE.** The other copy is inside the Code node of
- * `Leos Firm - Limpiar reservas vencidas` (WF4), which lives in n8n and not in
- * this repo. Changing it here alone leaves the cleaner deleting slots at 10
- * minutes and this file lying about it.
+ * ⚠️ **This number was 10 once, and 10 caused a real failure.** It was raised to
+ * 30 on 2026-08-05 (`docs/features/payments.md` § El riesgo que hay que resolver
+ * antes de codear) because the clock starts when the tentative event is created —
+ * before the visitor has even seen the card form. It has to cover reading the
+ * cancellation policy, finding a card, typing it and clearing 3-D Secure. When it
+ * ran out, the cleanup workflow deleted the slot while the charge was going
+ * through and the webhook arrived to confirm an event that no longer existed:
+ * **money taken, slot gone.**
+ *
+ * 15 is five minutes above the value that failed. The risk was put to the client
+ * in writing, with that history, and she chose 15 anyway — a slow payer losing
+ * their slot is the accepted cost of a calendar that clears faster. **If refunds
+ * for "paid but no appointment" start appearing, this number is the first
+ * suspect.**
+ *
+ * ⚠️ **This constant is DOCUMENTATION ONLY.** Nothing in this repo reads it — the
+ * one place that enforces it is the Code node of `Leos Firm - Limpiar reservas
+ * vencidas` (WF4), in n8n. Changing it here has no effect on its own; the two
+ * copies have to move together or this file is simply lying.
  */
-export const SLOT_HOLD_MINUTES = 30;
+export const SLOT_HOLD_MINUTES = 15;
 
 /**
  * Booking window (`docs/features/scheduling.md` § Bloque C, decisiones 2 y 3).

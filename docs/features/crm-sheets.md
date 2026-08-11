@@ -88,9 +88,58 @@ mapea por nombre: **un encabezado mal escrito pierde ese dato en silencio**, Goo
 | `Pagado el` | `paid_at` | pagado |
 | `Politica aceptada el` | `policy_accepted_at` | agenda |
 | `IP de aceptacion` | `policy_accepted_ip` | agenda |
+| `Estado de atencion` | `service_status` | todas — **columna nueva, 2026-08-07** |
 
 **Los encabezados van sin tildes a propósito.** Es el nombre de una clave, no un texto de UI: una
-tilde mal copiada entre la hoja y el workflow es un dato perdido que nadie nota.
+tilde mal copiada entre la hoja y el workflow es un dato perdido que nadie nota. Los **valores** sí
+llevan tilde («Pendiente de Atención»): esos los lee Claudia.
+
+---
+
+## Estados de entrega — el segundo eje (2026-08-07)
+
+La clienta pidió en el *Flujo de Procesos* §8 una máquina de estados nueva:
+
+```
+Pendiente de Atención  ──▶  Atendido  ──▶  Finalizado
+```
+
+**No sustituye a la columna `Estado`: convive con ella en una columna aparte**, `Estado de atencion`.
+Son dos preguntas distintas y una sola palabra no puede responder a las dos:
+
+| Columna | Pregunta que responde | Valores |
+|---|---|---|
+| `Estado` (`stage`) | ¿Hasta dónde llegó esta persona en el embudo? | `formulario` · `agenda` · `pagado` · `cancelado` |
+| `Estado de atencion` (`service_status`) | ¿La firma ya hizo su parte? | `Pendiente de Atención` · `Atendido` · `Finalizado` |
+
+Fundirlas obligaría además a romper el *upsert monótono*: hoy `stage` nunca retrocede, y eso es lo
+único que impide que un webhook de Square atrasado degrade una fila ya pagada.
+
+**El valor se deriva, no se pasa.** `serviceStatusForStage()` en `src/types/crm.types.ts` es la única
+tabla de conversión, así que ninguna parte del código puede escribir una combinación incoherente:
+
+| `stage` | `service_status` | Por qué |
+|---|---|---|
+| `formulario` | `Pendiente de Atención` | Existe el contacto, no se debe nada |
+| `agenda` | `Pendiente de Atención` | Hueco retenido, pago pendiente |
+| `pagado` | **`Atendido`** | La misma ejecución del WF3 que confirma el pago manda el correo de confirmación, que es el disparador que pidió la clienta |
+| `cancelado` | *(no se escribe)* | Ni atendida ni finalizada; la columna `Estado` ya lo dice. Escribir algo sería pisar un valor cierto con uno engañoso |
+
+> ⚠️ **`Atendido` no significa «ya lo atendieron».** Significa «salió el correo de confirmación». Es
+> la definición de la clienta y no es la lectura natural de la palabra — quedó advertido el
+> 2026-08-07 y aun así es la que quiere. Quien lea la hoja dentro de seis meses lo va a leer mal, y
+> por eso está escrito aquí.
+
+### 🔴 `Finalizado` no tiene quién lo dispare
+
+Los otros dos estados salen solos del flujo. **`Finalizado` no**: nada en el ciclo de petición y
+respuesta se entera de que una consulta ocurrió. Solo es cierto cuando el reloj pasa la hora de fin
+de la cita, así que necesita un **workflow programado** que recorra los eventos ya confirmados y
+marque las filas cuyas citas terminaron.
+
+Ese workflow **no existe**. Era la fase *Post-cita*, declarada **fuera de alcance el 2026-08-06** y
+reactivada de hecho por este pedido. Mientras no se construya, la columna se quedará en `Atendido`
+para siempre y `Finalizado` será un valor que el sistema nunca escribe.
 
 ### ✅ Las dos columnas de la política — hechas el 2026-08-06
 

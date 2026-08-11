@@ -1,6 +1,6 @@
 # Roadmap por Fases — Leos Firm LLC
 
-> **Última actualización:** 2026-08-05
+> **Última actualización:** 2026-08-10
 > **Este archivo es la ÚNICA fuente de verdad del orden de trabajo.**
 > Si otro documento contradice esta tabla, gana esta tabla y el otro documento se corrige.
 
@@ -56,10 +56,70 @@ usuario.
 | 5 | **Agendamiento: calendario propio** | B · Back | `/agendar`, disponibilidad real, reserva tentativa | ✅ **Completa** (2026-08-06) |
 | 6 | Square: checkout + webhook | B · Back | Cobro real, confirmación de la cita, CRM `pagado` | ✅ **Completa** (2026-08-06) — **primer pago real** |
 | 7 | Correos por n8n | B · Back | Confirmación, recordatorios 24 h / 1 h | 🔨 **Casi** — confirmación entregada; falta ver correr un recordatorio |
-| 8 | Cierre de front end | A · Front | A11Y, SEO, 404/500, contenido pendiente | ⬜ Pendiente |
+| 8 | Cierre de front end | A · Front | A11Y, SEO, 404/500, contenido pendiente | 🔨 **Código listo** — lo abierto es contenido de la clienta |
 | 9 | **Cancelar y reprogramar cita — versión mínima** | B · Back | Enlace con token en el correo: ver, cancelar, pedir cambio | 🔨 **En curso** — Next.js listo; los 3 workflows creados **sin publicar** |
+| — | **Flujo v2** (asistente, estados de entrega, liberar hueco) | B · Back | Documento de la clienta del 2026-08-07 | 🔨 **En curso** — ver § *Deriva entre el repo y producción* |
 | 10 | Hardening + deploy | B · Back | Security review, tests, Vercel | ⬜ Pendiente |
-| — | ~~Referidos~~ · ~~Post-cita~~ | — | **FUERA DEL ALCANCE** (2026-08-06) | 🧊 A futuro |
+| — | ~~Referidos~~ | — | **FUERA DEL ALCANCE** (2026-08-06) | 🧊 A futuro |
+| — | ~~Post-cita~~ | — | **Reabierta de hecho** por el estado `Finalizado` (§8 del flujo v2) | ⚠️ Sin disparador |
+
+---
+
+## 🔴 Deriva entre el repo y producción — auditado el 2026-08-10
+
+Tres decisiones ya escritas en el repositorio **no están aplicadas donde se ejecutan**. Verificado
+leyendo la instancia real de n8n, no deducido. Mientras esto siga así, `git log` describe un sistema
+que no existe.
+
+| # | Lo que dice el repo | Lo que hace producción | Consecuencia |
+|---|---|---|---|
+| 1 | `SLOT_HOLD_MINUTES = 15` ([`business.ts`](../src/constants/business.ts)) | El nodo Code de **«Limpiar reservas vencidas»** tiene `30`, y su trigger corre **cada 30 min** pese a llamarse «Cada 10 minutos» | Un hueco impago se libera entre los **30 y los 60 minutos**. La decisión de la clienta no está viva |
+| 2 | `crm.service.ts` manda `service_status` | Los 3 nodos de Sheets de **«CRM de leads»** conservan el esquema de 27 columnas, **sin `Estado de atencion`** | Google Sheets mapea **por nombre**: el campo llega y **se descarta en silencio**. La máquina de estados existe en el código y en cero filas |
+| 3 | `POST /api/v1/appointments/release` + **«Liberar hueco»** | El workflow está **creado y sin publicar**, y los 3 commits **no están desplegados** (`origin/main` = `b25269c`) | El endpoint no existe en producción. El hueco sigue expirando solo, que era el respaldo por diseño |
+
+### ⚠️ El borrador de «Limpiar reservas vencidas» apunta a otro calendario — NO publicarlo tal cual
+
+**«Leos Firm - Limpiar reservas vencidas»** (`hLWyt2vHv3CrCVBt`) tiene `versionId ≠ activeVersionId`:
+hay un borrador guardado que **no es lo que corre**. Y usa un calendar ID distinto:
+
+| Versión | Calendar ID |
+|---|---|
+| La que corre (`activeVersion`) | `c_4a1fcc0c1c44…cbabfaf` ✅ |
+| El borrador guardado | `c_0686985cc720…e349744` ❌ |
+
+**El bueno es `c_4a1fcc0c…`**: es el que usa **«Leos Firm - Reservar slot»** para crear los eventos, y
+ese workflow no tiene divergencia entre borrador y activo. Publicar el borrador dejaría al limpiador
+mirando un calendario donde no hay nada que limpiar — y las reservas impagas bloquearían la agenda
+para siempre, que es exactamente lo que ese workflow existe para impedir.
+
+### Lote pendiente de n8n — **a mano en la UI, nunca por MCP**
+
+Actualizar por MCP **borra las credenciales de los nodos** (probado dos veces; está en las notas
+adhesivas de «Reservar slot» y de «Limpiar reservas vencidas»). Los workflows de esta lista están
+**activos en producción**, así que cada cambio se hace en la interfaz.
+
+> 📌 **Los workflows se nombran por su nombre, no por número.** La numeración WF1…WF11 solo existe en
+> estos documentos, está incompleta —«Disponibilidad» nunca recibió número— y no coincide con lo que
+> se ve en la pantalla de n8n, que es donde se ejecutan estos cambios.
+
+- [ ] **«Limpiar reservas vencidas»** (`hLWyt2vHv3CrCVBt`) · nodo Code → `const SLOT_HOLD_MINUTES =
+      15;` · y el trigger de 30 a 10 min, para que el nombre del nodo deje de mentir. Antes:
+      resolver el borrador divergente de arriba
+- [ ] **«CRM de leads»** (`NYy88hBunUSkrcZk`) · añadir la columna `Estado de atencion` a la hoja **y**
+      al esquema de los **tres** nodos de Sheets. Mapeo en
+      [`features/crm-sheets.md`](./features/crm-sheets.md)
+- [ ] **«Confirmar cita»** (`5Tx6yxAmPBMghDBS`) · añadir el enlace de gestión al correo. El payload ya
+      lleva `access_token` y `appointment_url`: **sin esto nadie recibe el enlace** aunque la FASE 9
+      se publique entera
+- [ ] **«Confirmar cita»** · `CC: marco@leosfirm.com` → `BCC: claudia@leosfirm.com` · arreglar los
+      acentos
+- [ ] **«Reservar slot»** (`5MnPI0yaiahvOybZ`) · la descripción del evento dice «si el pago no llega
+      en **10 minutos**». Es texto que lee Claudia en su calendario y hoy es falso en dos sentidos
+- [ ] Credencial Gmail de `claudia@leosfirm.com` → aplicarla a los **6** nodos de Gmail (ADR-017)
+- [ ] Publicar los **4** workflows inactivos: **«Consultar cita»**, **«Cancelar cita»**,
+      **«Pedir otro horario»**, **«Liberar hueco»** → pone 4 webhooks en producción, **requiere
+      autorización explícita** (4 Leyes de Operación)
+- [ ] Después de publicar: `APPOINTMENT_TOKEN_SECRET` y las 4 URLs de webhook en Vercel + redespliegue
 
 ### Qué se cayó de la lista y por qué
 

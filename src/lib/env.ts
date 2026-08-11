@@ -61,6 +61,16 @@ const n8nSchema = z.object({
   N8N_BOOKING_WEBHOOK_URL: z.string().url().optional(),
   N8N_CONFIRM_WEBHOOK_URL: z.string().url().optional(),
 
+  /**
+   * Releases an unpaid hold the moment the visitor walks away (2026-08-07).
+   *
+   * Optional like the rest: without it the slot still disappears, just later —
+   * the WF4 cleaner takes it at `SLOT_HOLD_MINUTES`. That is the whole safety
+   * property of this feature. It makes the calendar free up FASTER; it is never
+   * what makes it free up at all.
+   */
+  N8N_RELEASE_WEBHOOK_URL: z.string().url().optional(),
+
   /** Payment registry — `Leos Firm - Registrar pago` (FASE 6, ADR-013). */
   N8N_PAYMENTS_WEBHOOK_URL: z.string().url().optional(),
 
